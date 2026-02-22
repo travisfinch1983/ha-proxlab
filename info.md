@@ -2,6 +2,24 @@
 
 A Home Assistant custom integration that connects HA's voice assistant pipeline to ProxLab-managed LLM/TTS/STT inference servers. Built on top of the hass-agent-llm conversation agent with full tool calling, device control, RAG, long-term memory, and streaming — plus TTS, STT, and ProxLab service discovery.
 
+## Installation
+
+### HACS (when available on GitHub)
+
+[![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=travisfinch1983&repository=ha-proxlab&category=integration)
+
+### Manual Install (Gitea / Local)
+
+1. Download or clone the repo from your Gitea instance:
+   ```
+   git clone http://10.0.0.146:3000/claude/ha-proxlab.git
+   ```
+2. Copy `custom_components/proxlab/` to your Home Assistant `config/custom_components/proxlab/`
+3. Restart Home Assistant
+4. Click the button below or go to **Settings > Devices & Services > Add Integration** and search for **ProxLab**
+
+[![Open your Home Assistant instance and start setting up a new integration.](https://my.home-assistant.io/badges/config_flow_start.svg)](https://my.home-assistant.io/redirect/config_flow_start/?domain=proxlab)
+
 ## Key Features
 
 - **Conversation Agent** — OpenAI-compatible LLM with tool calling for device control (30+ HA entity domains)
