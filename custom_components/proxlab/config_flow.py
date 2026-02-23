@@ -18,8 +18,13 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import device_registry as dr, entity_registry as er, selector
 
-from .connection_manager import eligible_connections_for_role
+from .agent_prompts import get_default_prompt
+from .connection_manager import eligible_connections_for_agent, eligible_connections_for_role
 from .const import (
+    AGENT_DEFINITIONS,
+    AGENT_EMBEDDINGS,
+    AGENT_MEMORY,
+    ALL_AGENTS,
     ALL_CAPABILITIES,
     ALL_ROLES,
     CAPABILITY_LABELS,
@@ -31,6 +36,7 @@ from .const import (
     CAP_VISION,
     CLAUDE_API_BASE_URL,
     CLAUDE_MODELS,
+    CONF_AGENTS,
     CONFIG_VERSION,
     CONNECTION_TYPE_CLAUDE,
     CONNECTION_TYPE_LOCAL,
@@ -131,8 +137,11 @@ from .const import (
     EMBEDDING_PROVIDER_OLLAMA,
     EMBEDDING_PROVIDER_OPENAI,
     LLM_CAPABILITIES,
+    OPTIONAL_AGENTS,
+    PRIMARY_AGENTS,
     ROLE_LABELS,
     ROLE_TO_CAPABILITY,
+    SYSTEM_AGENTS,
     VECTOR_DB_BACKEND_CHROMADB,
     VECTOR_DB_BACKEND_MILVUS,
 )
@@ -299,6 +308,8 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
         self._adding_connection: dict[str, Any] = {}
         self._editing_connection_id: str | None = None
         self._editing_connection: dict[str, Any] = {}
+        # Temp state for agent configuration
+        self._configuring_agent_id: str = ""
 
     # -----------------------------------------------------------
     # ProxLab service discovery helpers
@@ -333,7 +344,7 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
             step_id="init",
             menu_options=[
                 "connections",
-                "role_assignments",
+                "agents",
                 "proxlab_settings",
                 "context_settings",
                 "vector_db_settings",
@@ -720,8 +731,20 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                         new_roles[role] = None
                 new_data[CONF_ROLES] = new_roles
 
+                # Null any agent connections pointing to deleted connection
+                updated_options = dict(self._config_entry.options)
+                agents_config = dict(updated_options.get(CONF_AGENTS, {}))
+                for aid, acfg in agents_config.items():
+                    acfg = dict(acfg)
+                    if acfg.get("primary_connection") == cid:
+                        acfg["primary_connection"] = None
+                    if acfg.get("secondary_connection") == cid:
+                        acfg["secondary_connection"] = None
+                    agents_config[aid] = acfg
+                updated_options[CONF_AGENTS] = agents_config
+
                 self.hass.config_entries.async_update_entry(
-                    self._config_entry, data=new_data
+                    self._config_entry, data=new_data, options=updated_options
                 )
                 self._editing_connection_id = None
                 self._editing_connection = {}
@@ -1024,61 +1047,175 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
         return fields
 
     # ===========================================================
-    # ROLE ASSIGNMENTS
+    # AGENTS
     # ===========================================================
 
-    async def async_step_role_assignments(
+    def _agent_status_label(self, agent_id: str) -> str:
+        """Build a status label for an agent in the picker list."""
+        agent_def = AGENT_DEFINITIONS[agent_id]
+        agents_config = self._config_entry.options.get(CONF_AGENTS, {})
+        agent_cfg = agents_config.get(agent_id, {})
+
+        if agent_def.mandatory:
+            if agent_cfg.get("primary_connection"):
+                return f"{agent_def.name} \u2014 Configured"
+            return f"{agent_def.name} \u2014 Not configured"
+
+        if not agent_cfg.get("enabled", False):
+            return f"{agent_def.name} \u2014 Disabled"
+        if agent_cfg.get("primary_connection"):
+            return f"{agent_def.name} \u2014 Enabled"
+        return f"{agent_def.name} \u2014 Enabled (no connection)"
+
+    async def async_step_agents(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Assign connections to roles."""
+        """Agent picker: select an agent to configure."""
         if user_input is not None:
-            new_roles: dict[str, str | None] = {}
-            for role in ALL_ROLES:
-                val = user_input.get(role, "__none__")
-                new_roles[role] = None if val == "__none__" else val
+            selected = user_input.get("agent", "")
+            if selected and selected in AGENT_DEFINITIONS:
+                self._configuring_agent_id = selected
+                return await self.async_step_configure_agent()
+            return await self.async_step_agents()
 
-            new_data = dict(self._config_entry.data)
-            new_data[CONF_ROLES] = new_roles
-            self.hass.config_entries.async_update_entry(
-                self._config_entry, data=new_data
-            )
-            return self.async_create_entry(title="", data=self._config_entry.options)
+        # Build grouped options
+        options: list[dict[str, str]] = []
 
-        config = dict(self._config_entry.data) | dict(self._config_entry.options)
-        current_roles = config.get(CONF_ROLES, {})
-        connections = config.get(CONF_CONNECTIONS, {})
+        # Primary Agents group
+        options.append({"value": "__hdr_primary__", "label": "\u2501\u2501 Primary Agents \u2501\u2501"})
+        for aid in PRIMARY_AGENTS:
+            options.append({"value": aid, "label": self._agent_status_label(aid)})
 
-        schema_fields: dict[Any, Any] = {}
-        for role in ALL_ROLES:
-            required_cap = ROLE_TO_CAPABILITY.get(role, role)
-            # Filter connections to those with the required capability
-            eligible = [
-                (cid, conn)
-                for cid, conn in connections.items()
-                if required_cap in conn.get("capabilities", [])
-            ]
+        # Optional Agents group
+        options.append({"value": "__hdr_optional__", "label": "\u2501\u2501 Optional Agents \u2501\u2501"})
+        for aid in OPTIONAL_AGENTS:
+            options.append({"value": aid, "label": self._agent_status_label(aid)})
 
-            options = [{"value": "__none__", "label": "(Not assigned)"}]
-            for cid, conn in eligible:
-                options.append(
-                    {"value": cid, "label": conn.get("name", cid)}
-                )
-
-            current_val = current_roles.get(role)
-            default = current_val if current_val and current_val in connections else "__none__"
-
-            schema_fields[
-                vol.Optional(role, default=default)
-            ] = selector.SelectSelector(
-                selector.SelectSelectorConfig(
-                    options=options,
-                    mode=selector.SelectSelectorMode.DROPDOWN,
-                )
-            )
+        # System Agents group
+        options.append({"value": "__hdr_system__", "label": "\u2501\u2501 System Agents \u2501\u2501"})
+        for aid in SYSTEM_AGENTS:
+            options.append({"value": aid, "label": self._agent_status_label(aid)})
 
         return self.async_show_form(
-            step_id="role_assignments",
+            step_id="agents",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("agent"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=options,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+            ),
+        )
+
+    async def async_step_configure_agent(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Configure a single agent: enable, connections, prompt."""
+        agent_id = self._configuring_agent_id
+        agent_def = AGENT_DEFINITIONS[agent_id]
+        config = dict(self._config_entry.data) | dict(self._config_entry.options)
+        agents_config = dict(self._config_entry.options.get(CONF_AGENTS, {}))
+        agent_cfg = dict(agents_config.get(agent_id, {}))
+
+        if user_input is not None:
+            # Process form submission
+            if agent_def.has_prompt and user_input.get("restore_default_prompt", False):
+                user_input["system_prompt"] = ""
+
+            new_agent_cfg: dict[str, Any] = {}
+
+            if agent_def.mandatory:
+                new_agent_cfg["enabled"] = True
+            else:
+                new_agent_cfg["enabled"] = user_input.get("enabled", False)
+
+            # Connection assignments
+            primary = user_input.get("primary_connection", "__none__")
+            secondary = user_input.get("secondary_connection", "__none__")
+            new_agent_cfg["primary_connection"] = None if primary == "__none__" else primary
+            new_agent_cfg["secondary_connection"] = None if secondary == "__none__" else secondary
+
+            # If disabled, clear connections
+            if not new_agent_cfg["enabled"]:
+                new_agent_cfg["primary_connection"] = None
+                new_agent_cfg["secondary_connection"] = None
+
+            # System prompt
+            if agent_def.has_prompt:
+                new_agent_cfg["system_prompt"] = user_input.get("system_prompt", "")
+            else:
+                new_agent_cfg["system_prompt"] = ""
+
+            # Save
+            agents_config[agent_id] = new_agent_cfg
+            updated_options = dict(self._config_entry.options)
+            updated_options[CONF_AGENTS] = agents_config
+            return self.async_create_entry(title="", data=updated_options)
+
+        # Build form
+        eligible = eligible_connections_for_agent(config, agent_id)
+        conn_options = [{"value": "__none__", "label": "(Not assigned)"}]
+        for cid, conn in eligible:
+            conn_options.append({"value": cid, "label": conn.get("name", cid)})
+
+        schema_fields: dict[Any, Any] = {}
+
+        # Enable toggle (optional agents only)
+        if not agent_def.mandatory:
+            schema_fields[
+                vol.Optional("enabled", default=agent_cfg.get("enabled", False))
+            ] = bool
+
+        # Primary connection
+        current_primary = agent_cfg.get("primary_connection")
+        primary_default = current_primary if current_primary else "__none__"
+        schema_fields[
+            vol.Optional("primary_connection", default=primary_default)
+        ] = selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=conn_options,
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )
+        )
+
+        # Secondary connection
+        current_secondary = agent_cfg.get("secondary_connection")
+        secondary_default = current_secondary if current_secondary else "__none__"
+        schema_fields[
+            vol.Optional("secondary_connection", default=secondary_default)
+        ] = selector.SelectSelector(
+            selector.SelectSelectorConfig(
+                options=conn_options,
+                mode=selector.SelectSelectorMode.DROPDOWN,
+            )
+        )
+
+        # System prompt (only for agents with has_prompt=True)
+        if agent_def.has_prompt:
+            current_prompt = agent_cfg.get("system_prompt", "")
+            display_prompt = current_prompt if current_prompt else get_default_prompt(agent_id)
+            schema_fields[
+                vol.Optional(
+                    "system_prompt",
+                    description={"suggested_value": display_prompt},
+                )
+            ] = selector.TextSelector(
+                selector.TextSelectorConfig(multiline=True)
+            )
+            schema_fields[
+                vol.Optional("restore_default_prompt", default=False)
+            ] = bool
+
+        return self.async_show_form(
+            step_id="configure_agent",
             data_schema=vol.Schema(schema_fields),
+            description_placeholders={
+                "agent_name": agent_def.name,
+                "agent_description": agent_def.description,
+            },
         )
 
     # ===========================================================
@@ -1200,10 +1337,30 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
     # VECTOR DB SETTINGS (simplified: no embedding URL/model)
     # ===========================================================
 
+    async def async_step_vector_db_settings_gated(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Show gated info when Embeddings agent isn't ready."""
+        if user_input is not None:
+            return await self.async_step_init()
+        return self.async_show_form(
+            step_id="vector_db_settings_gated",
+            data_schema=vol.Schema({}),
+        )
+
     async def async_step_vector_db_settings(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         """Configure Vector DB settings."""
+        # Gate: require Embeddings agent enabled and configured
+        agents = self._config_entry.options.get(CONF_AGENTS, {})
+        embeddings_agent = agents.get(AGENT_EMBEDDINGS, {})
+        embeddings_ready = embeddings_agent.get("enabled") and embeddings_agent.get(
+            "primary_connection"
+        )
+        if not embeddings_ready:
+            return await self.async_step_vector_db_settings_gated()
+
         if user_input is not None:
             if CONF_ADDITIONAL_COLLECTIONS in user_input:
                 collections_str = user_input[CONF_ADDITIONAL_COLLECTIONS]
@@ -1527,10 +1684,32 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
     # MEMORY SETTINGS (unchanged from v1)
     # ===========================================================
 
+    async def async_step_memory_settings_gated(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Show gated info when Memory + Embeddings agents aren't ready."""
+        if user_input is not None:
+            return await self.async_step_init()
+        return self.async_show_form(
+            step_id="memory_settings_gated",
+            data_schema=vol.Schema({}),
+        )
+
     async def async_step_memory_settings(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         """Configure long-term memory system settings."""
+        # Gate: require Memory + Embeddings agents enabled and configured
+        agents = self._config_entry.options.get(CONF_AGENTS, {})
+        memory_agent = agents.get(AGENT_MEMORY, {})
+        embeddings_agent = agents.get(AGENT_EMBEDDINGS, {})
+        memory_ready = memory_agent.get("enabled") and memory_agent.get("primary_connection")
+        embeddings_ready = embeddings_agent.get("enabled") and embeddings_agent.get(
+            "primary_connection"
+        )
+        if not (memory_ready and embeddings_ready):
+            return await self.async_step_memory_settings_gated()
+
         errors: dict[str, str] = {}
 
         if user_input is not None:

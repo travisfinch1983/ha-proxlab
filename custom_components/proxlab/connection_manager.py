@@ -10,12 +10,18 @@ import logging
 from typing import Any
 
 from .const import (
+    AGENT_CONVERSATION,
+    AGENT_DEFINITIONS,
+    AGENT_EMBEDDINGS,
+    AGENT_STT,
+    AGENT_TTS,
     ALL_ROLES,
     CAP_CONVERSATION,
     CAP_EMBEDDINGS,
     CAP_EXTERNAL_LLM,
     CAP_STT,
     CAP_TTS,
+    CONF_AGENTS,
     CONF_CONNECTIONS,
     CONF_EMBEDDING_KEEP_ALIVE,
     CONF_EXTERNAL_LLM_API_KEY,
@@ -148,6 +154,45 @@ def eligible_connections_for_role(
     return connections_for_capability(config, cap)
 
 
+def eligible_connections_for_agent(
+    config: dict[str, Any], agent_id: str
+) -> list[tuple[str, dict[str, Any]]]:
+    """Return connections eligible for an agent using OR-of-AND capability matching.
+
+    Args:
+        config: Merged config dict.
+        agent_id: Agent ID from AGENT_DEFINITIONS.
+
+    Returns:
+        List of (connection_id, connection_dict) tuples.
+    """
+    agent_def = AGENT_DEFINITIONS.get(agent_id)
+    if not agent_def:
+        return []
+    connections = config.get(CONF_CONNECTIONS, {})
+    eligible = []
+    for cid, conn in connections.items():
+        conn_caps = set(conn.get("capabilities", []))
+        for cap_group in agent_def.required_capabilities:
+            if set(cap_group).issubset(conn_caps):
+                eligible.append((cid, conn))
+                break
+    return eligible
+
+
+def _get_agent_connection(
+    config: dict[str, Any], agent_id: str
+) -> dict[str, Any] | None:
+    """Get the primary connection dict for an agent, or None."""
+    agents = config.get(CONF_AGENTS, {})
+    agent_cfg = agents.get(agent_id, {})
+    conn_id = agent_cfg.get("primary_connection")
+    if not conn_id:
+        return None
+    connections = config.get(CONF_CONNECTIONS, {})
+    return connections.get(conn_id)
+
+
 def resolve_connections_to_flat_config(config: dict[str, Any]) -> dict[str, Any]:
     """Resolution shim: populate flat CONF_* keys from connections+roles.
 
@@ -161,7 +206,10 @@ def resolve_connections_to_flat_config(config: dict[str, Any]) -> dict[str, Any]
         The same config dict with flat keys populated.
     """
     # --- Conversation / primary LLM ---
-    conv_conn = get_connection_for_role(config, ROLE_CONVERSATION)
+    # Prefer agent-based config; fall back to role-based
+    conv_conn = _get_agent_connection(config, AGENT_CONVERSATION) or get_connection_for_role(
+        config, ROLE_CONVERSATION
+    )
     if conv_conn:
         config[CONF_LLM_BASE_URL] = conv_conn.get("base_url", "")
         config[CONF_LLM_API_KEY] = conv_conn.get("api_key", "")
@@ -176,7 +224,9 @@ def resolve_connections_to_flat_config(config: dict[str, Any]) -> dict[str, Any]
         )
 
     # --- TTS ---
-    tts_conn = get_connection_for_role(config, ROLE_TTS)
+    tts_conn = _get_agent_connection(config, AGENT_TTS) or get_connection_for_role(
+        config, ROLE_TTS
+    )
     if tts_conn:
         config[CONF_TTS_BASE_URL] = tts_conn.get("base_url", "")
         config[CONF_TTS_MODEL] = tts_conn.get("model", DEFAULT_TTS_MODEL)
@@ -185,7 +235,9 @@ def resolve_connections_to_flat_config(config: dict[str, Any]) -> dict[str, Any]
         config[CONF_TTS_FORMAT] = tts_conn.get("format", DEFAULT_TTS_FORMAT)
 
     # --- STT ---
-    stt_conn = get_connection_for_role(config, ROLE_STT)
+    stt_conn = _get_agent_connection(config, AGENT_STT) or get_connection_for_role(
+        config, ROLE_STT
+    )
     if stt_conn:
         config[CONF_STT_BASE_URL] = stt_conn.get("base_url", "")
         config[CONF_STT_MODEL] = stt_conn.get("model", DEFAULT_STT_MODEL)
@@ -218,7 +270,9 @@ def resolve_connections_to_flat_config(config: dict[str, Any]) -> dict[str, Any]
         config.setdefault(CONF_EXTERNAL_LLM_ENABLED, False)
 
     # --- Embeddings ---
-    emb_conn = get_connection_for_role(config, ROLE_EMBEDDINGS)
+    emb_conn = _get_agent_connection(config, AGENT_EMBEDDINGS) or get_connection_for_role(
+        config, ROLE_EMBEDDINGS
+    )
     if emb_conn:
         config[CONF_VECTOR_DB_EMBEDDING_BASE_URL] = emb_conn.get("base_url", "")
         config[CONF_VECTOR_DB_EMBEDDING_MODEL] = emb_conn.get("model", "")

@@ -35,7 +35,7 @@
         "description": "Manage your ProxLab configuration.",
         "menu_options": {
           "connections": "Connections",
-          "role_assignments": "Role Assignments",
+          "agents": "Agents",
           "proxlab_settings": "ProxLab Discovery",
           "context_settings": "Context Settings",
           "vector_db_settings": "Vector Database",
@@ -172,29 +172,41 @@
           "__delete__": "Check this box and submit to permanently delete this connection and unassign its roles"
         }
       },
-      "role_assignments": {
-        "title": "Role Assignments",
-        "description": "Assign connections to functional roles. Each dropdown only shows connections with the matching capability.",
+      "agents": {
+        "title": "Agents",
+        "description": "Select an agent to configure. Primary agents must have a primary connection assigned.",
         "data": {
-          "conversation": "Conversational LLM",
-          "tool_use": "Tool Use (LLM)",
-          "tts": "Text-to-Speech",
-          "stt": "Speech-to-Text",
-          "embeddings": "Embeddings",
-          "reranker": "Reranker",
-          "multimodal_embeddings": "Multimodal Embeddings",
-          "external_llm": "External LLM"
+          "agent": "Agent"
         },
         "data_description": {
-          "conversation": "LLM used for conversation responses",
-          "tool_use": "The LLM used for tool calling (often same as conversation)",
-          "tts": "OpenAI-compatible text-to-speech endpoint",
-          "stt": "OpenAI-compatible speech-to-text endpoint",
-          "embeddings": "Embedding model for vector DB operations",
-          "reranker": "Reranker model for improved retrieval",
-          "multimodal_embeddings": "Multimodal embedding model (text + images)",
-          "external_llm": "Secondary LLM that the primary can delegate complex queries to"
+          "agent": "Choose an agent to view or configure"
         }
+      },
+      "configure_agent": {
+        "title": "Configure {agent_name}",
+        "description": "{agent_description}",
+        "data": {
+          "enabled": "Enable this agent",
+          "primary_connection": "Primary Connection",
+          "secondary_connection": "Secondary Connection (fallback)",
+          "system_prompt": "System Prompt",
+          "restore_default_prompt": "Restore Default Prompt"
+        },
+        "data_description": {
+          "enabled": "Enable or disable this optional agent",
+          "primary_connection": "Main connection used by this agent",
+          "secondary_connection": "Optional fallback connection if primary is unavailable",
+          "system_prompt": "Instructions that guide this agent's behavior",
+          "restore_default_prompt": "Check this box and submit to reset the prompt to the built-in default"
+        }
+      },
+      "memory_settings_gated": {
+        "title": "Memory System",
+        "description": "The Memory System requires the Memory and Embeddings agents to be enabled and configured with primary connections. Go to Agents to set them up."
+      },
+      "vector_db_settings_gated": {
+        "title": "Vector Database",
+        "description": "The Vector Database requires the Embeddings agent to be enabled and configured with a primary connection. Go to Agents to set it up."
       },
       "proxlab_settings": {
         "title": "ProxLab Service Discovery",

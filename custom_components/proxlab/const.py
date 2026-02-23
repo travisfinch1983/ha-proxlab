@@ -1,5 +1,8 @@
 """Constants for the ProxLab integration."""
 
+from __future__ import annotations
+
+from dataclasses import dataclass, field
 from typing import Final
 
 # Domain and component info
@@ -43,6 +46,148 @@ ALL_CAPABILITIES: Final = [
     CAP_SPECIALIZED,
     CAP_VISION,
 ]
+
+# --- Agent System ---
+
+# Agent IDs
+AGENT_ORCHESTRATOR: Final = "orchestrator"
+AGENT_CONVERSATION: Final = "conversation_agent"
+AGENT_WORKER: Final = "worker"
+AGENT_TTS: Final = "tts_agent"
+AGENT_STT: Final = "stt_agent"
+AGENT_MEMORY: Final = "memory"
+AGENT_EMBEDDINGS: Final = "embeddings_agent"
+AGENT_RERANKER: Final = "reranker_agent"
+AGENT_REPAIRMAN: Final = "repairman"
+AGENT_REPORTING: Final = "reporting"
+AGENT_SECURITY_GUARD: Final = "security_guard"
+AGENT_CYBERSECURITY: Final = "cybersecurity"
+AGENT_MEDICAL_ADVISOR: Final = "medical_advisor"
+
+CONF_AGENTS: Final = "agents"
+
+
+@dataclass
+class AgentDefinition:
+    """Definition of a ProxLab agent."""
+
+    id: str
+    name: str
+    description: str
+    mandatory: bool
+    required_capabilities: list[list[str]]  # OR-of-AND groups
+    has_prompt: bool = True
+    gates: list[str] = field(default_factory=list)
+
+
+AGENT_DEFINITIONS: Final[dict[str, AgentDefinition]] = {
+    AGENT_ORCHESTRATOR: AgentDefinition(
+        id=AGENT_ORCHESTRATOR,
+        name="Orchestrator",
+        description="Routes your requests to the proper agent.",
+        mandatory=True,
+        required_capabilities=[[CAP_TOOL_USE]],
+    ),
+    AGENT_CONVERSATION: AgentDefinition(
+        id=AGENT_CONVERSATION,
+        name="Conversation",
+        description="Friendly voice assistant for general conversation.",
+        mandatory=True,
+        required_capabilities=[[CAP_CONVERSATION]],
+    ),
+    AGENT_WORKER: AgentDefinition(
+        id=AGENT_WORKER,
+        name="Worker",
+        description="Executes Home Assistant commands and tool calls.",
+        mandatory=True,
+        required_capabilities=[[CAP_TOOL_USE]],
+    ),
+    AGENT_TTS: AgentDefinition(
+        id=AGENT_TTS,
+        name="Text-to-Speech",
+        description="Converts text responses to spoken audio.",
+        mandatory=False,
+        required_capabilities=[[CAP_TTS]],
+        has_prompt=False,
+    ),
+    AGENT_STT: AgentDefinition(
+        id=AGENT_STT,
+        name="Speech-to-Text",
+        description="Transcribes spoken audio to text.",
+        mandatory=False,
+        required_capabilities=[[CAP_STT]],
+        has_prompt=False,
+    ),
+    AGENT_MEMORY: AgentDefinition(
+        id=AGENT_MEMORY,
+        name="Memory",
+        description="Extracts and manages long-term memories from conversations.",
+        mandatory=False,
+        required_capabilities=[[CAP_CONVERSATION]],
+        gates=["memory_settings"],
+    ),
+    AGENT_EMBEDDINGS: AgentDefinition(
+        id=AGENT_EMBEDDINGS,
+        name="Embeddings",
+        description="Generates vector embeddings for semantic search.",
+        mandatory=False,
+        required_capabilities=[[CAP_EMBEDDINGS], [CAP_MULTIMODAL_EMBEDDINGS]],
+        has_prompt=False,
+        gates=["vector_db_settings"],
+    ),
+    AGENT_RERANKER: AgentDefinition(
+        id=AGENT_RERANKER,
+        name="Reranker",
+        description="Reranks search results for improved relevance.",
+        mandatory=False,
+        required_capabilities=[[CAP_RERANKER]],
+        has_prompt=False,
+    ),
+    AGENT_REPAIRMAN: AgentDefinition(
+        id=AGENT_REPAIRMAN,
+        name="Repairman",
+        description="Diagnoses and fixes Home Assistant configuration issues.",
+        mandatory=False,
+        required_capabilities=[[CAP_TOOL_USE]],
+    ),
+    AGENT_REPORTING: AgentDefinition(
+        id=AGENT_REPORTING,
+        name="Reporting",
+        description="Compiles and summarizes agent activity reports.",
+        mandatory=False,
+        required_capabilities=[[CAP_CONVERSATION]],
+    ),
+    AGENT_SECURITY_GUARD: AgentDefinition(
+        id=AGENT_SECURITY_GUARD,
+        name="Security Guard",
+        description="Monitors camera feeds and sensors for anomalies.",
+        mandatory=False,
+        required_capabilities=[[CAP_VISION, CAP_TOOL_USE]],
+    ),
+    AGENT_CYBERSECURITY: AgentDefinition(
+        id=AGENT_CYBERSECURITY,
+        name="Cybersecurity",
+        description="Analyzes network traffic and detects intrusions.",
+        mandatory=False,
+        required_capabilities=[[CAP_SPECIALIZED, CAP_TOOL_USE]],
+    ),
+    AGENT_MEDICAL_ADVISOR: AgentDefinition(
+        id=AGENT_MEDICAL_ADVISOR,
+        name="Medical Advisor",
+        description="Provides general health guidance with safety disclaimers.",
+        mandatory=False,
+        required_capabilities=[[CAP_SPECIALIZED]],
+    ),
+}
+
+# Agent groups
+PRIMARY_AGENTS: Final = [AGENT_ORCHESTRATOR, AGENT_CONVERSATION, AGENT_WORKER]
+OPTIONAL_AGENTS: Final = [
+    AGENT_MEMORY, AGENT_REPAIRMAN, AGENT_REPORTING,
+    AGENT_SECURITY_GUARD, AGENT_CYBERSECURITY, AGENT_MEDICAL_ADVISOR,
+]
+SYSTEM_AGENTS: Final = [AGENT_TTS, AGENT_STT, AGENT_EMBEDDINGS, AGENT_RERANKER]
+ALL_AGENTS: Final = PRIMARY_AGENTS + OPTIONAL_AGENTS + SYSTEM_AGENTS
 
 # Role names (keys in roles dict)
 ROLE_CONVERSATION: Final = "conversation"
