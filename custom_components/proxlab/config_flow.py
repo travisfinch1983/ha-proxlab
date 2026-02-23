@@ -422,35 +422,81 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
     # Add Connection (local endpoint)
     # -----------------------------------------------------------
 
+    def _build_proxlab_import_options(
+        self, services: list, proxlab_url: str
+    ) -> list[dict[str, str]]:
+        """Build import dropdown options with proxy URLs for ProxLab services.
+
+        LLM services get numbered proxy slots (llm, llm/2, llm/3).
+        TTS/STT services use type-based proxy paths.
+        """
+        proxy_base = proxlab_url.rstrip("/") + "/api/proxy"
+        options: list[dict[str, str]] = [
+            {"value": "__none__", "label": "(Manual entry)"},
+        ]
+
+        # Track LLM slot numbering
+        llm_slot = 0
+
+        for svc in services:
+            if not (hasattr(svc, "base_url") and svc.base_url):
+                continue
+
+            if svc.service_type == "llm":
+                llm_slot += 1
+                slot_path = "llm" if llm_slot == 1 else f"llm/{llm_slot}"
+                proxy_url = f"{proxy_base}/{slot_path}/v1"
+            elif svc.service_type == "tts":
+                proxy_url = f"{proxy_base}/tts/v1"
+            elif svc.service_type == "stt":
+                proxy_url = f"{proxy_base}/stt/v1"
+            else:
+                proxy_url = svc.base_url
+
+            # Encode service ID + proxy URL + direct URL as pipe-delimited value
+            val = f"{svc.id}|{proxy_url}|{svc.base_url}"
+            options.append({
+                "value": val,
+                "label": f"{svc.display_name}",
+            })
+
+        return options
+
     async def async_step_add_connection(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
         """Add local connection: name, URL, API key, model, capabilities."""
         errors: dict[str, str] = {}
-        prefill: dict[str, Any] = {}
 
         if user_input is not None:
             # Check if this is a ProxLab import request
-            import_url = user_input.get("import_from_proxlab")
-            if import_url and import_url != "__none__":
-                # Look up the service and re-render with populated defaults
-                services = await self._get_proxlab_services()
-                svc = next(
-                    (s for s in services if s.base_url == import_url), None
-                )
-                if svc:
-                    cap_map = {
-                        "llm": [CAP_CONVERSATION, CAP_TOOL_USE],
-                        "tts": [CAP_TTS],
-                        "stt": [CAP_STT],
-                    }
-                    prefill = {
-                        "name": f"{svc.provider} {svc.model}",
-                        "base_url": svc.base_url,
-                        "model": svc.model,
-                        "capabilities": cap_map.get(svc.service_type, []),
-                    }
-                # Fall through to re-render form with prefilled values
+            import_val = user_input.get("import_from_proxlab", "__none__")
+            if import_val and import_val != "__none__":
+                # Decode: "service_id|proxy_url|direct_url"
+                parts = import_val.split("|", 2)
+                if len(parts) == 3:
+                    svc_id, proxy_url, direct_url = parts
+                    services = await self._get_proxlab_services()
+                    svc = next(
+                        (s for s in services if s.id == svc_id), None
+                    )
+                    if svc:
+                        cap_map = {
+                            "llm": [CAP_CONVERSATION, CAP_TOOL_USE],
+                            "tts": [CAP_TTS],
+                            "stt": [CAP_STT],
+                        }
+                        self._adding_connection = {
+                            "name": f"{svc.provider} {svc.model}",
+                            "connection_type": CONNECTION_TYPE_LOCAL,
+                            "base_url": proxy_url,
+                            "api_key": "",
+                            "model": svc.model,
+                            "capabilities": cap_map.get(
+                                svc.service_type, []
+                            ),
+                        }
+                        return await self.async_step_connection_details()
             else:
                 # Normal form submission — validate and proceed
                 base_url = user_input.get("base_url", "")
@@ -488,12 +534,9 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
         if proxlab_url:
             services = await self._get_proxlab_services()
             if services:
-                import_options = [{"value": "__none__", "label": "(Don't import)"}]
-                for svc in services:
-                    if hasattr(svc, "base_url") and svc.base_url:
-                        import_options.append(
-                            {"value": svc.base_url, "label": svc.display_name}
-                        )
+                import_options = self._build_proxlab_import_options(
+                    services, proxlab_url
+                )
                 schema_fields[vol.Optional("import_from_proxlab")] = (
                     selector.SelectSelector(
                         selector.SelectSelectorConfig(
@@ -505,20 +548,11 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
 
         schema_fields.update(
             {
-                vol.Required(
-                    "name", default=prefill.get("name", "New Connection")
-                ): str,
-                vol.Required(
-                    "base_url", default=prefill.get("base_url", "")
-                ): str,
+                vol.Required("name", default="New Connection"): str,
+                vol.Required("base_url", default=""): str,
                 vol.Optional("api_key", default=""): str,
-                vol.Optional(
-                    "model", default=prefill.get("model", "")
-                ): str,
-                vol.Required(
-                    "capabilities",
-                    default=prefill.get("capabilities"),
-                ): selector.SelectSelector(
+                vol.Optional("model", default=""): str,
+                vol.Required("capabilities"): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=cap_options,
                         multiple=True,
