@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from typing import Any, cast
+from uuid import uuid4
 
 from homeassistant.components import conversation as ha_conversation
 from homeassistant.config_entries import ConfigEntry
@@ -16,35 +17,280 @@ from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.helpers.typing import ConfigType
 
 from .agent import ProxLabAgent
+from .connection_manager import resolve_connections_to_flat_config
 from .const import (
+    ALL_ROLES,
+    CAP_CONVERSATION,
+    CAP_EMBEDDINGS,
+    CAP_EXTERNAL_LLM,
+    CAP_STT,
+    CAP_TTS,
+    CAP_TOOL_USE,
+    CONFIG_VERSION,
+    CONF_CONNECTIONS,
     CONF_CONTEXT_MODE,
+    CONF_EMBEDDING_KEEP_ALIVE,
+    CONF_EXTERNAL_LLM_API_KEY,
+    CONF_EXTERNAL_LLM_AUTO_INCLUDE_CONTEXT,
+    CONF_EXTERNAL_LLM_BASE_URL,
+    CONF_EXTERNAL_LLM_ENABLED,
+    CONF_EXTERNAL_LLM_KEEP_ALIVE,
+    CONF_EXTERNAL_LLM_MAX_TOKENS,
+    CONF_EXTERNAL_LLM_MODEL,
+    CONF_EXTERNAL_LLM_TEMPERATURE,
+    CONF_EXTERNAL_LLM_TOOL_DESCRIPTION,
+    CONF_LLM_API_KEY,
+    CONF_LLM_BASE_URL,
+    CONF_LLM_KEEP_ALIVE,
+    CONF_LLM_MAX_TOKENS,
+    CONF_LLM_MODEL,
+    CONF_LLM_PROXY_HEADERS,
+    CONF_LLM_TEMPERATURE,
+    CONF_LLM_TOP_P,
     CONF_MEMORY_ENABLED,
+    CONF_OPENAI_API_KEY,
+    CONF_PROXLAB_URL,
+    CONF_ROLES,
     CONF_SESSION_PERSISTENCE_ENABLED,
     CONF_SESSION_TIMEOUT,
     CONF_STT_BASE_URL,
+    CONF_STT_LANGUAGE,
+    CONF_STT_MODEL,
+    CONF_THINKING_ENABLED,
     CONF_TOOLS_CUSTOM,
     CONF_TTS_BASE_URL,
+    CONF_TTS_FORMAT,
+    CONF_TTS_MODEL,
+    CONF_TTS_SPEED,
+    CONF_TTS_VOICE,
     CONF_VECTOR_DB_BACKEND,
     CONF_VECTOR_DB_EMBEDDING_BASE_URL,
+    CONF_VECTOR_DB_EMBEDDING_MODEL,
     CONF_VECTOR_DB_EMBEDDING_PROVIDER,
     CONF_VECTOR_DB_HOST,
     CONF_VECTOR_DB_PORT,
     CONTEXT_MODE_VECTOR_DB,
+    DEFAULT_EMBEDDING_KEEP_ALIVE,
+    DEFAULT_EXTERNAL_LLM_AUTO_INCLUDE_CONTEXT,
+    DEFAULT_EXTERNAL_LLM_KEEP_ALIVE,
+    DEFAULT_EXTERNAL_LLM_MAX_TOKENS,
+    DEFAULT_EXTERNAL_LLM_MODEL,
+    DEFAULT_EXTERNAL_LLM_TEMPERATURE,
+    DEFAULT_EXTERNAL_LLM_TOOL_DESCRIPTION,
+    DEFAULT_LLM_KEEP_ALIVE,
+    DEFAULT_LLM_MODEL,
+    DEFAULT_MAX_TOKENS,
     DEFAULT_MEMORY_ENABLED,
+    DEFAULT_ROLES,
     DEFAULT_SESSION_PERSISTENCE_ENABLED,
     DEFAULT_SESSION_TIMEOUT,
+    DEFAULT_STT_LANGUAGE,
+    DEFAULT_STT_MODEL,
+    DEFAULT_TEMPERATURE,
+    DEFAULT_THINKING_ENABLED,
+    DEFAULT_TOP_P,
+    DEFAULT_TTS_FORMAT,
+    DEFAULT_TTS_MODEL,
+    DEFAULT_TTS_SPEED,
+    DEFAULT_TTS_VOICE,
     DEFAULT_VECTOR_DB_BACKEND,
     DEFAULT_VECTOR_DB_EMBEDDING_BASE_URL,
+    DEFAULT_VECTOR_DB_EMBEDDING_MODEL,
+    DEFAULT_VECTOR_DB_EMBEDDING_PROVIDER,
     DEFAULT_VECTOR_DB_HOST,
     DEFAULT_VECTOR_DB_PORT,
     DOMAIN,
     EMBEDDING_PROVIDER_OLLAMA,
+    ROLE_CONVERSATION,
+    ROLE_EMBEDDINGS,
+    ROLE_EXTERNAL_LLM,
+    ROLE_STT,
+    ROLE_TOOL_USE,
+    ROLE_TTS,
     VECTOR_DB_BACKEND_MILVUS,
 )
 from .conversation_session import ConversationSessionManager
 from .helpers import check_chromadb_health, check_ollama_health
 
 _LOGGER = logging.getLogger(__name__)
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Migrate config entry from v1 (flat keys) to v2 (connections+roles).
+
+    Called automatically by HA when entry.version < ConfigFlow.VERSION.
+
+    Args:
+        hass: Home Assistant instance.
+        entry: The config entry to migrate.
+
+    Returns:
+        True if migration succeeded, False otherwise.
+    """
+    if entry.version == 1:
+        _LOGGER.info("Migrating ProxLab config entry from v1 to v2")
+
+        old_data = dict(entry.data)
+        old_options = dict(entry.options)
+        merged = old_data | old_options
+
+        connections: dict[str, dict[str, Any]] = {}
+        roles: dict[str, str | None] = dict(DEFAULT_ROLES)
+
+        def _new_id() -> str:
+            return uuid4().hex[:8]
+
+        # --- Migrate primary LLM ---
+        llm_url = merged.get(CONF_LLM_BASE_URL, "")
+        if llm_url:
+            cid = _new_id()
+            caps = [CAP_CONVERSATION, CAP_TOOL_USE]
+            connections[cid] = {
+                "name": f"LLM ({merged.get(CONF_LLM_MODEL, DEFAULT_LLM_MODEL)})",
+                "base_url": llm_url,
+                "api_key": merged.get(CONF_LLM_API_KEY, ""),
+                "model": merged.get(CONF_LLM_MODEL, DEFAULT_LLM_MODEL),
+                "capabilities": caps,
+                "temperature": merged.get(CONF_LLM_TEMPERATURE, DEFAULT_TEMPERATURE),
+                "max_tokens": merged.get(CONF_LLM_MAX_TOKENS, DEFAULT_MAX_TOKENS),
+                "top_p": merged.get(CONF_LLM_TOP_P, DEFAULT_TOP_P),
+                "keep_alive": merged.get(CONF_LLM_KEEP_ALIVE, DEFAULT_LLM_KEEP_ALIVE),
+                "proxy_headers": merged.get(CONF_LLM_PROXY_HEADERS, {}),
+                "thinking_enabled": merged.get(
+                    CONF_THINKING_ENABLED, DEFAULT_THINKING_ENABLED
+                ),
+            }
+            roles[ROLE_CONVERSATION] = cid
+            roles[ROLE_TOOL_USE] = cid
+
+        # --- Migrate TTS ---
+        tts_url = merged.get(CONF_TTS_BASE_URL, "")
+        if tts_url:
+            cid = _new_id()
+            connections[cid] = {
+                "name": f"TTS ({merged.get(CONF_TTS_MODEL, DEFAULT_TTS_MODEL)})",
+                "base_url": tts_url,
+                "api_key": "",
+                "model": merged.get(CONF_TTS_MODEL, DEFAULT_TTS_MODEL),
+                "capabilities": [CAP_TTS],
+                "voice": merged.get(CONF_TTS_VOICE, DEFAULT_TTS_VOICE),
+                "speed": merged.get(CONF_TTS_SPEED, DEFAULT_TTS_SPEED),
+                "format": merged.get(CONF_TTS_FORMAT, DEFAULT_TTS_FORMAT),
+            }
+            roles[ROLE_TTS] = cid
+
+        # --- Migrate STT ---
+        stt_url = merged.get(CONF_STT_BASE_URL, "")
+        if stt_url:
+            cid = _new_id()
+            connections[cid] = {
+                "name": f"STT ({merged.get(CONF_STT_MODEL, DEFAULT_STT_MODEL)})",
+                "base_url": stt_url,
+                "api_key": "",
+                "model": merged.get(CONF_STT_MODEL, DEFAULT_STT_MODEL),
+                "capabilities": [CAP_STT],
+                "language": merged.get(CONF_STT_LANGUAGE, DEFAULT_STT_LANGUAGE),
+            }
+            roles[ROLE_STT] = cid
+
+        # --- Migrate External LLM ---
+        ext_enabled = merged.get(CONF_EXTERNAL_LLM_ENABLED, False)
+        ext_url = merged.get(CONF_EXTERNAL_LLM_BASE_URL, "")
+        if ext_enabled and ext_url:
+            cid = _new_id()
+            connections[cid] = {
+                "name": f"External LLM ({merged.get(CONF_EXTERNAL_LLM_MODEL, DEFAULT_EXTERNAL_LLM_MODEL)})",
+                "base_url": ext_url,
+                "api_key": merged.get(CONF_EXTERNAL_LLM_API_KEY, ""),
+                "model": merged.get(CONF_EXTERNAL_LLM_MODEL, DEFAULT_EXTERNAL_LLM_MODEL),
+                "capabilities": [CAP_EXTERNAL_LLM],
+                "temperature": merged.get(
+                    CONF_EXTERNAL_LLM_TEMPERATURE, DEFAULT_EXTERNAL_LLM_TEMPERATURE
+                ),
+                "max_tokens": merged.get(
+                    CONF_EXTERNAL_LLM_MAX_TOKENS, DEFAULT_EXTERNAL_LLM_MAX_TOKENS
+                ),
+                "keep_alive": merged.get(
+                    CONF_EXTERNAL_LLM_KEEP_ALIVE, DEFAULT_EXTERNAL_LLM_KEEP_ALIVE
+                ),
+                "tool_description": merged.get(
+                    CONF_EXTERNAL_LLM_TOOL_DESCRIPTION,
+                    DEFAULT_EXTERNAL_LLM_TOOL_DESCRIPTION,
+                ),
+                "auto_include_context": merged.get(
+                    CONF_EXTERNAL_LLM_AUTO_INCLUDE_CONTEXT,
+                    DEFAULT_EXTERNAL_LLM_AUTO_INCLUDE_CONTEXT,
+                ),
+            }
+            roles[ROLE_EXTERNAL_LLM] = cid
+
+        # --- Migrate Embeddings ---
+        emb_url = merged.get(CONF_VECTOR_DB_EMBEDDING_BASE_URL, "")
+        if emb_url:
+            cid = _new_id()
+            connections[cid] = {
+                "name": f"Embeddings ({merged.get(CONF_VECTOR_DB_EMBEDDING_MODEL, DEFAULT_VECTOR_DB_EMBEDDING_MODEL)})",
+                "base_url": emb_url,
+                "api_key": merged.get(CONF_OPENAI_API_KEY, ""),
+                "model": merged.get(
+                    CONF_VECTOR_DB_EMBEDDING_MODEL, DEFAULT_VECTOR_DB_EMBEDDING_MODEL
+                ),
+                "capabilities": [CAP_EMBEDDINGS],
+                "embedding_provider": merged.get(
+                    CONF_VECTOR_DB_EMBEDDING_PROVIDER,
+                    DEFAULT_VECTOR_DB_EMBEDDING_PROVIDER,
+                ),
+                "keep_alive": merged.get(
+                    CONF_EMBEDDING_KEEP_ALIVE, DEFAULT_EMBEDDING_KEEP_ALIVE
+                ),
+            }
+            roles[ROLE_EMBEDDINGS] = cid
+
+        # Build new entry.data: keep non-endpoint fields, add connections+roles
+        # Keys that belong in the new data dict
+        new_data: dict[str, Any] = {
+            "name": old_data.get("name", "ProxLab"),
+            CONF_CONNECTIONS: connections,
+            CONF_ROLES: roles,
+        }
+        # Preserve proxlab_url if set
+        if CONF_PROXLAB_URL in old_data:
+            new_data[CONF_PROXLAB_URL] = old_data[CONF_PROXLAB_URL]
+
+        # Strip endpoint keys from options (they now live in connections)
+        _ENDPOINT_KEYS = {
+            CONF_LLM_BASE_URL, CONF_LLM_API_KEY, CONF_LLM_MODEL,
+            CONF_LLM_TEMPERATURE, CONF_LLM_MAX_TOKENS, CONF_LLM_TOP_P,
+            CONF_LLM_KEEP_ALIVE, CONF_LLM_PROXY_HEADERS, CONF_THINKING_ENABLED,
+            CONF_TTS_BASE_URL, CONF_TTS_MODEL, CONF_TTS_VOICE, CONF_TTS_SPEED,
+            CONF_TTS_FORMAT, CONF_STT_BASE_URL, CONF_STT_MODEL, CONF_STT_LANGUAGE,
+            CONF_EXTERNAL_LLM_ENABLED, CONF_EXTERNAL_LLM_BASE_URL,
+            CONF_EXTERNAL_LLM_API_KEY, CONF_EXTERNAL_LLM_MODEL,
+            CONF_EXTERNAL_LLM_TEMPERATURE, CONF_EXTERNAL_LLM_MAX_TOKENS,
+            CONF_EXTERNAL_LLM_KEEP_ALIVE, CONF_EXTERNAL_LLM_TOOL_DESCRIPTION,
+            CONF_EXTERNAL_LLM_AUTO_INCLUDE_CONTEXT,
+            CONF_VECTOR_DB_EMBEDDING_BASE_URL, CONF_VECTOR_DB_EMBEDDING_MODEL,
+            CONF_VECTOR_DB_EMBEDDING_PROVIDER, CONF_OPENAI_API_KEY,
+            CONF_EMBEDDING_KEEP_ALIVE,
+            # Source keys from v1 ProxLab routing
+            "llm_source", "tts_source", "stt_source", "external_llm_source",
+            "llm_backend", "azure_api_version",
+        }
+        new_options = {
+            k: v for k, v in old_options.items() if k not in _ENDPOINT_KEYS
+        }
+
+        hass.config_entries.async_update_entry(
+            entry, data=new_data, options=new_options, version=CONFIG_VERSION
+        )
+
+        _LOGGER.info(
+            "Migration v1→v2 complete: %d connections, roles=%s",
+            len(connections),
+            {r: ("set" if v else "empty") for r, v in roles.items()},
+        )
+
+    return True
 
 
 def _get_platforms(config: dict[str, Any]) -> list[Platform]:
@@ -91,6 +337,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Merge config data
     config = dict(entry.data) | dict(entry.options)
 
+    # v2 resolution shim: populate flat CONF_* keys from connections+roles
+    if CONF_CONNECTIONS in config:
+        config = resolve_connections_to_flat_config(config)
+
     # Also merge YAML config for custom tools (if present)
     # This allows users to define custom tools in configuration.yaml
     if "yaml_config" in hass.data.get(DOMAIN, {}):
@@ -123,8 +373,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     else:
         _LOGGER.info("Conversation Session Manager initialized with persistence disabled")
 
-    # Create ProxLab instance with session manager
-    agent = ProxLabAgent(hass, config, session_manager)
+    # Guard against empty LLM URL — user may configure later via options
+    llm_base_url = config.get(CONF_LLM_BASE_URL, "")
+    agent = None
+
+    if llm_base_url:
+        # Create ProxLab instance with session manager
+        agent = ProxLabAgent(hass, config, session_manager)
+    else:
+        _LOGGER.warning(
+            "ProxLab: LLM base URL not configured — conversation agent disabled. "
+            "Configure it in integration options (LLM Settings)."
+        )
 
     # Store agent instance and session manager
     hass.data.setdefault(DOMAIN, {})
@@ -214,11 +474,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.error("Failed to set up Memory Manager: %s", err)
             # Continue setup without memory manager
 
-    # Register as a conversation agent
-    ha_conversation.async_set_agent(hass, entry, agent)
-
-    # Setup scheduled cleanup for conversation history
-    agent.conversation_manager.setup_scheduled_cleanup()
+    # Register as a conversation agent (only if agent was created)
+    if agent:
+        ha_conversation.async_set_agent(hass, entry, agent)
+        agent.conversation_manager.setup_scheduled_cleanup()
 
     # Register services
     await async_setup_services(hass, entry.entry_id)
@@ -260,6 +519,8 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Unload TTS/STT platforms
     config = dict(entry.data) | dict(entry.options)
+    if CONF_CONNECTIONS in config:
+        config = resolve_connections_to_flat_config(config)
     platforms = _get_platforms(config)
     if platforms:
         await hass.config_entries.async_unload_platforms(entry, platforms)
@@ -279,13 +540,12 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         if "vector_manager" in entry_data:
             await entry_data["vector_manager"].async_shutdown()
 
-        # Clean up agent
-        agent: ProxLabAgent = entry_data["agent"]
+        # Clean up agent (may be None if LLM URL was not configured)
+        agent = entry_data.get("agent")
 
-        # Shutdown scheduled cleanup for conversation history
-        agent.conversation_manager.shutdown_scheduled_cleanup()
-
-        await agent.close()
+        if agent:
+            agent.conversation_manager.shutdown_scheduled_cleanup()
+            await agent.close()
 
         del hass.data[DOMAIN][entry.entry_id]
 

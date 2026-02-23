@@ -1,15 +1,6 @@
 """Config flow for ProxLab integration.
 
-This module implements the configuration UI for the ProxLab custom component,
-providing multi-step configuration flows for initial setup and options management.
-
-NOTE: A refactored modular version of this code is available in the config/ package:
-- config/flow.py - ConfigFlow and OptionsFlow classes
-- config/schemas.py - Schema definitions
-- config/validators.py - Validation logic
-- config/utils.py - Helper functions
-
-The refactored version can be adopted by replacing this file's imports when ready.
+v2 architecture: Connections pool + Roles assignment system.
 """
 
 from __future__ import annotations
@@ -19,6 +10,7 @@ import logging
 import re
 from typing import Any
 from urllib.parse import urlparse
+from uuid import uuid4
 
 import aiohttp
 import voluptuous as vol
@@ -26,48 +18,31 @@ from homeassistant import config_entries
 from homeassistant.core import callback
 from homeassistant.helpers import selector
 
+from .connection_manager import eligible_connections_for_role
 from .const import (
+    ALL_CAPABILITIES,
+    ALL_ROLES,
+    CAPABILITY_LABELS,
+    CAP_CONVERSATION,
+    CAP_EMBEDDINGS,
+    CAP_EXTERNAL_LLM,
+    CAP_STT,
+    CAP_TTS,
+    CAP_TOOL_USE,
+    CONFIG_VERSION,
     CONF_ADDITIONAL_COLLECTIONS,
     CONF_ADDITIONAL_L2_DISTANCE_THRESHOLD,
     CONF_ADDITIONAL_TOP_K,
+    CONF_CONNECT_PROXLAB,
+    CONF_CONNECTIONS,
     CONF_CONTEXT_FORMAT,
     CONF_CONTEXT_MODE,
     CONF_DEBUG_LOGGING,
     CONF_DIRECT_ENTITIES,
-    CONF_EMBEDDING_KEEP_ALIVE,
-    CONF_EXTERNAL_LLM_API_KEY,
-    CONF_EXTERNAL_LLM_AUTO_INCLUDE_CONTEXT,
-    CONF_EXTERNAL_LLM_BASE_URL,
     CONF_EXTERNAL_LLM_ENABLED,
-    CONF_EXTERNAL_LLM_KEEP_ALIVE,
-    CONF_EXTERNAL_LLM_MAX_TOKENS,
-    CONF_EXTERNAL_LLM_MODEL,
-    CONF_EXTERNAL_LLM_TEMPERATURE,
-    CONF_EXTERNAL_LLM_TOOL_DESCRIPTION,
     CONF_HISTORY_ENABLED,
     CONF_HISTORY_MAX_MESSAGES,
     CONF_HISTORY_MAX_TOKENS,
-    CONF_LLM_API_KEY,
-    CONF_MILVUS_COLLECTION,
-    CONF_MILVUS_HOST,
-    CONF_MILVUS_PORT,
-    CONF_PROXLAB_URL,
-    CONF_STT_BASE_URL,
-    CONF_STT_LANGUAGE,
-    CONF_STT_MODEL,
-    CONF_TTS_BASE_URL,
-    CONF_TTS_FORMAT,
-    CONF_TTS_MODEL,
-    CONF_TTS_SPEED,
-    CONF_TTS_VOICE,
-    CONF_VECTOR_DB_BACKEND,
-    CONF_LLM_BACKEND,
-    CONF_LLM_BASE_URL,
-    CONF_LLM_KEEP_ALIVE,
-    CONF_LLM_MAX_TOKENS,
-    CONF_LLM_MODEL,
-    CONF_LLM_PROXY_HEADERS,
-    CONF_LLM_TEMPERATURE,
     CONF_MAX_CONTEXT_TOKENS,
     CONF_MEMORY_COLLECTION_NAME,
     CONF_MEMORY_CONTEXT_TOP_K,
@@ -77,20 +52,22 @@ from .const import (
     CONF_MEMORY_MAX_MEMORIES,
     CONF_MEMORY_MIN_IMPORTANCE,
     CONF_MEMORY_MIN_WORDS,
+    CONF_MILVUS_COLLECTION,
+    CONF_MILVUS_HOST,
+    CONF_MILVUS_PORT,
     CONF_OPENAI_API_KEY,
     CONF_PROMPT_CUSTOM_ADDITIONS,
     CONF_PROMPT_INCLUDE_LABELS,
     CONF_PROMPT_USE_DEFAULT,
+    CONF_PROXLAB_URL,
+    CONF_ROLES,
     CONF_SESSION_PERSISTENCE_ENABLED,
     CONF_SESSION_TIMEOUT,
     CONF_STREAMING_ENABLED,
-    CONF_THINKING_ENABLED,
     CONF_TOOLS_MAX_CALLS_PER_TURN,
     CONF_TOOLS_TIMEOUT,
+    CONF_VECTOR_DB_BACKEND,
     CONF_VECTOR_DB_COLLECTION,
-    CONF_VECTOR_DB_EMBEDDING_BASE_URL,
-    CONF_VECTOR_DB_EMBEDDING_MODEL,
-    CONF_VECTOR_DB_EMBEDDING_PROVIDER,
     CONF_VECTOR_DB_HOST,
     CONF_VECTOR_DB_PORT,
     CONF_VECTOR_DB_SIMILARITY_THRESHOLD,
@@ -106,14 +83,7 @@ from .const import (
     DEFAULT_CONTEXT_FORMAT,
     DEFAULT_CONTEXT_MODE,
     DEFAULT_DEBUG_LOGGING,
-    DEFAULT_EMBEDDING_KEEP_ALIVE,
-    DEFAULT_EXTERNAL_LLM_AUTO_INCLUDE_CONTEXT,
     DEFAULT_EXTERNAL_LLM_ENABLED,
-    DEFAULT_EXTERNAL_LLM_KEEP_ALIVE,
-    DEFAULT_EXTERNAL_LLM_MAX_TOKENS,
-    DEFAULT_EXTERNAL_LLM_MODEL,
-    DEFAULT_EXTERNAL_LLM_TEMPERATURE,
-    DEFAULT_EXTERNAL_LLM_TOOL_DESCRIPTION,
     DEFAULT_HISTORY_ENABLED,
     DEFAULT_HISTORY_MAX_MESSAGES,
     DEFAULT_HISTORY_MAX_TOKENS,
@@ -129,9 +99,13 @@ from .const import (
     DEFAULT_MEMORY_MAX_MEMORIES,
     DEFAULT_MEMORY_MIN_IMPORTANCE,
     DEFAULT_MEMORY_MIN_WORDS,
+    DEFAULT_MILVUS_COLLECTION,
+    DEFAULT_MILVUS_HOST,
+    DEFAULT_MILVUS_PORT,
     DEFAULT_NAME,
     DEFAULT_PROMPT_INCLUDE_LABELS,
     DEFAULT_PROMPT_USE_DEFAULT,
+    DEFAULT_ROLES,
     DEFAULT_SESSION_PERSISTENCE_ENABLED,
     DEFAULT_SESSION_TIMEOUT,
     DEFAULT_STREAMING_ENABLED,
@@ -139,31 +113,22 @@ from .const import (
     DEFAULT_THINKING_ENABLED,
     DEFAULT_TOOLS_MAX_CALLS_PER_TURN,
     DEFAULT_TOOLS_TIMEOUT,
-    DEFAULT_VECTOR_DB_COLLECTION,
-    DEFAULT_VECTOR_DB_EMBEDDING_BASE_URL,
-    DEFAULT_VECTOR_DB_EMBEDDING_MODEL,
-    DEFAULT_VECTOR_DB_EMBEDDING_PROVIDER,
-    DEFAULT_VECTOR_DB_HOST,
-    DEFAULT_VECTOR_DB_PORT,
-    DEFAULT_VECTOR_DB_SIMILARITY_THRESHOLD,
-    DEFAULT_VECTOR_DB_TOP_K,
-    DEFAULT_MILVUS_COLLECTION,
-    DEFAULT_MILVUS_HOST,
-    DEFAULT_MILVUS_PORT,
-    DEFAULT_STT_LANGUAGE,
-    DEFAULT_STT_MODEL,
     DEFAULT_TTS_FORMAT,
     DEFAULT_TTS_MODEL,
     DEFAULT_TTS_SPEED,
     DEFAULT_TTS_VOICE,
     DEFAULT_VECTOR_DB_BACKEND,
+    DEFAULT_VECTOR_DB_COLLECTION,
+    DEFAULT_VECTOR_DB_HOST,
+    DEFAULT_VECTOR_DB_PORT,
+    DEFAULT_VECTOR_DB_SIMILARITY_THRESHOLD,
+    DEFAULT_VECTOR_DB_TOP_K,
     DOMAIN,
     EMBEDDING_PROVIDER_OLLAMA,
     EMBEDDING_PROVIDER_OPENAI,
-    LLM_BACKEND_DEFAULT,
-    LLM_BACKEND_LLAMA_CPP,
-    LLM_BACKEND_OLLAMA_GPU,
-    LLM_BACKEND_VLLM,
+    LLM_CAPABILITIES,
+    ROLE_LABELS,
+    ROLE_TO_CAPABILITY,
     VECTOR_DB_BACKEND_CHROMADB,
     VECTOR_DB_BACKEND_MILVUS,
 )
@@ -171,60 +136,32 @@ from .exceptions import AuthenticationError, ValidationError
 
 _LOGGER = logging.getLogger(__name__)
 
-# OpenAI default base URL
+# -------------------------------------------------------------------
+# Helpers
+# -------------------------------------------------------------------
+
 OPENAI_BASE_URL = "https://api.openai.com/v1"
 
 
 def normalize_url(url: str) -> str:
-    """Normalize a URL for OpenAI-compatible endpoints.
-
-    - Strip whitespace and trailing slashes
-    - Auto-add http:// if no scheme
-    - Auto-append /v1 if missing (for OpenAI-compatible endpoints)
-    - Validate scheme is http/https
-
-    Args:
-        url: Raw URL input from user.
-
-    Returns:
-        Normalized URL string.
-    """
+    """Normalize a URL for OpenAI-compatible endpoints."""
     url = url.strip().rstrip("/")
     if not url:
         return url
-
-    # Auto-add http:// if no scheme
     if not url.startswith(("http://", "https://")):
         url = f"http://{url}"
-
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
-        return url  # Let validation catch this
-
-    # Auto-append /v1 if path is empty or just /
+        return url
     if not parsed.path or parsed.path == "/":
         url = f"{url}/v1"
-
     return url
 
 
 def _validate_proxy_headers(headers_input: str | dict[str, str] | None) -> dict[str, str]:
-    """Validate proxy headers configuration.
-
-    Args:
-        headers_input: Either a JSON string or dict of headers
-
-    Returns:
-        Validated headers dictionary
-
-    Raises:
-        ValidationError: If headers are invalid
-    """
-    # Handle None or empty string
+    """Validate proxy headers configuration."""
     if not headers_input:
         return {}
-
-    # Parse JSON string if needed
     if isinstance(headers_input, str):
         headers_input = headers_input.strip()
         if not headers_input:
@@ -235,366 +172,164 @@ def _validate_proxy_headers(headers_input: str | dict[str, str] | None) -> dict[
             raise ValidationError(f"Invalid JSON format for proxy headers: {err}") from err
     else:
         headers = headers_input
-
-    # Validate it's a dictionary
     if not isinstance(headers, dict):
         raise ValidationError("Proxy headers must be a JSON object (dictionary)")
-
-    # Validate each header
     for key, value in headers.items():
-        # RFC 7230 header name validation
-        # Header names must be tokens (alphanumeric and -_)
         if not re.match(r"^[a-zA-Z0-9\-_]+$", key):
             raise ValidationError(
                 f"Invalid header name '{key}'. Header names must contain only "
                 "alphanumeric characters, hyphens, and underscores (RFC 7230)"
             )
-
-        # Ensure values are strings
         if not isinstance(value, str):
             raise ValidationError(
                 f"Header value for '{key}' must be a string, got {type(value).__name__}"
             )
-
     return headers
 
 
-def _migrate_legacy_backend(config: dict[str, Any]) -> dict[str, Any]:
-    """Migrate legacy llm_backend setting to llm_proxy_headers.
+def _new_connection_id() -> str:
+    """Generate a short unique connection ID."""
+    return uuid4().hex[:8]
 
-    Args:
-        config: Configuration dictionary
 
-    Returns:
-        Updated configuration with migrated settings
-    """
-    # If proxy_headers already exist, don't migrate
-    if CONF_LLM_PROXY_HEADERS in config:
-        return config
-
-    # Check for legacy backend setting
-    backend = config.get(CONF_LLM_BACKEND)
-    if backend and backend != LLM_BACKEND_DEFAULT:
-        # Migrate to proxy headers
-        config[CONF_LLM_PROXY_HEADERS] = {"X-Ollama-Backend": backend}
-        _LOGGER.info("Migrated legacy llm_backend setting '%s' to llm_proxy_headers", backend)
-
-    return config
+# -------------------------------------------------------------------
+# ConfigFlow (initial setup)
+# -------------------------------------------------------------------
 
 
 class ProxLabAgentConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
-    """Handle a config flow for ProxLab.
+    """Handle initial config flow for ProxLab (v2)."""
 
-    This config flow implements multi-step configuration for the ProxLab
-    integration, including initial LLM setup and validation.
-    """
-
-    VERSION = 1
+    VERSION = CONFIG_VERSION
 
     def __init__(self) -> None:
         """Initialize the config flow."""
         self._data: dict[str, Any] = {}
-        self._test_connection_passed = False
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Handle the initial step - LLM configuration.
+        """Handle the initial step - simplified setup.
 
-        This step collects basic LLM configuration including:
-        - Integration name
-        - LLM base URL (OpenAI-compatible endpoint)
-        - API key
-        - Model name
-        - Temperature
-        - Max tokens
-
-        Args:
-            user_input: User-provided configuration data
-
-        Returns:
-            FlowResult indicating next step or completion
+        Collects: name, connect_proxlab checkbox, proxlab_url.
+        Creates entry with empty connections/roles (v2 data shape).
         """
         errors: dict[str, str] = {}
 
         if user_input is not None:
             try:
-                # Normalize URLs
-                if CONF_LLM_BASE_URL in user_input:
-                    user_input[CONF_LLM_BASE_URL] = normalize_url(
-                        user_input[CONF_LLM_BASE_URL]
-                    )
-                if CONF_PROXLAB_URL in user_input and user_input[CONF_PROXLAB_URL]:
-                    user_input[CONF_PROXLAB_URL] = user_input[CONF_PROXLAB_URL].strip().rstrip("/")
-                if CONF_TTS_BASE_URL in user_input and user_input[CONF_TTS_BASE_URL]:
-                    user_input[CONF_TTS_BASE_URL] = normalize_url(
-                        user_input[CONF_TTS_BASE_URL]
-                    )
-                if CONF_STT_BASE_URL in user_input and user_input[CONF_STT_BASE_URL]:
-                    user_input[CONF_STT_BASE_URL] = normalize_url(
-                        user_input[CONF_STT_BASE_URL]
-                    )
+                connect_proxlab = user_input.get(CONF_CONNECT_PROXLAB, False)
+                proxlab_url = user_input.get(CONF_PROXLAB_URL, "").strip().rstrip("/")
 
-                # Parse and validate proxy headers
-                if CONF_LLM_PROXY_HEADERS in user_input:
-                    validated_headers = _validate_proxy_headers(user_input[CONF_LLM_PROXY_HEADERS])
-                    user_input[CONF_LLM_PROXY_HEADERS] = validated_headers
+                entry_data: dict[str, Any] = {
+                    "name": user_input.get("name", DEFAULT_NAME),
+                    CONF_CONNECTIONS: {},
+                    CONF_ROLES: dict(DEFAULT_ROLES),
+                }
 
-                # Validate the configuration
-                await self._validate_llm_config(user_input)
+                if connect_proxlab and proxlab_url:
+                    from .proxlab_api import check_proxlab_connection
 
-                # Migrate legacy backend setting if needed
-                user_input = _migrate_legacy_backend(user_input)
+                    reachable = await check_proxlab_connection(proxlab_url)
+                    if not reachable:
+                        errors["base"] = "cannot_connect"
+                        raise ValidationError("Cannot connect to ProxLab")
+                    entry_data[CONF_PROXLAB_URL] = proxlab_url
 
-                # Store the configuration
-                self._data.update(user_input)
+                self._data.update(entry_data)
 
-                # Create the config entry with basic configuration
-                # Options flow will handle advanced settings
                 return self.async_create_entry(
                     title=user_input.get("name", DEFAULT_NAME),
                     data=self._data,
                 )
 
-            except ValidationError as err:
-                _LOGGER.error("Validation error: %s", err)
-                errors["base"] = "invalid_config"
-            except AuthenticationError as err:
-                _LOGGER.error("Authentication error: %s", err)
-                errors["base"] = "invalid_auth"
-            except Exception as err:  # pylint: disable=broad-except
+            except ValidationError:
+                if not errors:
+                    errors["base"] = "invalid_config"
+            except Exception as err:
                 _LOGGER.exception("Unexpected error during config flow: %s", err)
                 errors["base"] = "unknown"
 
-        # Show the configuration form
         return self.async_show_form(
             step_id="user",
             data_schema=vol.Schema(
                 {
                     vol.Required("name", default=DEFAULT_NAME): str,
+                    vol.Optional(CONF_CONNECT_PROXLAB, default=False): bool,
                     vol.Optional(
                         CONF_PROXLAB_URL,
                         description={"suggested_value": "http://10.0.0.233:7777"},
-                    ): str,
-                    vol.Required(
-                        CONF_LLM_BASE_URL,
-                        default=OPENAI_BASE_URL,
-                    ): str,
-                    vol.Optional(
-                        CONF_LLM_API_KEY,
-                        description={"suggested_value": ""},
-                    ): selector.TemplateSelector(),
-                    vol.Required(
-                        CONF_LLM_MODEL,
-                        default=DEFAULT_LLM_MODEL,
-                    ): str,
-                    vol.Optional(
-                        CONF_LLM_TEMPERATURE,
-                        default=DEFAULT_TEMPERATURE,
-                    ): vol.All(vol.Coerce(float), vol.Range(min=0.0, max=2.0)),
-                    vol.Optional(
-                        CONF_LLM_MAX_TOKENS,
-                        default=DEFAULT_MAX_TOKENS,
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=100000)),
-                    vol.Optional(
-                        CONF_LLM_KEEP_ALIVE,
-                        default=DEFAULT_LLM_KEEP_ALIVE,
-                    ): str,
-                    vol.Optional(
-                        CONF_LLM_PROXY_HEADERS,
-                        description={"suggested_value": ""},
-                    ): str,
-                    vol.Optional(
-                        CONF_TTS_BASE_URL,
-                        description={"suggested_value": ""},
-                    ): str,
-                    vol.Optional(
-                        CONF_STT_BASE_URL,
-                        description={"suggested_value": ""},
                     ): str,
                 }
             ),
             errors=errors,
             description_placeholders={
-                "openai_url": OPENAI_BASE_URL,
-                "ollama_url": "http://localhost:11434/v1",
-                "default_model": DEFAULT_LLM_MODEL,
+                "setup_message": (
+                    "Configure connections and roles in integration options after setup."
+                ),
             },
         )
-
-    async def _validate_llm_config(self, config: dict[str, Any]) -> None:
-        """Validate LLM configuration.
-
-        Validates:
-        - URL format is correct
-        - API key is provided and not empty
-        - Temperature is within valid range
-        - Max tokens is reasonable
-
-        Args:
-            config: Configuration dictionary to validate
-
-        Raises:
-            ValidationError: If configuration is invalid
-            AuthenticationError: If API key is invalid (optional test)
-        """
-        # Validate URL format
-        base_url = config.get(CONF_LLM_BASE_URL, "")
-        if not base_url:
-            raise ValidationError("LLM base URL cannot be empty")
-
-        parsed = urlparse(base_url)
-        if not parsed.scheme or not parsed.netloc:
-            raise ValidationError(
-                f"Invalid URL format: {base_url}. " "Expected format: https://api.example.com/v1"
-            )
-
-        if parsed.scheme not in ("http", "https"):
-            raise ValidationError(f"URL scheme must be http or https, got: {parsed.scheme}")
-
-        # API key is optional - some local LLMs don't require authentication
-
-        # Validate model name
-        model = config.get(CONF_LLM_MODEL, "")
-        if not model or not model.strip():
-            raise ValidationError("Model name cannot be empty")
-
-        # Temperature and max_tokens are validated by voluptuous schema
-        # but we can add additional checks here if needed
-        temperature = config.get(CONF_LLM_TEMPERATURE, DEFAULT_TEMPERATURE)
-        if not 0.0 <= temperature <= 2.0:
-            raise ValidationError(f"Temperature must be between 0.0 and 2.0, got: {temperature}")
-
-        max_tokens = config.get(CONF_LLM_MAX_TOKENS, DEFAULT_MAX_TOKENS)
-        if max_tokens < 1:
-            raise ValidationError(f"Max tokens must be at least 1, got: {max_tokens}")
-
-        # Validate proxy headers if provided
-        if CONF_LLM_PROXY_HEADERS in config:
-            _validate_proxy_headers(config[CONF_LLM_PROXY_HEADERS])
-
-    async def _test_llm_connection(self, config: dict[str, Any]) -> bool:
-        """Test connection to LLM API.
-
-        Optional validation step to verify the LLM configuration works
-        by attempting a minimal API call.
-
-        Args:
-            config: LLM configuration to test
-
-        Returns:
-            True if connection successful, False otherwise
-
-        Note:
-            This is an optional enhancement. Currently not called in the main flow
-            but can be enabled if desired.
-        """
-        base_url = config[CONF_LLM_BASE_URL]
-        api_key = config[CONF_LLM_API_KEY]
-        model = config[CONF_LLM_MODEL]
-
-        # Construct the chat completions endpoint
-        url = f"{base_url.rstrip('/')}/chat/completions"
-
-        headers = {
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-        }
-
-        # Minimal test payload
-        payload = {
-            "model": model,
-            "messages": [{"role": "user", "content": "test"}],
-            "max_tokens": 5,
-        }
-
-        try:
-            async with aiohttp.ClientSession() as session:
-                async with session.post(
-                    url,
-                    json=payload,
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=10),
-                ) as response:
-                    if response.status == 401:
-                        raise AuthenticationError("Invalid API key")
-                    if response.status == 404:
-                        raise ValidationError(
-                            f"Endpoint not found. Verify the base URL: {base_url}"
-                        )
-                    if response.status >= 400:
-                        error_text = await response.text()
-                        raise ValidationError(f"API returned error {response.status}: {error_text}")
-
-                    # Success
-                    _LOGGER.debug("LLM connection test successful")
-                    return True
-
-        except aiohttp.ClientError as err:
-            _LOGGER.error("Connection error during LLM test: %s", err)
-            raise ValidationError(f"Failed to connect to LLM at {base_url}: {err}") from err
 
     @staticmethod
     @callback
     def async_get_options_flow(
         config_entry: config_entries.ConfigEntry,
     ) -> ProxLabAgentOptionsFlow:
-        """Get the options flow for this handler.
-
-        Args:
-            config_entry: The config entry to create options flow for
-
-        Returns:
-            ProxLabAgentOptionsFlow instance
-        """
+        """Get the options flow for this handler."""
         return ProxLabAgentOptionsFlow(config_entry)
 
 
-class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
-    """Handle options flow for ProxLab.
+# -------------------------------------------------------------------
+# OptionsFlow (v2: Connections + Roles)
+# -------------------------------------------------------------------
 
-    This options flow provides advanced configuration settings including:
-    - Context injection mode and settings
-    - Conversation history configuration
-    - System prompt customization
-    - Tool settings
-    - External LLM tool configuration
-    - Debug logging
-    """
+
+class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
+    """Handle options flow for ProxLab v2."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        """Initialize the options flow.
-
-        Args:
-            config_entry: The config entry to manage options for
-        """
+        """Initialize the options flow."""
         self._config_entry = config_entry
+        self._proxlab_services: list | None = None
+        # Temp state for multi-step connection flows
+        self._adding_connection: dict[str, Any] = {}
+        self._editing_connection_id: str | None = None
+        self._editing_connection: dict[str, Any] = {}
+
+    # -----------------------------------------------------------
+    # ProxLab service discovery helpers
+    # -----------------------------------------------------------
+
+    async def _get_proxlab_services(self) -> list:
+        """Fetch and cache ProxLab services for this options session."""
+        if self._proxlab_services is not None:
+            return self._proxlab_services
+        proxlab_url = self._config_entry.data.get(CONF_PROXLAB_URL, "")
+        if not proxlab_url:
+            self._proxlab_services = []
+            return self._proxlab_services
+        try:
+            from .proxlab_api import discover_services
+
+            self._proxlab_services = await discover_services(proxlab_url)
+        except Exception as err:
+            _LOGGER.warning("Failed to fetch ProxLab services: %s", err)
+            self._proxlab_services = []
+        return self._proxlab_services
+
+    # -----------------------------------------------------------
+    # Main menu
+    # -----------------------------------------------------------
 
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Manage the options - main menu.
-
-        Presents a menu of configuration categories:
-        - Context settings
-        - History settings
-        - Prompt settings
-        - Tool settings
-        - External LLM settings
-        - Debug settings
-
-        Args:
-            user_input: User selection
-
-        Returns:
-            FlowResult indicating next step
-        """
+        """Options main menu."""
         return self.async_show_menu(
             step_id="init",
             menu_options=[
-                "llm_settings",
-                "tts_settings",
-                "stt_settings",
+                "connections",
+                "role_assignments",
                 "proxlab_settings",
                 "context_settings",
                 "vector_db_settings",
@@ -602,215 +337,594 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                 "memory_settings",
                 "prompt_settings",
                 "tool_settings",
-                "external_llm_settings",
                 "debug_settings",
             ],
         )
 
-    async def async_step_llm_settings(
+    # ===========================================================
+    # CONNECTIONS SUB-FLOW
+    # ===========================================================
+
+    async def async_step_connections(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Configure LLM settings.
+        """Connections action picker: add / edit / delete."""
+        connections = dict(self._config_entry.data.get(CONF_CONNECTIONS, {}))
 
-        Args:
-            user_input: User-provided configuration
+        if user_input is not None:
+            action = user_input.get("action", "")
+            if action == "__add__":
+                return await self.async_step_add_connection()
+            if action.startswith("edit:"):
+                self._editing_connection_id = action[5:]
+                self._editing_connection = dict(
+                    connections.get(self._editing_connection_id, {})
+                )
+                return await self.async_step_edit_connection()
+            if action.startswith("delete:"):
+                self._editing_connection_id = action[7:]
+                return await self.async_step_delete_connection()
+            # Unknown action, show menu again
+            return await self.async_step_connections()
 
-        Returns:
-            FlowResult indicating completion or next step
-        """
+        # Build action options
+        options = [{"value": "__add__", "label": "Add New Connection"}]
+        for cid, conn in connections.items():
+            name = conn.get("name", cid)
+            caps = ", ".join(conn.get("capabilities", []))
+            options.append({"value": f"edit:{cid}", "label": f"Edit: {name} [{caps}]"})
+        for cid, conn in connections.items():
+            name = conn.get("name", cid)
+            options.append({"value": f"delete:{cid}", "label": f"Delete: {name}"})
+
+        return self.async_show_form(
+            step_id="connections",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("action"): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=options,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+            ),
+        )
+
+    # -----------------------------------------------------------
+    # Add Connection (step 1: basics)
+    # -----------------------------------------------------------
+
+    async def async_step_add_connection(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Add connection step 1: name, URL, API key, model, capabilities."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            _LOGGER.debug("LLM settings form submitted with user_input: %s", user_input)
-            # Validate LLM configuration
-            try:
-                # Parse and validate proxy headers
-                if CONF_LLM_PROXY_HEADERS in user_input:
-                    validated_headers = _validate_proxy_headers(user_input[CONF_LLM_PROXY_HEADERS])
-                    user_input[CONF_LLM_PROXY_HEADERS] = validated_headers
+            base_url = user_input.get("base_url", "")
+            if base_url:
+                base_url = normalize_url(base_url)
+                parsed = urlparse(base_url)
+                if not parsed.scheme or not parsed.netloc:
+                    errors["base"] = "invalid_config"
+            user_input["base_url"] = base_url
 
-                # Ensure API key is included even if empty (for local LLMs that don't need auth)
-                # Home Assistant forms may not include empty optional fields in user_input
-                if CONF_LLM_API_KEY not in user_input:
-                    _LOGGER.debug("API key not in user_input, setting to empty string")
-                    user_input[CONF_LLM_API_KEY] = ""
-
-                # Merge user input with entry data (not options)
-                # LLM settings should update the entry.data
-                test_config = dict(self._config_entry.data) | user_input
-                _LOGGER.debug("Merged test_config for validation: %s", test_config)
-
-                # Create a temporary config flow instance to validate
-                temp_flow = ProxLabAgentConfigFlow()
-                temp_flow.hass = self.hass
-                await temp_flow._validate_llm_config(test_config)
-                _LOGGER.debug("LLM config validation passed")
-
-                # Migrate legacy backend setting if needed
-                user_input = _migrate_legacy_backend(user_input)
-
-                # Update the config entry data with new LLM settings
-                # Note: async_update_entry is synchronous despite the name in HA
-                new_data = {**self._config_entry.data, **user_input}
-                _LOGGER.debug("Updating config entry data to: %s", new_data)
-                self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
-                _LOGGER.debug("Config entry data updated successfully")
-
-                # Return current options to preserve them
-                # The data update above modifies entry.data, this preserves entry.options
-                return self.async_create_entry(title="", data=self._config_entry.options)
-
-            except ValidationError as err:
-                _LOGGER.error("LLM validation error: %s", err)
+            caps = user_input.get("capabilities", [])
+            if not caps:
                 errors["base"] = "invalid_config"
-            except AuthenticationError as err:
-                _LOGGER.error("LLM authentication error: %s", err)
-                errors["base"] = "invalid_auth"
-            except Exception as err:  # pylint: disable=broad-except
-                _LOGGER.exception("Unexpected error updating LLM settings: %s", err)
-                errors["base"] = "unknown"
 
-        # Get current values from entry.data (not options)
-        current_data = self._config_entry.data
+            if not errors:
+                self._adding_connection = {
+                    "name": user_input.get("name", "New Connection"),
+                    "base_url": base_url,
+                    "api_key": user_input.get("api_key", ""),
+                    "model": user_input.get("model", ""),
+                    "capabilities": caps,
+                }
+                return await self.async_step_connection_details()
 
-        # Convert proxy headers dict to JSON string for display
-        proxy_headers = current_data.get(CONF_LLM_PROXY_HEADERS, {})
-        proxy_headers_str = json.dumps(proxy_headers, indent=2) if proxy_headers else ""
+        # Build capabilities multi-select options
+        cap_options = [
+            {"value": cap, "label": CAPABILITY_LABELS.get(cap, cap)}
+            for cap in ALL_CAPABILITIES
+        ]
+
+        # Optional ProxLab import dropdown
+        schema_fields: dict[Any, Any] = {}
+        proxlab_url = self._config_entry.data.get(CONF_PROXLAB_URL, "")
+        if proxlab_url:
+            services = await self._get_proxlab_services()
+            if services:
+                import_options = [{"value": "__none__", "label": "(Don't import)"}]
+                for svc in services:
+                    if hasattr(svc, "base_url") and svc.base_url:
+                        import_options.append(
+                            {"value": svc.base_url, "label": svc.display_name}
+                        )
+                schema_fields[vol.Optional("import_from_proxlab")] = (
+                    selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=import_options,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    )
+                )
+
+        schema_fields.update(
+            {
+                vol.Required("name", default="New Connection"): str,
+                vol.Required("base_url", default=""): str,
+                vol.Optional("api_key", default=""): str,
+                vol.Optional("model", default=""): str,
+                vol.Required("capabilities"): selector.SelectSelector(
+                    selector.SelectSelectorConfig(
+                        options=cap_options,
+                        multiple=True,
+                        mode=selector.SelectSelectorMode.DROPDOWN,
+                    )
+                ),
+            }
+        )
 
         return self.async_show_form(
-            step_id="llm_settings",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(
-                        CONF_LLM_BASE_URL,
-                        default=current_data.get(CONF_LLM_BASE_URL, OPENAI_BASE_URL),
-                    ): str,
-                    vol.Optional(
-                        CONF_LLM_API_KEY,
-                        description={"suggested_value": current_data.get(CONF_LLM_API_KEY, "")},
-                    ): selector.TemplateSelector(),
-                    vol.Required(
-                        CONF_LLM_MODEL,
-                        default=current_data.get(CONF_LLM_MODEL, DEFAULT_LLM_MODEL),
-                    ): str,
-                    vol.Optional(
-                        CONF_LLM_TEMPERATURE,
-                        default=current_data.get(CONF_LLM_TEMPERATURE, DEFAULT_TEMPERATURE),
-                    ): vol.All(vol.Coerce(float), vol.Range(min=0.0, max=2.0)),
-                    vol.Optional(
-                        CONF_LLM_MAX_TOKENS,
-                        default=current_data.get(CONF_LLM_MAX_TOKENS, DEFAULT_MAX_TOKENS),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=100000)),
-                    vol.Optional(
-                        CONF_LLM_KEEP_ALIVE,
-                        default=current_data.get(CONF_LLM_KEEP_ALIVE, DEFAULT_LLM_KEEP_ALIVE),
-                    ): str,
-                    vol.Optional(
-                        CONF_LLM_PROXY_HEADERS,
-                        description={"suggested_value": proxy_headers_str},
-                    ): str,
-                    vol.Optional(
-                        CONF_THINKING_ENABLED,
-                        default=current_data.get(CONF_THINKING_ENABLED, DEFAULT_THINKING_ENABLED),
-                    ): bool,
-                }
-            ),
+            step_id="add_connection",
+            data_schema=vol.Schema(schema_fields),
             errors=errors,
+        )
+
+    # -----------------------------------------------------------
+    # Add Connection (step 2: type-specific details)
+    # -----------------------------------------------------------
+
+    async def async_step_connection_details(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Add connection step 2: type-specific fields based on capabilities."""
+        if user_input is not None:
+            conn = dict(self._adding_connection)
+            conn.update(self._extract_detail_fields(user_input, conn["capabilities"]))
+
+            # Validate proxy headers
+            if "proxy_headers" in conn and isinstance(conn["proxy_headers"], str):
+                try:
+                    conn["proxy_headers"] = _validate_proxy_headers(conn["proxy_headers"])
+                except ValidationError:
+                    conn["proxy_headers"] = {}
+
+            # Save connection
+            cid = _new_connection_id()
+            new_data = dict(self._config_entry.data)
+            connections = dict(new_data.get(CONF_CONNECTIONS, {}))
+            connections[cid] = conn
+            new_data[CONF_CONNECTIONS] = connections
+            self.hass.config_entries.async_update_entry(
+                self._config_entry, data=new_data
+            )
+            self._adding_connection = {}
+            return self.async_create_entry(title="", data=self._config_entry.options)
+
+        caps = self._adding_connection.get("capabilities", [])
+        schema_fields = self._build_detail_schema(caps, {})
+
+        if not schema_fields:
+            # No detail fields needed, save directly
+            return await self.async_step_connection_details({})
+
+        return self.async_show_form(
+            step_id="connection_details",
+            data_schema=vol.Schema(schema_fields),
             description_placeholders={
-                "openai_url": OPENAI_BASE_URL,
-                "ollama_url": "http://localhost:11434/v1",
+                "connection_name": self._adding_connection.get("name", ""),
             },
         )
 
-    async def async_step_tts_settings(
+    # -----------------------------------------------------------
+    # Edit Connection (step 1: basics)
+    # -----------------------------------------------------------
+
+    async def async_step_edit_connection(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Configure TTS (text-to-speech) settings."""
+        """Edit connection step 1: name, URL, API key, model, capabilities."""
+        errors: dict[str, str] = {}
+        conn = self._editing_connection
+
         if user_input is not None:
-            # Normalize URL
-            if CONF_TTS_BASE_URL in user_input and user_input[CONF_TTS_BASE_URL]:
-                user_input[CONF_TTS_BASE_URL] = normalize_url(user_input[CONF_TTS_BASE_URL])
+            base_url = user_input.get("base_url", "")
+            if base_url:
+                base_url = normalize_url(base_url)
+                parsed = urlparse(base_url)
+                if not parsed.scheme or not parsed.netloc:
+                    errors["base"] = "invalid_config"
+            user_input["base_url"] = base_url
 
-            # TTS settings go in entry.data since they affect platform setup
-            new_data = {**self._config_entry.data, **user_input}
-            self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
-            return self.async_create_entry(title="", data=self._config_entry.options)
+            caps = user_input.get("capabilities", [])
+            if not caps:
+                errors["base"] = "invalid_config"
 
-        current_data = self._config_entry.data
-        current_options = self._config_entry.options
+            if not errors:
+                self._editing_connection = {
+                    **conn,
+                    "name": user_input.get("name", conn.get("name", "")),
+                    "base_url": base_url,
+                    "api_key": user_input.get("api_key", conn.get("api_key", "")),
+                    "model": user_input.get("model", conn.get("model", "")),
+                    "capabilities": caps,
+                }
+                return await self.async_step_edit_connection_details()
+
+        cap_options = [
+            {"value": cap, "label": CAPABILITY_LABELS.get(cap, cap)}
+            for cap in ALL_CAPABILITIES
+        ]
 
         return self.async_show_form(
-            step_id="tts_settings",
+            step_id="edit_connection",
             data_schema=vol.Schema(
                 {
+                    vol.Required("name", default=conn.get("name", "")): str,
+                    vol.Required("base_url", default=conn.get("base_url", "")): str,
                     vol.Optional(
-                        CONF_TTS_BASE_URL,
-                        description={"suggested_value": current_data.get(CONF_TTS_BASE_URL, "")},
+                        "api_key",
+                        description={"suggested_value": conn.get("api_key", "")},
                     ): str,
-                    vol.Optional(
-                        CONF_TTS_MODEL,
-                        default=current_data.get(CONF_TTS_MODEL, DEFAULT_TTS_MODEL),
-                    ): str,
-                    vol.Optional(
-                        CONF_TTS_VOICE,
-                        default=current_data.get(CONF_TTS_VOICE, DEFAULT_TTS_VOICE),
+                    vol.Optional("model", default=conn.get("model", "")): str,
+                    vol.Required(
+                        "capabilities", default=conn.get("capabilities", [])
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
-                            options=["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
+                            options=cap_options,
+                            multiple=True,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+            ),
+            errors=errors,
+        )
+
+    # -----------------------------------------------------------
+    # Edit Connection (step 2: type-specific details)
+    # -----------------------------------------------------------
+
+    async def async_step_edit_connection_details(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Edit connection step 2: type-specific fields."""
+        conn = self._editing_connection
+        cid = self._editing_connection_id
+
+        if user_input is not None:
+            conn.update(self._extract_detail_fields(user_input, conn["capabilities"]))
+
+            if "proxy_headers" in conn and isinstance(conn["proxy_headers"], str):
+                try:
+                    conn["proxy_headers"] = _validate_proxy_headers(conn["proxy_headers"])
+                except ValidationError:
+                    conn["proxy_headers"] = {}
+
+            # Save edited connection
+            new_data = dict(self._config_entry.data)
+            connections = dict(new_data.get(CONF_CONNECTIONS, {}))
+            connections[cid] = conn
+            new_data[CONF_CONNECTIONS] = connections
+            self.hass.config_entries.async_update_entry(
+                self._config_entry, data=new_data
+            )
+            self._editing_connection_id = None
+            self._editing_connection = {}
+            return self.async_create_entry(title="", data=self._config_entry.options)
+
+        caps = conn.get("capabilities", [])
+        schema_fields = self._build_detail_schema(caps, conn)
+
+        if not schema_fields:
+            return await self.async_step_edit_connection_details({})
+
+        return self.async_show_form(
+            step_id="edit_connection_details",
+            data_schema=vol.Schema(schema_fields),
+            description_placeholders={
+                "connection_name": conn.get("name", ""),
+            },
+        )
+
+    # -----------------------------------------------------------
+    # Delete Connection
+    # -----------------------------------------------------------
+
+    async def async_step_delete_connection(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Delete connection with confirmation."""
+        cid = self._editing_connection_id
+        connections = dict(self._config_entry.data.get(CONF_CONNECTIONS, {}))
+        conn = connections.get(cid, {})
+
+        if user_input is not None:
+            if user_input.get("confirm", False):
+                new_data = dict(self._config_entry.data)
+                new_connections = dict(new_data.get(CONF_CONNECTIONS, {}))
+                new_connections.pop(cid, None)
+                new_data[CONF_CONNECTIONS] = new_connections
+
+                # Null any roles pointing to deleted connection
+                new_roles = dict(new_data.get(CONF_ROLES, {}))
+                for role, assigned_cid in new_roles.items():
+                    if assigned_cid == cid:
+                        new_roles[role] = None
+                new_data[CONF_ROLES] = new_roles
+
+                self.hass.config_entries.async_update_entry(
+                    self._config_entry, data=new_data
+                )
+
+            self._editing_connection_id = None
+            return self.async_create_entry(title="", data=self._config_entry.options)
+
+        return self.async_show_form(
+            step_id="delete_connection",
+            data_schema=vol.Schema(
+                {vol.Required("confirm", default=False): bool}
+            ),
+            description_placeholders={
+                "connection_name": conn.get("name", cid or "Unknown"),
+            },
+        )
+
+    # -----------------------------------------------------------
+    # Detail schema helpers
+    # -----------------------------------------------------------
+
+    def _build_detail_schema(
+        self, caps: list[str], defaults: dict[str, Any]
+    ) -> dict[Any, Any]:
+        """Build type-specific detail fields based on capabilities.
+
+        Args:
+            caps: List of capability strings.
+            defaults: Existing values for pre-population.
+
+        Returns:
+            Dict of voluptuous schema fields.
+        """
+        fields: dict[Any, Any] = {}
+        has_llm = bool(set(caps) & LLM_CAPABILITIES)
+        has_tts = CAP_TTS in caps
+        has_stt = CAP_STT in caps
+        has_emb = CAP_EMBEDDINGS in caps
+
+        if has_llm:
+            proxy_headers = defaults.get("proxy_headers", {})
+            proxy_headers_str = (
+                json.dumps(proxy_headers, indent=2) if proxy_headers else ""
+            )
+            fields.update(
+                {
+                    vol.Optional(
+                        "temperature",
+                        default=defaults.get("temperature", DEFAULT_TEMPERATURE),
+                    ): vol.All(vol.Coerce(float), vol.Range(min=0.0, max=2.0)),
+                    vol.Optional(
+                        "max_tokens",
+                        default=defaults.get("max_tokens", DEFAULT_MAX_TOKENS),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=100000)),
+                    vol.Optional(
+                        "top_p",
+                        default=defaults.get("top_p", 1.0),
+                    ): vol.All(vol.Coerce(float), vol.Range(min=0.0, max=1.0)),
+                    vol.Optional(
+                        "keep_alive",
+                        default=defaults.get("keep_alive", DEFAULT_LLM_KEEP_ALIVE),
+                    ): str,
+                    vol.Optional(
+                        "proxy_headers",
+                        description={"suggested_value": proxy_headers_str},
+                    ): str,
+                    vol.Optional(
+                        "thinking_enabled",
+                        default=defaults.get(
+                            "thinking_enabled", DEFAULT_THINKING_ENABLED
+                        ),
+                    ): bool,
+                }
+            )
+
+        if has_tts:
+            fields.update(
+                {
+                    vol.Optional(
+                        "voice",
+                        default=defaults.get("voice", DEFAULT_TTS_VOICE),
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                "alloy",
+                                "echo",
+                                "fable",
+                                "onyx",
+                                "nova",
+                                "shimmer",
+                            ],
                             custom_value=True,
                         )
                     ),
                     vol.Optional(
-                        CONF_TTS_SPEED,
-                        default=current_data.get(CONF_TTS_SPEED, DEFAULT_TTS_SPEED),
+                        "speed",
+                        default=defaults.get("speed", DEFAULT_TTS_SPEED),
                     ): vol.All(vol.Coerce(float), vol.Range(min=0.25, max=4.0)),
                     vol.Optional(
-                        CONF_TTS_FORMAT,
-                        default=current_data.get(CONF_TTS_FORMAT, DEFAULT_TTS_FORMAT),
+                        "format",
+                        default=defaults.get("format", DEFAULT_TTS_FORMAT),
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=["mp3", "opus", "aac", "flac", "wav", "pcm"],
                         )
                     ),
                 }
-            ),
-        )
+            )
 
-    async def async_step_stt_settings(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Configure STT (speech-to-text) settings."""
-        if user_input is not None:
-            # Normalize URL
-            if CONF_STT_BASE_URL in user_input and user_input[CONF_STT_BASE_URL]:
-                user_input[CONF_STT_BASE_URL] = normalize_url(user_input[CONF_STT_BASE_URL])
+        if has_stt:
+            fields[
+                vol.Optional(
+                    "language", default=defaults.get("language", "en")
+                )
+            ] = str
 
-            # STT settings go in entry.data since they affect platform setup
-            new_data = {**self._config_entry.data, **user_input}
-            self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
-            return self.async_create_entry(title="", data=self._config_entry.options)
-
-        current_data = self._config_entry.data
-
-        return self.async_show_form(
-            step_id="stt_settings",
-            data_schema=vol.Schema(
+        if has_emb:
+            fields.update(
                 {
                     vol.Optional(
-                        CONF_STT_BASE_URL,
-                        description={"suggested_value": current_data.get(CONF_STT_BASE_URL, "")},
-                    ): str,
+                        "embedding_provider",
+                        default=defaults.get("embedding_provider", "ollama"),
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                EMBEDDING_PROVIDER_OPENAI,
+                                EMBEDDING_PROVIDER_OLLAMA,
+                            ],
+                            translation_key="embedding_provider",
+                        )
+                    ),
                     vol.Optional(
-                        CONF_STT_MODEL,
-                        default=current_data.get(CONF_STT_MODEL, DEFAULT_STT_MODEL),
-                    ): str,
-                    vol.Optional(
-                        CONF_STT_LANGUAGE,
-                        default=current_data.get(CONF_STT_LANGUAGE, DEFAULT_STT_LANGUAGE),
+                        "keep_alive",
+                        default=defaults.get("keep_alive", "5m"),
                     ): str,
                 }
-            ),
+            )
+
+        # External LLM specific fields
+        if CAP_EXTERNAL_LLM in caps:
+            fields.update(
+                {
+                    vol.Optional(
+                        "tool_description",
+                        description={
+                            "suggested_value": defaults.get("tool_description", "")
+                        },
+                    ): str,
+                    vol.Optional(
+                        "auto_include_context",
+                        default=defaults.get("auto_include_context", True),
+                    ): bool,
+                }
+            )
+
+        return fields
+
+    def _extract_detail_fields(
+        self, user_input: dict[str, Any], caps: list[str]
+    ) -> dict[str, Any]:
+        """Extract type-specific fields from user input.
+
+        Args:
+            user_input: Form submission data.
+            caps: List of capability strings.
+
+        Returns:
+            Dict of detail fields to merge into connection.
+        """
+        fields: dict[str, Any] = {}
+        has_llm = bool(set(caps) & LLM_CAPABILITIES)
+        has_tts = CAP_TTS in caps
+        has_stt = CAP_STT in caps
+        has_emb = CAP_EMBEDDINGS in caps
+
+        if has_llm:
+            for key in (
+                "temperature",
+                "max_tokens",
+                "top_p",
+                "keep_alive",
+                "proxy_headers",
+                "thinking_enabled",
+            ):
+                if key in user_input:
+                    fields[key] = user_input[key]
+
+        if has_tts:
+            for key in ("voice", "speed", "format"):
+                if key in user_input:
+                    fields[key] = user_input[key]
+
+        if has_stt:
+            if "language" in user_input:
+                fields["language"] = user_input["language"]
+
+        if has_emb:
+            for key in ("embedding_provider", "keep_alive"):
+                if key in user_input:
+                    fields[key] = user_input[key]
+
+        if CAP_EXTERNAL_LLM in caps:
+            for key in ("tool_description", "auto_include_context"):
+                if key in user_input:
+                    fields[key] = user_input[key]
+
+        return fields
+
+    # ===========================================================
+    # ROLE ASSIGNMENTS
+    # ===========================================================
+
+    async def async_step_role_assignments(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Assign connections to roles."""
+        if user_input is not None:
+            new_roles: dict[str, str | None] = {}
+            for role in ALL_ROLES:
+                val = user_input.get(role, "__none__")
+                new_roles[role] = None if val == "__none__" else val
+
+            new_data = dict(self._config_entry.data)
+            new_data[CONF_ROLES] = new_roles
+            self.hass.config_entries.async_update_entry(
+                self._config_entry, data=new_data
+            )
+            return self.async_create_entry(title="", data=self._config_entry.options)
+
+        config = dict(self._config_entry.data) | dict(self._config_entry.options)
+        current_roles = config.get(CONF_ROLES, {})
+        connections = config.get(CONF_CONNECTIONS, {})
+
+        schema_fields: dict[Any, Any] = {}
+        for role in ALL_ROLES:
+            required_cap = ROLE_TO_CAPABILITY.get(role, role)
+            # Filter connections to those with the required capability
+            eligible = [
+                (cid, conn)
+                for cid, conn in connections.items()
+                if required_cap in conn.get("capabilities", [])
+            ]
+
+            options = [{"value": "__none__", "label": "(Not assigned)"}]
+            for cid, conn in eligible:
+                options.append(
+                    {"value": cid, "label": conn.get("name", cid)}
+                )
+
+            current_val = current_roles.get(role)
+            default = current_val if current_val and current_val in connections else "__none__"
+
+            schema_fields[
+                vol.Optional(role, default=default)
+            ] = selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=options,
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            )
+
+        return self.async_show_form(
+            step_id="role_assignments",
+            data_schema=vol.Schema(schema_fields),
         )
+
+    # ===========================================================
+    # PROXLAB SETTINGS (unchanged from v1)
+    # ===========================================================
 
     async def async_step_proxlab_settings(
         self, user_input: dict[str, Any] | None = None
@@ -822,21 +936,23 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
             proxlab_url = user_input.get(CONF_PROXLAB_URL, "").strip().rstrip("/")
             user_input[CONF_PROXLAB_URL] = proxlab_url
 
-            # Validate ProxLab URL if provided
             if proxlab_url:
                 try:
                     from .proxlab_api import discover_services
-                    services = await discover_services(proxlab_url)
-                    if not services:
-                        _LOGGER.warning("ProxLab returned no active services")
+
+                    await discover_services(proxlab_url)
                 except Exception as err:
                     _LOGGER.warning("ProxLab connection test failed: %s", err)
                     errors["base"] = "cannot_connect"
 
             if not errors:
                 new_data = {**self._config_entry.data, **user_input}
-                self.hass.config_entries.async_update_entry(self._config_entry, data=new_data)
-                return self.async_create_entry(title="", data=self._config_entry.options)
+                self.hass.config_entries.async_update_entry(
+                    self._config_entry, data=new_data
+                )
+                return self.async_create_entry(
+                    title="", data=self._config_entry.options
+                )
 
         current_data = self._config_entry.data
 
@@ -846,26 +962,24 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                 {
                     vol.Optional(
                         CONF_PROXLAB_URL,
-                        description={"suggested_value": current_data.get(CONF_PROXLAB_URL, "")},
+                        description={
+                            "suggested_value": current_data.get(CONF_PROXLAB_URL, "")
+                        },
                     ): str,
                 }
             ),
             errors=errors,
         )
 
+    # ===========================================================
+    # CONTEXT SETTINGS (unchanged from v1)
+    # ===========================================================
+
     async def async_step_context_settings(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Configure context injection settings.
-
-        Args:
-            user_input: User-provided configuration
-
-        Returns:
-            FlowResult indicating completion or next step
-        """
+        """Configure context injection settings."""
         if user_input is not None:
-            # Update options with new context settings
             updated_options = {**self._config_entry.options, **user_input}
             return self.async_create_entry(title="", data=updated_options)
 
@@ -887,7 +1001,9 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                         CONF_CONTEXT_FORMAT,
                         default=current_options.get(
                             CONF_CONTEXT_FORMAT,
-                            current_data.get(CONF_CONTEXT_FORMAT, DEFAULT_CONTEXT_FORMAT),
+                            current_data.get(
+                                CONF_CONTEXT_FORMAT, DEFAULT_CONTEXT_FORMAT
+                            ),
                         ),
                     ): vol.In(
                         [
@@ -899,14 +1015,17 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                     vol.Optional(
                         CONF_DIRECT_ENTITIES,
                         default=current_options.get(
-                            CONF_DIRECT_ENTITIES, current_data.get(CONF_DIRECT_ENTITIES, "")
+                            CONF_DIRECT_ENTITIES,
+                            current_data.get(CONF_DIRECT_ENTITIES, ""),
                         ),
                     ): str,
                     vol.Optional(
                         CONF_MAX_CONTEXT_TOKENS,
                         default=current_options.get(
                             CONF_MAX_CONTEXT_TOKENS,
-                            current_data.get(CONF_MAX_CONTEXT_TOKENS, DEFAULT_MAX_CONTEXT_TOKENS),
+                            current_data.get(
+                                CONF_MAX_CONTEXT_TOKENS, DEFAULT_MAX_CONTEXT_TOKENS
+                            ),
                         ),
                     ): vol.All(vol.Coerce(int), vol.Range(min=1000, max=128000)),
                 }
@@ -918,24 +1037,21 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
             },
         )
 
+    # ===========================================================
+    # VECTOR DB SETTINGS (simplified: no embedding URL/model)
+    # ===========================================================
+
     async def async_step_vector_db_settings(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Configure Vector DB (ChromaDB) settings.
-
-        Args:
-            user_input: User-provided configuration
-
-        Returns:
-            FlowResult indicating completion or next step
-        """
+        """Configure Vector DB settings."""
         if user_input is not None:
-            # Convert comma-separated collection names to list
             if CONF_ADDITIONAL_COLLECTIONS in user_input:
                 collections_str = user_input[CONF_ADDITIONAL_COLLECTIONS]
                 if isinstance(collections_str, str):
-                    # Parse comma-separated string to list, removing whitespace
-                    collections_list = [c.strip() for c in collections_str.split(",") if c.strip()]
+                    collections_list = [
+                        c.strip() for c in collections_str.split(",") if c.strip()
+                    ]
                     user_input[CONF_ADDITIONAL_COLLECTIONS] = collections_list
 
             updated_options = {**self._config_entry.options, **user_input}
@@ -944,7 +1060,6 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
         current_options = self._config_entry.options
         current_data = self._config_entry.data
 
-        # Convert list to comma-separated string for display
         additional_collections = current_options.get(
             CONF_ADDITIONAL_COLLECTIONS, DEFAULT_ADDITIONAL_COLLECTIONS
         )
@@ -961,11 +1076,16 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                         CONF_VECTOR_DB_BACKEND,
                         default=current_options.get(
                             CONF_VECTOR_DB_BACKEND,
-                            current_data.get(CONF_VECTOR_DB_BACKEND, DEFAULT_VECTOR_DB_BACKEND),
+                            current_data.get(
+                                CONF_VECTOR_DB_BACKEND, DEFAULT_VECTOR_DB_BACKEND
+                            ),
                         ),
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
-                            options=[VECTOR_DB_BACKEND_CHROMADB, VECTOR_DB_BACKEND_MILVUS],
+                            options=[
+                                VECTOR_DB_BACKEND_CHROMADB,
+                                VECTOR_DB_BACKEND_MILVUS,
+                            ],
                             translation_key="vector_db_backend",
                         )
                     ),
@@ -973,14 +1093,18 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                         CONF_VECTOR_DB_HOST,
                         default=current_options.get(
                             CONF_VECTOR_DB_HOST,
-                            current_data.get(CONF_VECTOR_DB_HOST, DEFAULT_VECTOR_DB_HOST),
+                            current_data.get(
+                                CONF_VECTOR_DB_HOST, DEFAULT_VECTOR_DB_HOST
+                            ),
                         ),
                     ): str,
                     vol.Optional(
                         CONF_VECTOR_DB_PORT,
                         default=current_options.get(
                             CONF_VECTOR_DB_PORT,
-                            current_data.get(CONF_VECTOR_DB_PORT, DEFAULT_VECTOR_DB_PORT),
+                            current_data.get(
+                                CONF_VECTOR_DB_PORT, DEFAULT_VECTOR_DB_PORT
+                            ),
                         ),
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
                     vol.Optional(
@@ -988,68 +1112,18 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                         default=current_options.get(
                             CONF_VECTOR_DB_COLLECTION,
                             current_data.get(
-                                CONF_VECTOR_DB_COLLECTION, DEFAULT_VECTOR_DB_COLLECTION
+                                CONF_VECTOR_DB_COLLECTION,
+                                DEFAULT_VECTOR_DB_COLLECTION,
                             ),
-                        ),
-                    ): str,
-                    vol.Optional(
-                        CONF_VECTOR_DB_EMBEDDING_PROVIDER,
-                        default=current_options.get(
-                            CONF_VECTOR_DB_EMBEDDING_PROVIDER,
-                            current_data.get(
-                                CONF_VECTOR_DB_EMBEDDING_PROVIDER,
-                                DEFAULT_VECTOR_DB_EMBEDDING_PROVIDER,
-                            ),
-                        ),
-                    ): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            options=[
-                                EMBEDDING_PROVIDER_OPENAI,
-                                EMBEDDING_PROVIDER_OLLAMA,
-                            ],
-                            translation_key="embedding_provider",
-                        )
-                    ),
-                    vol.Optional(
-                        CONF_VECTOR_DB_EMBEDDING_BASE_URL,
-                        default=current_options.get(
-                            CONF_VECTOR_DB_EMBEDDING_BASE_URL,
-                            current_data.get(
-                                CONF_VECTOR_DB_EMBEDDING_BASE_URL,
-                                DEFAULT_VECTOR_DB_EMBEDDING_BASE_URL,
-                            ),
-                        ),
-                    ): str,
-                    vol.Optional(
-                        CONF_VECTOR_DB_EMBEDDING_MODEL,
-                        default=current_options.get(
-                            CONF_VECTOR_DB_EMBEDDING_MODEL,
-                            current_data.get(
-                                CONF_VECTOR_DB_EMBEDDING_MODEL,
-                                DEFAULT_VECTOR_DB_EMBEDDING_MODEL,
-                            ),
-                        ),
-                    ): str,
-                    vol.Optional(
-                        CONF_EMBEDDING_KEEP_ALIVE,
-                        default=current_options.get(
-                            CONF_EMBEDDING_KEEP_ALIVE,
-                            current_data.get(
-                                CONF_EMBEDDING_KEEP_ALIVE, DEFAULT_EMBEDDING_KEEP_ALIVE
-                            ),
-                        ),
-                    ): str,
-                    vol.Optional(
-                        CONF_OPENAI_API_KEY,
-                        default=current_options.get(
-                            CONF_OPENAI_API_KEY, current_data.get(CONF_OPENAI_API_KEY, "")
                         ),
                     ): str,
                     vol.Optional(
                         CONF_VECTOR_DB_TOP_K,
                         default=current_options.get(
                             CONF_VECTOR_DB_TOP_K,
-                            current_data.get(CONF_VECTOR_DB_TOP_K, DEFAULT_VECTOR_DB_TOP_K),
+                            current_data.get(
+                                CONF_VECTOR_DB_TOP_K, DEFAULT_VECTOR_DB_TOP_K
+                            ),
                         ),
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=50)),
                     vol.Optional(
@@ -1061,7 +1135,9 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                                 DEFAULT_VECTOR_DB_SIMILARITY_THRESHOLD,
                             ),
                         ),
-                    ): vol.All(vol.Coerce(float), vol.Range(min=0.0, max=1000.0)),
+                    ): vol.All(
+                        vol.Coerce(float), vol.Range(min=0.0, max=1000.0)
+                    ),
                     vol.Optional(
                         CONF_ADDITIONAL_COLLECTIONS,
                         default=additional_collections_str,
@@ -1078,7 +1154,9 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                             CONF_ADDITIONAL_L2_DISTANCE_THRESHOLD,
                             DEFAULT_ADDITIONAL_L2_DISTANCE_THRESHOLD,
                         ),
-                    ): vol.All(vol.Coerce(float), vol.Range(min=0.0, max=2000.0)),
+                    ): vol.All(
+                        vol.Coerce(float), vol.Range(min=0.0, max=2000.0)
+                    ),
                     vol.Optional(
                         CONF_MILVUS_HOST,
                         default=current_options.get(
@@ -1097,7 +1175,9 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                         CONF_MILVUS_COLLECTION,
                         default=current_options.get(
                             CONF_MILVUS_COLLECTION,
-                            current_data.get(CONF_MILVUS_COLLECTION, DEFAULT_MILVUS_COLLECTION),
+                            current_data.get(
+                                CONF_MILVUS_COLLECTION, DEFAULT_MILVUS_COLLECTION
+                            ),
                         ),
                     ): str,
                 }
@@ -1109,22 +1189,19 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
             },
         )
 
+    # ===========================================================
+    # HISTORY SETTINGS (unchanged from v1)
+    # ===========================================================
+
     async def async_step_history_settings(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Configure conversation history settings.
-
-        Args:
-            user_input: User-provided configuration
-
-        Returns:
-            FlowResult indicating completion or next step
-        """
+        """Configure conversation history settings."""
         if user_input is not None:
-            # Convert session_timeout from minutes to seconds for storage
             if CONF_SESSION_TIMEOUT in user_input:
-                user_input[CONF_SESSION_TIMEOUT] = user_input[CONF_SESSION_TIMEOUT] * 60
-
+                user_input[CONF_SESSION_TIMEOUT] = (
+                    user_input[CONF_SESSION_TIMEOUT] * 60
+                )
             updated_options = {**self._config_entry.options, **user_input}
             return self.async_create_entry(title="", data=updated_options)
 
@@ -1139,7 +1216,9 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                         CONF_HISTORY_ENABLED,
                         default=current_options.get(
                             CONF_HISTORY_ENABLED,
-                            current_data.get(CONF_HISTORY_ENABLED, DEFAULT_HISTORY_ENABLED),
+                            current_data.get(
+                                CONF_HISTORY_ENABLED, DEFAULT_HISTORY_ENABLED
+                            ),
                         ),
                     ): bool,
                     vol.Optional(
@@ -1147,7 +1226,8 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                         default=current_options.get(
                             CONF_HISTORY_MAX_MESSAGES,
                             current_data.get(
-                                CONF_HISTORY_MAX_MESSAGES, DEFAULT_HISTORY_MAX_MESSAGES
+                                CONF_HISTORY_MAX_MESSAGES,
+                                DEFAULT_HISTORY_MAX_MESSAGES,
                             ),
                         ),
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=100)),
@@ -1155,7 +1235,9 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                         CONF_HISTORY_MAX_TOKENS,
                         default=current_options.get(
                             CONF_HISTORY_MAX_TOKENS,
-                            current_data.get(CONF_HISTORY_MAX_TOKENS, DEFAULT_HISTORY_MAX_TOKENS),
+                            current_data.get(
+                                CONF_HISTORY_MAX_TOKENS, DEFAULT_HISTORY_MAX_TOKENS
+                            ),
                         ),
                     ): vol.All(vol.Coerce(int), vol.Range(min=100, max=50000)),
                     vol.Required(
@@ -1172,25 +1254,24 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                         CONF_SESSION_TIMEOUT,
                         default=current_options.get(
                             CONF_SESSION_TIMEOUT,
-                            current_data.get(CONF_SESSION_TIMEOUT, DEFAULT_SESSION_TIMEOUT),
+                            current_data.get(
+                                CONF_SESSION_TIMEOUT, DEFAULT_SESSION_TIMEOUT
+                            ),
                         )
-                        // 60,  # Convert seconds to minutes for display
+                        // 60,
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=120)),
                 }
             ),
         )
 
+    # ===========================================================
+    # PROMPT SETTINGS (unchanged from v1)
+    # ===========================================================
+
     async def async_step_prompt_settings(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Configure system prompt settings.
-
-        Args:
-            user_input: User-provided configuration
-
-        Returns:
-            FlowResult indicating completion or next step
-        """
+        """Configure system prompt settings."""
         if user_input is not None:
             updated_options = {**self._config_entry.options, **user_input}
             return self.async_create_entry(title="", data=updated_options)
@@ -1206,7 +1287,9 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                         CONF_PROMPT_USE_DEFAULT,
                         default=current_options.get(
                             CONF_PROMPT_USE_DEFAULT,
-                            current_data.get(CONF_PROMPT_USE_DEFAULT, DEFAULT_PROMPT_USE_DEFAULT),
+                            current_data.get(
+                                CONF_PROMPT_USE_DEFAULT, DEFAULT_PROMPT_USE_DEFAULT
+                            ),
                         ),
                     ): bool,
                     vol.Optional(
@@ -1214,7 +1297,8 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                         default=current_options.get(
                             CONF_PROMPT_INCLUDE_LABELS,
                             current_data.get(
-                                CONF_PROMPT_INCLUDE_LABELS, DEFAULT_PROMPT_INCLUDE_LABELS
+                                CONF_PROMPT_INCLUDE_LABELS,
+                                DEFAULT_PROMPT_INCLUDE_LABELS,
                             ),
                         ),
                     ): bool,
@@ -1232,23 +1316,20 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
             description_placeholders={
                 "example_addition": (
                     "Additional context about my home:\n"
-                    "- The thermostat prefers 68-72°F\n"
+                    "- The thermostat prefers 68-72\u00b0F\n"
                     "- Keep doors locked after 10 PM"
                 ),
             },
         )
 
+    # ===========================================================
+    # TOOL SETTINGS (unchanged from v1)
+    # ===========================================================
+
     async def async_step_tool_settings(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Configure tool execution settings.
-
-        Args:
-            user_input: User-provided configuration
-
-        Returns:
-            FlowResult indicating completion or next step
-        """
+        """Configure tool execution settings."""
         if user_input is not None:
             updated_options = {**self._config_entry.options, **user_input}
             return self.async_create_entry(title="", data=updated_options)
@@ -1265,7 +1346,8 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                         default=current_options.get(
                             CONF_TOOLS_MAX_CALLS_PER_TURN,
                             current_data.get(
-                                CONF_TOOLS_MAX_CALLS_PER_TURN, DEFAULT_TOOLS_MAX_CALLS_PER_TURN
+                                CONF_TOOLS_MAX_CALLS_PER_TURN,
+                                DEFAULT_TOOLS_MAX_CALLS_PER_TURN,
                             ),
                         ),
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=20)),
@@ -1273,209 +1355,40 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                         CONF_TOOLS_TIMEOUT,
                         default=current_options.get(
                             CONF_TOOLS_TIMEOUT,
-                            current_data.get(CONF_TOOLS_TIMEOUT, DEFAULT_TOOLS_TIMEOUT),
+                            current_data.get(
+                                CONF_TOOLS_TIMEOUT, DEFAULT_TOOLS_TIMEOUT
+                            ),
                         ),
                     ): vol.All(vol.Coerce(int), vol.Range(min=5, max=300)),
                 }
             ),
         )
 
-    async def async_step_external_llm_settings(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Configure external LLM tool settings.
-
-        The external LLM tool allows the primary LLM to delegate complex
-        queries to a more capable model.
-
-        Args:
-            user_input: User-provided configuration
-
-        Returns:
-            FlowResult indicating completion or next step
-        """
-        if user_input is not None:
-            # Validate external LLM config if enabled
-            if user_input.get(CONF_EXTERNAL_LLM_ENABLED, False):
-                try:
-                    await self._validate_external_llm_config(user_input)
-                except ValidationError as err:
-                    _LOGGER.error("External LLM validation error: %s", err)
-                    return self.async_show_form(
-                        step_id="external_llm_settings",
-                        data_schema=self._get_external_llm_schema(
-                            dict(self._config_entry.options), dict(self._config_entry.data)
-                        ),
-                        errors={"base": "invalid_external_llm"},
-                    )
-
-            updated_options = {**self._config_entry.options, **user_input}
-            return self.async_create_entry(title="", data=updated_options)
-
-        current_options = self._config_entry.options
-        current_data = self._config_entry.data
-
-        return self.async_show_form(
-            step_id="external_llm_settings",
-            data_schema=self._get_external_llm_schema(dict(current_options), dict(current_data)),
-            description_placeholders={
-                "use_case": (
-                    "Enable this to allow the primary LLM to delegate "
-                    "complex queries to a more capable external model"
-                ),
-            },
-        )
-
-    def _get_external_llm_schema(
-        self, current_options: dict[str, Any], current_data: dict[str, Any] | None = None
-    ) -> vol.Schema:
-        """Get schema for external LLM settings.
-
-        Args:
-            current_options: Current option values
-            current_data: Current data values (fallback)
-
-        Returns:
-            Voluptuous schema for external LLM configuration
-        """
-        if current_data is None:
-            current_data = {}
-
-        return vol.Schema(
-            {
-                vol.Required(
-                    CONF_EXTERNAL_LLM_ENABLED,
-                    default=current_options.get(
-                        CONF_EXTERNAL_LLM_ENABLED,
-                        current_data.get(CONF_EXTERNAL_LLM_ENABLED, DEFAULT_EXTERNAL_LLM_ENABLED),
-                    ),
-                ): bool,
-                vol.Optional(
-                    CONF_EXTERNAL_LLM_BASE_URL,
-                    default=current_options.get(
-                        CONF_EXTERNAL_LLM_BASE_URL,
-                        current_data.get(CONF_EXTERNAL_LLM_BASE_URL, OPENAI_BASE_URL),
-                    ),
-                ): str,
-                vol.Optional(
-                    CONF_EXTERNAL_LLM_API_KEY,
-                    default=current_options.get(
-                        CONF_EXTERNAL_LLM_API_KEY, current_data.get(CONF_EXTERNAL_LLM_API_KEY, "")
-                    ),
-                ): selector.TemplateSelector(),
-                vol.Optional(
-                    CONF_EXTERNAL_LLM_MODEL,
-                    default=current_options.get(
-                        CONF_EXTERNAL_LLM_MODEL,
-                        current_data.get(CONF_EXTERNAL_LLM_MODEL, DEFAULT_EXTERNAL_LLM_MODEL),
-                    ),
-                ): str,
-                vol.Optional(
-                    CONF_EXTERNAL_LLM_TEMPERATURE,
-                    default=current_options.get(
-                        CONF_EXTERNAL_LLM_TEMPERATURE,
-                        current_data.get(
-                            CONF_EXTERNAL_LLM_TEMPERATURE, DEFAULT_EXTERNAL_LLM_TEMPERATURE
-                        ),
-                    ),
-                ): vol.All(vol.Coerce(float), vol.Range(min=0.0, max=2.0)),
-                vol.Optional(
-                    CONF_EXTERNAL_LLM_MAX_TOKENS,
-                    default=current_options.get(
-                        CONF_EXTERNAL_LLM_MAX_TOKENS,
-                        current_data.get(
-                            CONF_EXTERNAL_LLM_MAX_TOKENS, DEFAULT_EXTERNAL_LLM_MAX_TOKENS
-                        ),
-                    ),
-                ): vol.All(vol.Coerce(int), vol.Range(min=1, max=100000)),
-                vol.Optional(
-                    CONF_EXTERNAL_LLM_KEEP_ALIVE,
-                    default=current_options.get(
-                        CONF_EXTERNAL_LLM_KEEP_ALIVE,
-                        current_data.get(
-                            CONF_EXTERNAL_LLM_KEEP_ALIVE, DEFAULT_EXTERNAL_LLM_KEEP_ALIVE
-                        ),
-                    ),
-                ): str,
-                vol.Optional(
-                    CONF_EXTERNAL_LLM_TOOL_DESCRIPTION,
-                    description={
-                        "suggested_value": current_options.get(
-                            CONF_EXTERNAL_LLM_TOOL_DESCRIPTION,
-                            current_data.get(
-                                CONF_EXTERNAL_LLM_TOOL_DESCRIPTION,
-                                DEFAULT_EXTERNAL_LLM_TOOL_DESCRIPTION,
-                            ),
-                        )
-                    },
-                ): selector.TemplateSelector(),
-                vol.Optional(
-                    CONF_EXTERNAL_LLM_AUTO_INCLUDE_CONTEXT,
-                    default=current_options.get(
-                        CONF_EXTERNAL_LLM_AUTO_INCLUDE_CONTEXT,
-                        current_data.get(
-                            CONF_EXTERNAL_LLM_AUTO_INCLUDE_CONTEXT,
-                            DEFAULT_EXTERNAL_LLM_AUTO_INCLUDE_CONTEXT,
-                        ),
-                    ),
-                ): bool,
-            }
-        )
-
-    async def _validate_external_llm_config(self, config: dict[str, Any]) -> None:
-        """Validate external LLM configuration.
-
-        Args:
-            config: External LLM configuration to validate
-
-        Raises:
-            ValidationError: If configuration is invalid
-        """
-        base_url = config.get(CONF_EXTERNAL_LLM_BASE_URL, "")
-        if not base_url:
-            raise ValidationError("External LLM base URL cannot be empty")
-
-        parsed = urlparse(base_url)
-        if not parsed.scheme or not parsed.netloc:
-            raise ValidationError(f"Invalid external LLM URL format: {base_url}")
-
-        api_key = config.get(CONF_EXTERNAL_LLM_API_KEY, "")
-        if not api_key or not api_key.strip():
-            raise ValidationError("External LLM API key cannot be empty")
-
-        model = config.get(CONF_EXTERNAL_LLM_MODEL, "")
-        if not model or not model.strip():
-            raise ValidationError("External LLM model name cannot be empty")
+    # ===========================================================
+    # MEMORY SETTINGS (unchanged from v1)
+    # ===========================================================
 
     async def async_step_memory_settings(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Configure long-term memory system settings.
-
-        Args:
-            user_input: User-provided configuration
-
-        Returns:
-            FlowResult indicating completion or next step
-        """
+        """Configure long-term memory system settings."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            # Validate configuration
             if user_input.get(CONF_MEMORY_EXTRACTION_LLM) == "external":
-                # Check if external LLM is enabled
                 current_data = self._config_entry.data
                 current_options = self._config_entry.options
-                external_llm_enabled = current_options.get(
+                # In v2, check if external_llm role is assigned
+                roles = current_data.get(CONF_ROLES, {})
+                ext_assigned = roles.get("external_llm") is not None
+                ext_enabled = current_options.get(
                     CONF_EXTERNAL_LLM_ENABLED,
                     current_data.get(CONF_EXTERNAL_LLM_ENABLED, DEFAULT_EXTERNAL_LLM_ENABLED),
                 )
-
-                if not external_llm_enabled:
+                if not ext_assigned and not ext_enabled:
                     errors["base"] = "external_llm_required"
 
             if not errors:
-                # Update config entry options
                 updated_options = {**self._config_entry.options, **user_input}
                 return self.async_create_entry(title="", data=updated_options)
 
@@ -1490,7 +1403,9 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                         CONF_MEMORY_ENABLED,
                         default=current_options.get(
                             CONF_MEMORY_ENABLED,
-                            current_data.get(CONF_MEMORY_ENABLED, DEFAULT_MEMORY_ENABLED),
+                            current_data.get(
+                                CONF_MEMORY_ENABLED, DEFAULT_MEMORY_ENABLED
+                            ),
                         ),
                     ): bool,
                     vol.Required(
@@ -1532,14 +1447,15 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                                 DEFAULT_MEMORY_MIN_IMPORTANCE,
                             ),
                         ),
-                    ): vol.All(vol.Coerce(float), vol.Range(min=0.0, max=1.0)),
+                    ): vol.All(
+                        vol.Coerce(float), vol.Range(min=0.0, max=1.0)
+                    ),
                     vol.Optional(
                         CONF_MEMORY_MIN_WORDS,
                         default=current_options.get(
                             CONF_MEMORY_MIN_WORDS,
                             current_data.get(
-                                CONF_MEMORY_MIN_WORDS,
-                                DEFAULT_MEMORY_MIN_WORDS,
+                                CONF_MEMORY_MIN_WORDS, DEFAULT_MEMORY_MIN_WORDS
                             ),
                         ),
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=50)),
@@ -1569,22 +1485,19 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
             description_placeholders={
                 "external_llm_note": (
                     "Memory extraction using external LLM requires the "
-                    "external LLM tool to be enabled in the External LLM settings."
+                    "external LLM role to be assigned in Role Assignments."
                 ),
             },
         )
 
+    # ===========================================================
+    # DEBUG SETTINGS (unchanged from v1)
+    # ===========================================================
+
     async def async_step_debug_settings(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Configure debug and logging settings.
-
-        Args:
-            user_input: User-provided configuration
-
-        Returns:
-            FlowResult indicating completion or next step
-        """
+        """Configure debug and logging settings."""
         if user_input is not None:
             updated_options = {**self._config_entry.options, **user_input}
             return self.async_create_entry(title="", data=updated_options)
@@ -1600,14 +1513,18 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                         CONF_DEBUG_LOGGING,
                         default=current_options.get(
                             CONF_DEBUG_LOGGING,
-                            current_data.get(CONF_DEBUG_LOGGING, DEFAULT_DEBUG_LOGGING),
+                            current_data.get(
+                                CONF_DEBUG_LOGGING, DEFAULT_DEBUG_LOGGING
+                            ),
                         ),
                     ): bool,
                     vol.Required(
                         CONF_STREAMING_ENABLED,
                         default=current_options.get(
                             CONF_STREAMING_ENABLED,
-                            current_data.get(CONF_STREAMING_ENABLED, DEFAULT_STREAMING_ENABLED),
+                            current_data.get(
+                                CONF_STREAMING_ENABLED, DEFAULT_STREAMING_ENABLED
+                            ),
                         ),
                     ): bool,
                 }

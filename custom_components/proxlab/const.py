@@ -6,9 +6,116 @@ from typing import Final
 DOMAIN: Final = "proxlab"
 DEFAULT_NAME: Final = "ProxLab"
 VERSION: Final = "1.0.0"
+CONFIG_VERSION: Final = 2
+
+# --- Connections + Roles Architecture (v2) ---
+
+# Connection field keys
+CONF_CONNECTIONS: Final = "connections"
+CONF_ROLES: Final = "roles"
+CONF_CONNECTION_NAME: Final = "name"
+CONF_CONNECTION_BASE_URL: Final = "base_url"
+CONF_CONNECTION_API_KEY: Final = "api_key"
+CONF_CONNECTION_MODEL: Final = "model"
+CONF_CONNECTION_CAPABILITIES: Final = "capabilities"
+
+# Capability names (used in connection capabilities[] list)
+CAP_CONVERSATION: Final = "conversation"
+CAP_TOOL_USE: Final = "tool_use"
+CAP_TTS: Final = "tts"
+CAP_STT: Final = "stt"
+CAP_EMBEDDINGS: Final = "embeddings"
+CAP_RERANKER: Final = "reranker"
+CAP_MULTIMODAL_EMBEDDINGS: Final = "multimodal_embeddings"
+CAP_EXTERNAL_LLM: Final = "external_llm"
+
+ALL_CAPABILITIES: Final = [
+    CAP_CONVERSATION,
+    CAP_TOOL_USE,
+    CAP_TTS,
+    CAP_STT,
+    CAP_EMBEDDINGS,
+    CAP_RERANKER,
+    CAP_MULTIMODAL_EMBEDDINGS,
+    CAP_EXTERNAL_LLM,
+]
+
+# Role names (keys in roles dict)
+ROLE_CONVERSATION: Final = "conversation"
+ROLE_TOOL_USE: Final = "tool_use"
+ROLE_TTS: Final = "tts"
+ROLE_STT: Final = "stt"
+ROLE_EMBEDDINGS: Final = "embeddings"
+ROLE_RERANKER: Final = "reranker"
+ROLE_MULTIMODAL_EMBEDDINGS: Final = "multimodal_embeddings"
+ROLE_EXTERNAL_LLM: Final = "external_llm"
+
+ALL_ROLES: Final = [
+    ROLE_CONVERSATION,
+    ROLE_TOOL_USE,
+    ROLE_TTS,
+    ROLE_STT,
+    ROLE_EMBEDDINGS,
+    ROLE_RERANKER,
+    ROLE_MULTIMODAL_EMBEDDINGS,
+    ROLE_EXTERNAL_LLM,
+]
+
+# Mapping from role → which capability a connection must have to fill that role
+ROLE_TO_CAPABILITY: Final = {
+    ROLE_CONVERSATION: CAP_CONVERSATION,
+    ROLE_TOOL_USE: CAP_TOOL_USE,
+    ROLE_TTS: CAP_TTS,
+    ROLE_STT: CAP_STT,
+    ROLE_EMBEDDINGS: CAP_EMBEDDINGS,
+    ROLE_RERANKER: CAP_RERANKER,
+    ROLE_MULTIMODAL_EMBEDDINGS: CAP_MULTIMODAL_EMBEDDINGS,
+    ROLE_EXTERNAL_LLM: CAP_EXTERNAL_LLM,
+}
+
+# LLM-type capabilities (connections with these get LLM detail fields)
+LLM_CAPABILITIES: Final = {CAP_CONVERSATION, CAP_TOOL_USE, CAP_EXTERNAL_LLM}
+
+# Capability display labels
+CAPABILITY_LABELS: Final = {
+    CAP_CONVERSATION: "Conversation (primary LLM)",
+    CAP_TOOL_USE: "Tool Use (LLM)",
+    CAP_TTS: "Text-to-Speech",
+    CAP_STT: "Speech-to-Text",
+    CAP_EMBEDDINGS: "Embeddings",
+    CAP_RERANKER: "Reranker",
+    CAP_MULTIMODAL_EMBEDDINGS: "Multimodal Embeddings",
+    CAP_EXTERNAL_LLM: "External LLM",
+}
+
+# Role display labels
+ROLE_LABELS: Final = {
+    ROLE_CONVERSATION: "Conversation",
+    ROLE_TOOL_USE: "Tool Use",
+    ROLE_TTS: "Text-to-Speech",
+    ROLE_STT: "Speech-to-Text",
+    ROLE_EMBEDDINGS: "Embeddings",
+    ROLE_RERANKER: "Reranker",
+    ROLE_MULTIMODAL_EMBEDDINGS: "Multimodal Embeddings",
+    ROLE_EXTERNAL_LLM: "External LLM",
+}
+
+# Default empty roles dict
+DEFAULT_ROLES: Final = {role: None for role in ALL_ROLES}
 
 # Configuration keys - ProxLab Discovery
 CONF_PROXLAB_URL: Final = "proxlab_url"
+CONF_CONNECT_PROXLAB: Final = "connect_proxlab"
+
+# Configuration keys - Source Mode (proxy/manual/specific service selection)
+CONF_LLM_SOURCE: Final = "llm_source"
+CONF_TTS_SOURCE: Final = "tts_source"
+CONF_STT_SOURCE: Final = "stt_source"
+CONF_EXTERNAL_LLM_SOURCE: Final = "external_llm_source"
+
+# Source mode values
+SOURCE_PROXLAB_PROXY: Final = "__proxy__"
+SOURCE_MANUAL: Final = "__manual__"
 
 # Configuration keys - TTS Configuration
 CONF_TTS_BASE_URL: Final = "tts_base_url"
