@@ -20,6 +20,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
     CONF_CONNECTIONS,
+    CONNECTION_TYPE_CLAUDE,
     DOMAIN,
     HEALTH_CHECK_INTERVAL,
     HEALTH_CHECK_TIMEOUT,
@@ -104,6 +105,7 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
         base_url = conn.get("base_url", "").rstrip("/")
         capabilities = set(conn.get("capabilities", []))
         model_name = conn.get("model")
+        is_claude = conn.get("connection_type") == CONNECTION_TYPE_CLAUDE
 
         if not base_url:
             return ConnectionCheckResult(
@@ -115,6 +117,11 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
             )
 
         session = self._get_session()
+
+        if is_claude:
+            return await self._check_claude_connection(
+                session, conn, base_url, model_name
+            )
 
         # Phase 1: Connectivity — hit /models
         reachable = False
@@ -155,6 +162,58 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
             error=error,
             model_name=model_name,
         )
+
+    async def _check_claude_connection(
+        self,
+        session: aiohttp.ClientSession,
+        conn: dict[str, Any],
+        base_url: str,
+        model_name: str | None,
+    ) -> ConnectionCheckResult:
+        """Check an Anthropic Claude API connection.
+
+        Uses the Anthropic /v1/models endpoint with proper auth headers.
+        """
+        api_key = conn.get("api_key", "")
+        headers = {
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01",
+        }
+        models_url = f"{base_url}/v1/models"
+
+        try:
+            async with session.get(models_url, headers=headers) as resp:
+                if resp.status == 401:
+                    return ConnectionCheckResult(
+                        reachable=True,
+                        api_valid=False,
+                        detail="Invalid API key",
+                        error="Auth Failed",
+                        model_name=model_name,
+                    )
+                if resp.status == 200:
+                    return ConnectionCheckResult(
+                        reachable=True,
+                        api_valid=True,
+                        detail="OK",
+                        error=None,
+                        model_name=model_name,
+                    )
+                return ConnectionCheckResult(
+                    reachable=True,
+                    api_valid=False,
+                    detail=f"Unexpected status {resp.status}",
+                    error="API Error",
+                    model_name=model_name,
+                )
+        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+            return ConnectionCheckResult(
+                reachable=False,
+                api_valid=False,
+                detail=f"Connection failed: {err}",
+                error="Unreachable",
+                model_name=model_name,
+            )
 
     async def _probe_api(
         self,

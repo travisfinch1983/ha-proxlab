@@ -16,7 +16,7 @@ import aiohttp
 import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.core import callback
-from homeassistant.helpers import selector
+from homeassistant.helpers import device_registry as dr, entity_registry as er, selector
 
 from .connection_manager import eligible_connections_for_role
 from .const import (
@@ -630,6 +630,16 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
         if user_input is not None:
             # Handle delete toggle
             if user_input.get("__delete__", False):
+                # Remove device and its entities from the registry
+                device_reg = dr.async_get(self.hass)
+                device = device_reg.async_get_device(
+                    identifiers={
+                        (DOMAIN, f"{self._config_entry.entry_id}_{cid}")
+                    }
+                )
+                if device:
+                    device_reg.async_remove_device(device.id)
+
                 new_data = dict(self._config_entry.data)
                 new_connections = dict(new_data.get(CONF_CONNECTIONS, {}))
                 new_connections.pop(cid, None)

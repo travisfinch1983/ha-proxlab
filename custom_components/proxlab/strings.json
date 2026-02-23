@@ -358,7 +358,7 @@
     },
     "embedding_provider": {
       "options": {
-        "openai": "OpenAI (Cloud)",
+        "openai": "OpenAI Compatible",
         "ollama": "Ollama (Local)"
       }
     },
