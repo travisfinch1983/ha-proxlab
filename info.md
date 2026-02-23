@@ -4,15 +4,15 @@ A Home Assistant custom integration that connects HA's voice assistant pipeline 
 
 ## Installation
 
-### HACS (when available on GitHub)
+### HACS
 
 [![Open your Home Assistant instance and open a repository inside the Home Assistant Community Store.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=travisfinch1983&repository=ha-proxlab&category=integration)
 
-### Manual Install (Gitea / Local)
+### Manual Install
 
-1. Download or clone the repo from your Gitea instance:
+1. Download or clone the repo:
    ```
-   git clone http://10.0.0.146:3000/claude/ha-proxlab.git
+   git clone https://github.com/travisfinch1983/ha-proxlab.git
    ```
 2. Copy `custom_components/proxlab/` to your Home Assistant `config/custom_components/proxlab/`
 3. Restart Home Assistant

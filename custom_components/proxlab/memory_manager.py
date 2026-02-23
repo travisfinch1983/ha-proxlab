@@ -28,6 +28,7 @@ from .const import (
     CONF_MEMORY_PREFERENCE_TTL,
     CONF_MEMORY_QUALITY_VALIDATION_ENABLED,
     CONF_MEMORY_QUALITY_VALIDATION_INTERVAL,
+    CONF_MEMORY_UNIVERSAL_ACCESS,
     CONTEXT_MODE_VECTOR_DB,
     DEFAULT_CONTEXT_MODE,
     DEFAULT_MEMORY_CLEANUP_INTERVAL,
@@ -41,8 +42,12 @@ from .const import (
     DEFAULT_MEMORY_PREFERENCE_TTL,
     DEFAULT_MEMORY_QUALITY_VALIDATION_ENABLED,
     DEFAULT_MEMORY_QUALITY_VALIDATION_INTERVAL,
+    DEFAULT_MEMORY_UNIVERSAL_ACCESS,
+    MEMORY_SCOPE_GLOBAL,
+    MEMORY_SCOPE_PERSONAL,
     MEMORY_STORAGE_KEY,
     MEMORY_STORAGE_VERSION,
+    MEMORY_USER_GLOBAL,
 )
 from .exceptions import ContextInjectionError
 from .memory.validator import MemoryValidator
@@ -212,6 +217,8 @@ class MemoryManager:
         conversation_id: str | None = None,
         importance: float = 0.5,
         metadata: dict | None = None,
+        user_id: str | None = None,
+        scope: str = MEMORY_SCOPE_GLOBAL,
     ) -> str:
         """Add a new memory to storage.
 
@@ -221,6 +228,8 @@ class MemoryManager:
             conversation_id: Origin conversation ID
             importance: Importance score (0.0 - 1.0)
             metadata: Additional metadata
+            user_id: User who generated this memory (None = global)
+            scope: Memory scope - "personal" or "global"
 
         Returns:
             Memory ID (UUID)
@@ -314,6 +323,9 @@ class MemoryManager:
             if "extraction_method" not in memory_metadata:
                 memory_metadata["extraction_method"] = "manual"
 
+            # Determine effective user_id for storage
+            effective_user_id = MEMORY_USER_GLOBAL if scope == MEMORY_SCOPE_GLOBAL else (user_id or MEMORY_USER_GLOBAL)
+
             memory = {
                 "id": memory_id,
                 "type": memory_type,
@@ -325,6 +337,8 @@ class MemoryManager:
                 "metadata": memory_metadata,
                 "expires_at": expires_at,
                 "is_transient": is_transient,
+                "user_id": effective_user_id,
+                "scope": scope,
             }
 
             # Store in memory
@@ -379,6 +393,7 @@ class MemoryManager:
         top_k: int = 5,
         min_importance: float = 0.0,
         memory_types: list[str] | None = None,
+        user_id: str | None = None,
     ) -> list[dict]:
         """Search memories using semantic similarity.
 
@@ -387,6 +402,7 @@ class MemoryManager:
             top_k: Number of results to return
             min_importance: Minimum importance threshold
             memory_types: Optional list of memory types to filter by
+            user_id: Current user ID for scoped access (None = all)
 
         Returns:
             List of memories sorted by relevance
@@ -396,10 +412,27 @@ class MemoryManager:
 
         if context_mode == CONTEXT_MODE_VECTOR_DB:
             # Vector DB mode: Query ChromaDB directly
-            return await self._search_memories_chromadb(query, top_k, min_importance, memory_types)
+            return await self._search_memories_chromadb(query, top_k, min_importance, memory_types, user_id)
         else:
             # Direct mode: Use local memory storage
-            return await self._search_memories_local(query, top_k, min_importance, memory_types)
+            return await self._search_memories_local(query, top_k, min_importance, memory_types, user_id)
+
+    def _should_include_memory_for_user(self, memory: dict, user_id: str | None) -> bool:
+        """Check if a memory should be included for the given user.
+
+        Args:
+            memory: Memory dict (or metadata dict from ChromaDB)
+            user_id: Current user ID
+
+        Returns:
+            True if the memory should be visible to this user
+        """
+        universal = self.config.get(CONF_MEMORY_UNIVERSAL_ACCESS, DEFAULT_MEMORY_UNIVERSAL_ACCESS)
+        if universal or user_id is None:
+            return True
+
+        memory_user = memory.get("user_id", MEMORY_USER_GLOBAL)
+        return memory_user in (MEMORY_USER_GLOBAL, user_id)
 
     async def _search_memories_chromadb(
         self,
@@ -407,6 +440,7 @@ class MemoryManager:
         top_k: int,
         min_importance: float,
         memory_types: list[str] | None,
+        user_id: str | None = None,
     ) -> list[dict]:
         """Search memories directly from ChromaDB.
 
@@ -417,6 +451,7 @@ class MemoryManager:
             top_k: Number of results to return
             min_importance: Minimum importance threshold
             memory_types: Optional list of memory types to filter by
+            user_id: Current user ID for scoped access
 
         Returns:
             List of memories sorted by relevance
@@ -456,6 +491,10 @@ class MemoryManager:
                 metadata = metadatas[i] if i < len(metadatas) else {}
                 document = documents[i] if i < len(documents) else ""
 
+                # Filter by user scope
+                if not self._should_include_memory_for_user(metadata, user_id):
+                    continue
+
                 # Extract importance from metadata
                 importance = float(metadata.get("importance", 0.5))
                 if importance < min_importance:
@@ -474,6 +513,8 @@ class MemoryManager:
                     "importance": importance,
                     "last_accessed": float(metadata.get("last_accessed", time.time())),
                     "extracted_at": float(metadata.get("extracted_at", time.time())),
+                    "user_id": metadata.get("user_id", MEMORY_USER_GLOBAL),
+                    "scope": metadata.get("scope", MEMORY_SCOPE_GLOBAL),
                 }
 
                 # Also update local cache if available
@@ -506,6 +547,7 @@ class MemoryManager:
         top_k: int,
         min_importance: float,
         memory_types: list[str] | None,
+        user_id: str | None = None,
     ) -> list[dict]:
         """Search memories from local storage.
 
@@ -516,6 +558,7 @@ class MemoryManager:
             top_k: Number of results to return
             min_importance: Minimum importance threshold
             memory_types: Optional list of memory types to filter by
+            user_id: Current user ID for scoped access
 
         Returns:
             List of memories sorted by relevance
@@ -527,7 +570,7 @@ class MemoryManager:
 
         if not self._chromadb_available:
             _LOGGER.warning("ChromaDB not available, falling back to keyword search")
-            return await self._fallback_search(query, top_k, min_importance, memory_types)
+            return await self._fallback_search(query, top_k, min_importance, memory_types, user_id)
 
         try:
             # Generate embedding for query
@@ -556,6 +599,10 @@ class MemoryManager:
             for memory_id in results["ids"][0]:
                 memory = self._memories.get(memory_id)
                 if not memory:
+                    continue
+
+                # Filter by user scope
+                if not self._should_include_memory_for_user(memory, user_id):
                     continue
 
                 # Apply filters
@@ -853,6 +900,8 @@ class MemoryManager:
                 "importance": memory["importance"],
                 "extracted_at": memory["extracted_at"],
                 "last_accessed": memory["last_accessed"],
+                "user_id": memory.get("user_id", MEMORY_USER_GLOBAL),
+                "scope": memory.get("scope", MEMORY_SCOPE_GLOBAL),
             }
 
             # Add conversation ID if present
@@ -1068,6 +1117,7 @@ class MemoryManager:
         top_k: int,
         min_importance: float,
         memory_types: list[str] | None,
+        user_id: str | None = None,
     ) -> list[dict]:
         """Fallback keyword search when ChromaDB is unavailable.
 
@@ -1076,6 +1126,7 @@ class MemoryManager:
             top_k: Number of results
             min_importance: Minimum importance
             memory_types: Memory types to filter
+            user_id: Current user ID for scoped access
 
         Returns:
             List of matching memories
@@ -1084,6 +1135,10 @@ class MemoryManager:
         matches = []
 
         for memory in self._memories.values():
+            # Filter by user scope
+            if not self._should_include_memory_for_user(memory, user_id):
+                continue
+
             # Filter by importance
             if memory["importance"] < min_importance:
                 continue

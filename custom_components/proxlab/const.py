@@ -9,7 +9,7 @@ from typing import Final
 DOMAIN: Final = "proxlab"
 DEFAULT_NAME: Final = "ProxLab"
 VERSION: Final = "1.0.0"
-CONFIG_VERSION: Final = 2
+CONFIG_VERSION: Final = 3
 
 # --- Connections + Roles Architecture (v2) ---
 
@@ -373,13 +373,12 @@ CONF_EXTERNAL_LLM_KEEP_ALIVE: Final = "external_llm_keep_alive"
 
 # Configuration keys - Memory Configuration
 CONF_MEMORY_ENABLED: Final = "memory_enabled"
+CONF_MEMORY_UNIVERSAL_ACCESS: Final = "memory_universal_access"
 CONF_MEMORY_MAX_MEMORIES: Final = "memory_max_memories"
 CONF_MEMORY_MIN_IMPORTANCE: Final = "memory_min_importance"
 CONF_MEMORY_COLLECTION_NAME: Final = "memory_collection_name"
 CONF_MEMORY_IMPORTANCE_DECAY: Final = "memory_importance_decay"
 CONF_MEMORY_DEDUP_THRESHOLD: Final = "memory_dedup_threshold"
-CONF_MEMORY_EXTRACTION_ENABLED: Final = "memory_extraction_enabled"
-CONF_MEMORY_EXTRACTION_LLM: Final = "memory_extraction_llm"
 CONF_MEMORY_CONTEXT_TOP_K: Final = "memory_context_top_k"
 CONF_MEMORY_EVENT_TTL: Final = "memory_event_ttl"
 CONF_MEMORY_FACT_TTL: Final = "memory_fact_ttl"
@@ -520,15 +519,19 @@ DEFAULT_EXTERNAL_LLM_TOOL_DESCRIPTION: Final = (
     "or comprehensive recommendations beyond simple home control."
 )
 
+# Memory scope constants
+MEMORY_SCOPE_PERSONAL: Final = "personal"
+MEMORY_SCOPE_GLOBAL: Final = "global"
+MEMORY_USER_GLOBAL: Final = "__global__"
+
 # Default values - Memory Configuration
 DEFAULT_MEMORY_ENABLED: Final = True
+DEFAULT_MEMORY_UNIVERSAL_ACCESS: Final = False
 DEFAULT_MEMORY_MAX_MEMORIES: Final = 100
 DEFAULT_MEMORY_MIN_IMPORTANCE: Final = 0.3
 DEFAULT_MEMORY_COLLECTION_NAME: Final = "proxlab_memories"
 DEFAULT_MEMORY_IMPORTANCE_DECAY: Final = 0.0  # No decay by default
 DEFAULT_MEMORY_DEDUP_THRESHOLD: Final = 0.85  # Lowered to catch near-duplicate memories
-DEFAULT_MEMORY_EXTRACTION_ENABLED: Final = True
-DEFAULT_MEMORY_EXTRACTION_LLM: Final = "external"  # "external" or "local"
 DEFAULT_MEMORY_CONTEXT_TOP_K: Final = 5
 DEFAULT_MEMORY_EVENT_TTL: Final = 300  # 5 minutes for events (in seconds)
 DEFAULT_MEMORY_FACT_TTL: Final = None  # No expiration for facts

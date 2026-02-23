@@ -27,7 +27,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .connection_manager import resolve_connections_to_flat_config
 from .const import (
+    CONF_CONNECTIONS,
     CONF_STT_BASE_URL,
     CONF_STT_LANGUAGE,
     CONF_STT_MODEL,
@@ -46,6 +48,8 @@ async def async_setup_entry(
 ) -> None:
     """Set up ProxLab STT platform from a config entry."""
     config = dict(config_entry.data) | dict(config_entry.options)
+    if CONF_CONNECTIONS in config:
+        config = resolve_connections_to_flat_config(config)
     stt_base_url = config.get(CONF_STT_BASE_URL)
 
     if not stt_base_url:

@@ -18,7 +18,9 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
+from .connection_manager import resolve_connections_to_flat_config
 from .const import (
+    CONF_CONNECTIONS,
     CONF_TTS_BASE_URL,
     CONF_TTS_MODEL,
     CONF_TTS_VOICE,
@@ -51,6 +53,8 @@ async def async_setup_entry(
 ) -> None:
     """Set up ProxLab TTS platform from a config entry."""
     config = dict(config_entry.data) | dict(config_entry.options)
+    if CONF_CONNECTIONS in config:
+        config = resolve_connections_to_flat_config(config)
     tts_base_url = config.get(CONF_TTS_BASE_URL)
 
     if not tts_base_url:

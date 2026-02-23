@@ -41,7 +41,6 @@
           "vector_db_settings": "Vector Database",
           "history_settings": "Conversation History",
           "memory_settings": "Memory System",
-          "prompt_settings": "System Prompt",
           "tool_settings": "Tool Configuration",
           "debug_settings": "Debug Settings"
         }
@@ -200,6 +199,16 @@
           "restore_default_prompt": "Check this box and submit to reset the prompt to the built-in default"
         }
       },
+      "confirm_agent_disable": {
+        "title": "Disable {agent_name}?",
+        "description": "This agent has connections configured. Are you sure you want to disable it? Your connections and prompt will be preserved.",
+        "data": {
+          "enable_instead": "Enable this agent instead"
+        },
+        "data_description": {
+          "enable_instead": "Check this to keep the agent enabled with the connections you configured"
+        }
+      },
       "memory_settings_gated": {
         "title": "Memory System",
         "description": "The Memory System requires the Memory and Embeddings agents to be enabled and configured with primary connections. Go to Agents to set them up."
@@ -235,15 +244,24 @@
         }
       },
       "vector_db_settings": {
-        "title": "Vector Database Settings",
-        "description": "Configure vector database backend settings. Embedding endpoint is configured via Connections + Roles.",
+        "title": "Vector Database",
+        "description": "Set up or manage your vector database backend for semantic entity search.",
         "data": {
-          "vector_db_backend": "Vector DB Backend",
-          "vector_db_host": "ChromaDB Host",
-          "vector_db_port": "ChromaDB Port",
-          "vector_db_collection": "ChromaDB Collection Name",
+          "vector_db_action": "Action"
+        },
+        "data_description": {
+          "vector_db_action": "Choose a backend to set up, or edit/remove an existing one"
+        }
+      },
+      "vector_db_configure": {
+        "title": "Configure {backend_name}",
+        "description": "Configure the connection and search settings for your vector database.",
+        "data": {
+          "vector_db_host": "Host",
+          "vector_db_port": "Port",
+          "vector_db_collection": "Collection Name",
           "vector_db_top_k": "Top K Results",
-          "vector_db_similarity_threshold": "Similarity Threshold",
+          "vector_db_similarity_threshold": "Similarity Threshold (L2)",
           "additional_collections": "Additional Collections",
           "additional_top_k": "Additional Collections Top K",
           "additional_l2_distance_threshold": "Additional L2 Threshold",
@@ -252,18 +270,27 @@
           "milvus_collection": "Milvus Collection Name"
         },
         "data_description": {
-          "vector_db_backend": "Choose between ChromaDB (lightweight) or Milvus (scalable)",
-          "vector_db_host": "ChromaDB server hostname or IP address",
-          "vector_db_port": "ChromaDB server port",
-          "vector_db_collection": "Name of the ChromaDB collection",
+          "vector_db_host": "Server hostname or IP address",
+          "vector_db_port": "Server port",
+          "vector_db_collection": "Name of the collection for entity embeddings",
           "vector_db_top_k": "Number of most relevant entities to retrieve",
-          "vector_db_similarity_threshold": "Maximum L2 distance threshold",
-          "additional_collections": "Extra ChromaDB collections (comma-separated)",
+          "vector_db_similarity_threshold": "Maximum L2 distance threshold for results",
+          "additional_collections": "Extra collections to search (comma-separated)",
           "additional_top_k": "Top K for additional collections",
           "additional_l2_distance_threshold": "L2 threshold for additional collections",
-          "milvus_host": "Milvus server hostname or IP (used when backend is Milvus)",
+          "milvus_host": "Milvus server hostname or IP",
           "milvus_port": "Milvus server port (default: 19530)",
           "milvus_collection": "Milvus collection name"
+        }
+      },
+      "vector_db_delete": {
+        "title": "Remove Vector Database",
+        "description": "This will remove all vector database configuration. Your data in the database will not be deleted.",
+        "data": {
+          "confirm_delete": "Confirm removal"
+        },
+        "data_description": {
+          "confirm_delete": "Check this box and submit to remove the vector database configuration"
         }
       },
       "history_settings": {
@@ -284,20 +311,6 @@
           "session_timeout": "Time in minutes before voice sessions expire (1-120)"
         }
       },
-      "prompt_settings": {
-        "title": "System Prompt",
-        "description": "Configure the system prompt that guides the LLM's behavior.",
-        "data": {
-          "use_default_prompt": "Use Default System Prompt",
-          "prompt_include_labels": "Include Entity/Device Labels",
-          "custom_prompt_additions": "Custom Prompt Additions"
-        },
-        "data_description": {
-          "use_default_prompt": "Use ProxLab's built-in system prompt",
-          "prompt_include_labels": "Include entity and device labels in the system prompt",
-          "custom_prompt_additions": "Additional instructions to append to the system prompt"
-        }
-      },
       "tool_settings": {
         "title": "Tool Configuration",
         "description": "Configure tool execution limits and timeouts.",
@@ -315,8 +328,7 @@
         "description": "Configure the long-term memory system for persistent learning across conversations.",
         "data": {
           "memory_enabled": "Enable Memory System",
-          "memory_extraction_enabled": "Enable Automatic Memory Extraction",
-          "memory_extraction_llm": "LLM for Memory Extraction",
+          "memory_universal_access": "Universal Memory",
           "memory_max_memories": "Maximum Stored Memories",
           "memory_min_importance": "Minimum Importance (0.0-1.0)",
           "memory_min_words": "Minimum Words (1-50)",
@@ -325,8 +337,7 @@
         },
         "data_description": {
           "memory_enabled": "Privacy toggle - enable or disable the entire memory system",
-          "memory_extraction_enabled": "Automatically extract memories after each conversation",
-          "memory_extraction_llm": "Choose which LLM to use for extracting memories",
+          "memory_universal_access": "When enabled, the agent can access all users' memories. When disabled, only the current user's memories and global memories are used.",
           "memory_max_memories": "Maximum number of memories to store",
           "memory_min_importance": "Filter memories by importance score (0.2-0.8)",
           "memory_min_words": "Minimum words required for a memory",

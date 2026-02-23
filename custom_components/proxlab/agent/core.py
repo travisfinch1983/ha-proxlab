@@ -120,6 +120,7 @@ from ..const import (
     CONF_HISTORY_MAX_TOKENS,
     CONF_HISTORY_PERSIST,
     CONF_LLM_MODEL,
+    CONF_MEMORY_ENABLED,
     CONF_PROMPT_CUSTOM_ADDITIONS,
     CONF_PROMPT_INCLUDE_LABELS,
     CONF_PROMPT_USE_DEFAULT,
@@ -130,7 +131,7 @@ from ..const import (
     CONF_TOOLS_TIMEOUT,
     DEFAULT_HISTORY_MAX_MESSAGES,
     DEFAULT_HISTORY_MAX_TOKENS,
-    DEFAULT_MEMORY_EXTRACTION_ENABLED,
+    DEFAULT_MEMORY_ENABLED,
     DEFAULT_PROMPT_INCLUDE_LABELS,
     DEFAULT_STREAMING_ENABLED,
     DEFAULT_SYSTEM_PROMPT,
@@ -141,7 +142,6 @@ from ..const import (
     EVENT_CONVERSATION_STARTED,
     EVENT_ERROR,
     EVENT_STREAMING_ERROR,
-    CONF_MEMORY_EXTRACTION_ENABLED,
     TOOL_QUERY_EXTERNAL_LLM,
 )
 from ..exceptions import (
@@ -813,7 +813,7 @@ class ProxLabAgent(
             # Preprocess user message (e.g., append /no_think if thinking mode disabled)
             preprocessed_text = self._preprocess_user_message(text)
             response = await self._process_conversation(
-                preprocessed_text, conversation_id, device_id, metrics
+                preprocessed_text, conversation_id, device_id, metrics, user_id=user_id
             )
 
             # Calculate total duration
@@ -1264,7 +1264,7 @@ class ProxLabAgent(
                 self.conversation_manager.add_message(conversation_id, "assistant", final_response)
 
         # Extract and store memories if enabled (fire and forget)
-        if self.config.get(CONF_MEMORY_EXTRACTION_ENABLED, DEFAULT_MEMORY_EXTRACTION_ENABLED):
+        if self.config.get(CONF_MEMORY_ENABLED, DEFAULT_MEMORY_ENABLED):
             # Extract final response for memory extraction
             final_response = ""
             for content_item in new_content:
@@ -1279,6 +1279,7 @@ class ProxLabAgent(
                         user_message=user_message,
                         assistant_response=final_response,
                         full_messages=messages,
+                        user_id=user_id,
                     )
                 )
 
@@ -1363,6 +1364,7 @@ class ProxLabAgent(
         conversation_id: str,
         device_id: str | None = None,
         metrics: dict[str, Any] | None = None,
+        user_id: str | None = None,
     ) -> str:
         """Process a conversation with tool calling loop.
 
@@ -1371,6 +1373,7 @@ class ProxLabAgent(
             conversation_id: Conversation ID for history
             device_id: Device ID that triggered the conversation
             metrics: Optional metrics dictionary to populate
+            user_id: User ID for the conversation
 
         Returns:
             Final response text
@@ -1506,15 +1509,14 @@ class ProxLabAgent(
                     )
 
                 # Extract and store memories if enabled (fire and forget)
-                if self.config.get(
-                    CONF_MEMORY_EXTRACTION_ENABLED, DEFAULT_MEMORY_EXTRACTION_ENABLED
-                ):
+                if self.config.get(CONF_MEMORY_ENABLED, DEFAULT_MEMORY_ENABLED):
                     self.hass.async_create_task(
                         self._extract_and_store_memories(
                             conversation_id=conversation_id,
                             user_message=user_message,
                             assistant_response=final_content,
                             full_messages=messages,
+                            user_id=user_id,
                         )
                     )
 

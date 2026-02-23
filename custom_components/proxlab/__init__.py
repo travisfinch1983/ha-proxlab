@@ -117,7 +117,10 @@ _LOGGER = logging.getLogger(__name__)
 
 
 async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Migrate config entry from v1 (flat keys) to v2 (connections+roles).
+    """Migrate config entry to current version.
+
+    v1→v2: Flat keys to connections+roles architecture.
+    v2→v3: Remove obsolete memory extraction keys.
 
     Called automatically by HA when entry.version < ConfigFlow.VERSION.
 
@@ -282,7 +285,7 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         }
 
         hass.config_entries.async_update_entry(
-            entry, data=new_data, options=new_options, version=CONFIG_VERSION
+            entry, data=new_data, options=new_options, version=2
         )
 
         _LOGGER.info(
@@ -290,6 +293,24 @@ async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             len(connections),
             {r: ("set" if v else "empty") for r, v in roles.items()},
         )
+
+    if entry.version == 2:
+        _LOGGER.info("Migrating ProxLab config entry from v2 to v3")
+
+        # Remove obsolete memory extraction keys
+        _OBSOLETE_KEYS = {
+            "memory_extraction_enabled",
+            "memory_extraction_llm",
+        }
+
+        new_data = {k: v for k, v in dict(entry.data).items() if k not in _OBSOLETE_KEYS}
+        new_options = {k: v for k, v in dict(entry.options).items() if k not in _OBSOLETE_KEYS}
+
+        hass.config_entries.async_update_entry(
+            entry, data=new_data, options=new_options, version=CONFIG_VERSION
+        )
+
+        _LOGGER.info("Migration v2→v3 complete: removed obsolete memory extraction keys")
 
     return True
 

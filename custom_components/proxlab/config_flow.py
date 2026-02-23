@@ -57,18 +57,14 @@ from .const import (
     CONF_MEMORY_COLLECTION_NAME,
     CONF_MEMORY_CONTEXT_TOP_K,
     CONF_MEMORY_ENABLED,
-    CONF_MEMORY_EXTRACTION_ENABLED,
-    CONF_MEMORY_EXTRACTION_LLM,
     CONF_MEMORY_MAX_MEMORIES,
     CONF_MEMORY_MIN_IMPORTANCE,
     CONF_MEMORY_MIN_WORDS,
+    CONF_MEMORY_UNIVERSAL_ACCESS,
     CONF_MILVUS_COLLECTION,
     CONF_MILVUS_HOST,
     CONF_MILVUS_PORT,
     CONF_OPENAI_API_KEY,
-    CONF_PROMPT_CUSTOM_ADDITIONS,
-    CONF_PROMPT_INCLUDE_LABELS,
-    CONF_PROMPT_USE_DEFAULT,
     CONF_PROXLAB_URL,
     CONF_ROLES,
     CONF_SESSION_PERSISTENCE_ENABLED,
@@ -104,17 +100,14 @@ from .const import (
     DEFAULT_MEMORY_COLLECTION_NAME,
     DEFAULT_MEMORY_CONTEXT_TOP_K,
     DEFAULT_MEMORY_ENABLED,
-    DEFAULT_MEMORY_EXTRACTION_ENABLED,
-    DEFAULT_MEMORY_EXTRACTION_LLM,
     DEFAULT_MEMORY_MAX_MEMORIES,
     DEFAULT_MEMORY_MIN_IMPORTANCE,
     DEFAULT_MEMORY_MIN_WORDS,
+    DEFAULT_MEMORY_UNIVERSAL_ACCESS,
     DEFAULT_MILVUS_COLLECTION,
     DEFAULT_MILVUS_HOST,
     DEFAULT_MILVUS_PORT,
     DEFAULT_NAME,
-    DEFAULT_PROMPT_INCLUDE_LABELS,
-    DEFAULT_PROMPT_USE_DEFAULT,
     DEFAULT_ROLES,
     DEFAULT_SESSION_PERSISTENCE_ENABLED,
     DEFAULT_SESSION_TIMEOUT,
@@ -308,8 +301,11 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
         self._adding_connection: dict[str, Any] = {}
         self._editing_connection_id: str | None = None
         self._editing_connection: dict[str, Any] = {}
+        # Pre-fill data from ProxLab import (shown on next form render)
+        self._prefill_connection: dict[str, Any] | None = None
         # Temp state for agent configuration
         self._configuring_agent_id: str = ""
+        self._pending_agent_cfg: dict[str, Any] | None = None
 
     # -----------------------------------------------------------
     # ProxLab service discovery helpers
@@ -350,7 +346,6 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                 "vector_db_settings",
                 "history_settings",
                 "memory_settings",
-                "prompt_settings",
                 "tool_settings",
                 "debug_settings",
             ],
@@ -497,9 +492,9 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                             "tts": [CAP_TTS],
                             "stt": [CAP_STT],
                         }
-                        self._adding_connection = {
+                        # Store pre-fill data and re-show form for user review
+                        self._prefill_connection = {
                             "name": f"{svc.provider} {svc.model}",
-                            "connection_type": CONNECTION_TYPE_LOCAL,
                             "base_url": proxy_url,
                             "api_key": "",
                             "model": svc.model,
@@ -507,7 +502,7 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                                 svc.service_type, []
                             ),
                         }
-                        return await self.async_step_connection_details()
+                        return await self.async_step_add_connection()
             else:
                 # Normal form submission — validate and proceed
                 base_url = user_input.get("base_url", "")
@@ -539,6 +534,10 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
             for cap in ALL_CAPABILITIES
         ]
 
+        # Use pre-fill data from ProxLab import if available
+        prefill = self._prefill_connection or {}
+        self._prefill_connection = None  # Clear after use
+
         # Optional ProxLab import dropdown
         schema_fields: dict[Any, Any] = {}
         proxlab_url = self._config_entry.data.get(CONF_PROXLAB_URL, "")
@@ -559,11 +558,14 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
 
         schema_fields.update(
             {
-                vol.Required("name", default="New Connection"): str,
-                vol.Required("base_url", default=""): str,
-                vol.Optional("api_key", default=""): str,
-                vol.Optional("model", default=""): str,
-                vol.Required("capabilities"): selector.SelectSelector(
+                vol.Required("name", default=prefill.get("name", "New Connection")): str,
+                vol.Required("base_url", default=prefill.get("base_url", "")): str,
+                vol.Optional("api_key", default=prefill.get("api_key", "")): str,
+                vol.Optional("model", default=prefill.get("model", "")): str,
+                vol.Required(
+                    "capabilities",
+                    default=prefill.get("capabilities", []),
+                ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=cap_options,
                         multiple=True,
@@ -1156,16 +1158,21 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
             new_agent_cfg["primary_connection"] = None if primary == "__none__" else primary
             new_agent_cfg["secondary_connection"] = None if secondary == "__none__" else secondary
 
-            # If disabled, clear connections
-            if not new_agent_cfg["enabled"]:
-                new_agent_cfg["primary_connection"] = None
-                new_agent_cfg["secondary_connection"] = None
-
-            # System prompt
+            # System prompt (always saved regardless of enabled state)
             if agent_def.has_prompt:
                 new_agent_cfg["system_prompt"] = user_input.get("system_prompt", "")
             else:
                 new_agent_cfg["system_prompt"] = ""
+
+            # If disabling an agent that has connections configured, ask for confirmation
+            if (
+                not new_agent_cfg["enabled"]
+                and not agent_def.mandatory
+                and new_agent_cfg.get("primary_connection")
+                and not user_input.get("_confirmed_disable", False)
+            ):
+                self._pending_agent_cfg = new_agent_cfg
+                return await self.async_step_confirm_agent_disable()
 
             # Save
             agents_config[agent_id] = new_agent_cfg
@@ -1220,9 +1227,7 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                     "system_prompt",
                     description={"suggested_value": display_prompt},
                 )
-            ] = selector.TextSelector(
-                selector.TextSelectorConfig(multiline=True)
-            )
+            ] = selector.TemplateSelector()
             schema_fields[
                 vol.Optional("restore_default_prompt", default=False)
             ] = bool
@@ -1233,6 +1238,39 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
             description_placeholders={
                 "agent_name": agent_def.name,
                 "agent_description": agent_def.description,
+            },
+        )
+
+    async def async_step_confirm_agent_disable(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Confirm disabling an agent that has connections configured."""
+        agent_id = self._configuring_agent_id
+        agent_def = AGENT_DEFINITIONS[agent_id]
+
+        if user_input is not None:
+            agents_config = dict(self._config_entry.options.get(CONF_AGENTS, {}))
+            pending = self._pending_agent_cfg or {}
+
+            if user_input.get("enable_instead", False):
+                # User chose to enable the agent instead
+                pending["enabled"] = True
+
+            agents_config[agent_id] = pending
+            updated_options = dict(self._config_entry.options)
+            updated_options[CONF_AGENTS] = agents_config
+            self._pending_agent_cfg = None
+            return self.async_create_entry(title="", data=updated_options)
+
+        return self.async_show_form(
+            step_id="confirm_agent_disable",
+            data_schema=vol.Schema(
+                {
+                    vol.Optional("enable_instead", default=False): bool,
+                }
+            ),
+            description_placeholders={
+                "agent_name": agent_def.name,
             },
         )
 
@@ -1300,6 +1338,22 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
         current_options = self._config_entry.options
         current_data = self._config_entry.data
 
+        # Check if Vector DB mode prerequisites are met
+        agents = current_options.get(CONF_AGENTS, {})
+        embeddings_agent = agents.get(AGENT_EMBEDDINGS, {})
+        embeddings_ready = embeddings_agent.get("enabled") and embeddings_agent.get(
+            "primary_connection"
+        )
+        vdb_configured = bool(current_options.get(CONF_VECTOR_DB_BACKEND))
+
+        # Build context mode options dynamically
+        context_mode_options = [CONTEXT_MODE_DIRECT]
+        vdb_note = ""
+        if embeddings_ready and vdb_configured:
+            context_mode_options.append(CONTEXT_MODE_VECTOR_DB)
+        else:
+            vdb_note = " (Vector DB unavailable — configure Embeddings agent and Vector Database first)"
+
         return self.async_show_form(
             step_id="context_settings",
             data_schema=vol.Schema(
@@ -1310,7 +1364,7 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                             CONF_CONTEXT_MODE,
                             current_data.get(CONF_CONTEXT_MODE, DEFAULT_CONTEXT_MODE),
                         ),
-                    ): vol.In([CONTEXT_MODE_DIRECT, CONTEXT_MODE_VECTOR_DB]),
+                    ): vol.In(context_mode_options),
                     vol.Optional(
                         CONF_CONTEXT_FORMAT,
                         default=current_options.get(
@@ -1348,6 +1402,7 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                 "direct_mode": CONTEXT_MODE_DIRECT,
                 "vector_db_mode": CONTEXT_MODE_VECTOR_DB,
                 "entity_format": "sensor.temperature,light.living_room",
+                "vector_db_note": vdb_note,
             },
         )
 
@@ -1369,7 +1424,7 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
     async def async_step_vector_db_settings(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Configure Vector DB settings."""
+        """Vector DB settings — select backend or manage existing config."""
         # Gate: require Embeddings agent enabled and configured
         agents = self._config_entry.options.get(CONF_AGENTS, {})
         embeddings_agent = agents.get(AGENT_EMBEDDINGS, {})
@@ -1379,118 +1434,74 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
         if not embeddings_ready:
             return await self.async_step_vector_db_settings_gated()
 
+        current_backend = self._config_entry.options.get(CONF_VECTOR_DB_BACKEND)
+
         if user_input is not None:
-            if CONF_ADDITIONAL_COLLECTIONS in user_input:
-                collections_str = user_input[CONF_ADDITIONAL_COLLECTIONS]
-                if isinstance(collections_str, str):
-                    collections_list = [
-                        c.strip() for c in collections_str.split(",") if c.strip()
-                    ]
-                    user_input[CONF_ADDITIONAL_COLLECTIONS] = collections_list
+            action = user_input.get("vector_db_action", "")
+            if action == "__edit__":
+                return await self.async_step_vector_db_configure()
+            if action == "__delete__":
+                return await self.async_step_vector_db_delete()
+            # New backend selected
+            if action in (VECTOR_DB_BACKEND_CHROMADB, VECTOR_DB_BACKEND_MILVUS):
+                updated_options = {**self._config_entry.options, CONF_VECTOR_DB_BACKEND: action}
+                self.hass.config_entries.async_update_entry(
+                    self._config_entry, options=updated_options
+                )
+                return await self.async_step_vector_db_configure()
+            return await self.async_step_init()
 
-            updated_options = {**self._config_entry.options, **user_input}
-            return self.async_create_entry(title="", data=updated_options)
-
-        current_options = self._config_entry.options
-        current_data = self._config_entry.data
-
-        additional_collections = current_options.get(
-            CONF_ADDITIONAL_COLLECTIONS, DEFAULT_ADDITIONAL_COLLECTIONS
-        )
-        if isinstance(additional_collections, list):
-            additional_collections_str = ", ".join(additional_collections)
+        # Build options based on current state
+        options: list[dict[str, str]] = []
+        if current_backend:
+            backend_label = "ChromaDB" if current_backend == VECTOR_DB_BACKEND_CHROMADB else "Milvus"
+            options.append({"value": "__edit__", "label": f"Edit {backend_label} Configuration"})
+            options.append({"value": "__delete__", "label": "Remove Vector Database"})
         else:
-            additional_collections_str = ""
+            options.append({"value": VECTOR_DB_BACKEND_CHROMADB, "label": "Set up ChromaDB"})
+            options.append({"value": VECTOR_DB_BACKEND_MILVUS, "label": "Set up Milvus"})
 
         return self.async_show_form(
             step_id="vector_db_settings",
             data_schema=vol.Schema(
                 {
-                    vol.Optional(
-                        CONF_VECTOR_DB_BACKEND,
-                        default=current_options.get(
-                            CONF_VECTOR_DB_BACKEND,
-                            current_data.get(
-                                CONF_VECTOR_DB_BACKEND, DEFAULT_VECTOR_DB_BACKEND
-                            ),
-                        ),
-                    ): selector.SelectSelector(
+                    vol.Required("vector_db_action"): selector.SelectSelector(
                         selector.SelectSelectorConfig(
-                            options=[
-                                VECTOR_DB_BACKEND_CHROMADB,
-                                VECTOR_DB_BACKEND_MILVUS,
-                            ],
-                            translation_key="vector_db_backend",
+                            options=options,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
                         )
                     ),
-                    vol.Optional(
-                        CONF_VECTOR_DB_HOST,
-                        default=current_options.get(
-                            CONF_VECTOR_DB_HOST,
-                            current_data.get(
-                                CONF_VECTOR_DB_HOST, DEFAULT_VECTOR_DB_HOST
-                            ),
-                        ),
-                    ): str,
-                    vol.Optional(
-                        CONF_VECTOR_DB_PORT,
-                        default=current_options.get(
-                            CONF_VECTOR_DB_PORT,
-                            current_data.get(
-                                CONF_VECTOR_DB_PORT, DEFAULT_VECTOR_DB_PORT
-                            ),
-                        ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
-                    vol.Optional(
-                        CONF_VECTOR_DB_COLLECTION,
-                        default=current_options.get(
-                            CONF_VECTOR_DB_COLLECTION,
-                            current_data.get(
-                                CONF_VECTOR_DB_COLLECTION,
-                                DEFAULT_VECTOR_DB_COLLECTION,
-                            ),
-                        ),
-                    ): str,
-                    vol.Optional(
-                        CONF_VECTOR_DB_TOP_K,
-                        default=current_options.get(
-                            CONF_VECTOR_DB_TOP_K,
-                            current_data.get(
-                                CONF_VECTOR_DB_TOP_K, DEFAULT_VECTOR_DB_TOP_K
-                            ),
-                        ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=50)),
-                    vol.Optional(
-                        CONF_VECTOR_DB_SIMILARITY_THRESHOLD,
-                        default=current_options.get(
-                            CONF_VECTOR_DB_SIMILARITY_THRESHOLD,
-                            current_data.get(
-                                CONF_VECTOR_DB_SIMILARITY_THRESHOLD,
-                                DEFAULT_VECTOR_DB_SIMILARITY_THRESHOLD,
-                            ),
-                        ),
-                    ): vol.All(
-                        vol.Coerce(float), vol.Range(min=0.0, max=1000.0)
-                    ),
-                    vol.Optional(
-                        CONF_ADDITIONAL_COLLECTIONS,
-                        default=additional_collections_str,
-                    ): str,
-                    vol.Optional(
-                        CONF_ADDITIONAL_TOP_K,
-                        default=current_options.get(
-                            CONF_ADDITIONAL_TOP_K, DEFAULT_ADDITIONAL_TOP_K
-                        ),
-                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=50)),
-                    vol.Optional(
-                        CONF_ADDITIONAL_L2_DISTANCE_THRESHOLD,
-                        default=current_options.get(
-                            CONF_ADDITIONAL_L2_DISTANCE_THRESHOLD,
-                            DEFAULT_ADDITIONAL_L2_DISTANCE_THRESHOLD,
-                        ),
-                    ): vol.All(
-                        vol.Coerce(float), vol.Range(min=0.0, max=2000.0)
-                    ),
+                }
+            ),
+        )
+
+    async def async_step_vector_db_configure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Configure backend-specific Vector DB fields."""
+        current_options = self._config_entry.options
+        current_data = self._config_entry.data
+        backend = current_options.get(
+            CONF_VECTOR_DB_BACKEND,
+            current_data.get(CONF_VECTOR_DB_BACKEND, DEFAULT_VECTOR_DB_BACKEND),
+        )
+
+        if user_input is not None:
+            if CONF_ADDITIONAL_COLLECTIONS in user_input:
+                collections_str = user_input[CONF_ADDITIONAL_COLLECTIONS]
+                if isinstance(collections_str, str):
+                    user_input[CONF_ADDITIONAL_COLLECTIONS] = [
+                        c.strip() for c in collections_str.split(",") if c.strip()
+                    ]
+
+            updated_options = {**self._config_entry.options, **user_input}
+            return self.async_create_entry(title="", data=updated_options)
+
+        schema_fields: dict[Any, Any] = {}
+
+        if backend == VECTOR_DB_BACKEND_MILVUS:
+            schema_fields.update(
+                {
                     vol.Optional(
                         CONF_MILVUS_HOST,
                         default=current_options.get(
@@ -1509,18 +1520,135 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                         CONF_MILVUS_COLLECTION,
                         default=current_options.get(
                             CONF_MILVUS_COLLECTION,
-                            current_data.get(
-                                CONF_MILVUS_COLLECTION, DEFAULT_MILVUS_COLLECTION
-                            ),
+                            current_data.get(CONF_MILVUS_COLLECTION, DEFAULT_MILVUS_COLLECTION),
                         ),
                     ): str,
+                    vol.Optional(
+                        CONF_VECTOR_DB_TOP_K,
+                        default=current_options.get(
+                            CONF_VECTOR_DB_TOP_K,
+                            current_data.get(CONF_VECTOR_DB_TOP_K, DEFAULT_VECTOR_DB_TOP_K),
+                        ),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=50)),
+                    vol.Optional(
+                        CONF_VECTOR_DB_SIMILARITY_THRESHOLD,
+                        default=current_options.get(
+                            CONF_VECTOR_DB_SIMILARITY_THRESHOLD,
+                            current_data.get(
+                                CONF_VECTOR_DB_SIMILARITY_THRESHOLD,
+                                DEFAULT_VECTOR_DB_SIMILARITY_THRESHOLD,
+                            ),
+                        ),
+                    ): vol.All(vol.Coerce(float), vol.Range(min=0.0, max=1000.0)),
+                }
+            )
+        else:
+            # ChromaDB
+            additional_collections = current_options.get(
+                CONF_ADDITIONAL_COLLECTIONS, DEFAULT_ADDITIONAL_COLLECTIONS
+            )
+            additional_collections_str = (
+                ", ".join(additional_collections)
+                if isinstance(additional_collections, list)
+                else ""
+            )
+            schema_fields.update(
+                {
+                    vol.Optional(
+                        CONF_VECTOR_DB_HOST,
+                        default=current_options.get(
+                            CONF_VECTOR_DB_HOST,
+                            current_data.get(CONF_VECTOR_DB_HOST, DEFAULT_VECTOR_DB_HOST),
+                        ),
+                    ): str,
+                    vol.Optional(
+                        CONF_VECTOR_DB_PORT,
+                        default=current_options.get(
+                            CONF_VECTOR_DB_PORT,
+                            current_data.get(CONF_VECTOR_DB_PORT, DEFAULT_VECTOR_DB_PORT),
+                        ),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=65535)),
+                    vol.Optional(
+                        CONF_VECTOR_DB_COLLECTION,
+                        default=current_options.get(
+                            CONF_VECTOR_DB_COLLECTION,
+                            current_data.get(CONF_VECTOR_DB_COLLECTION, DEFAULT_VECTOR_DB_COLLECTION),
+                        ),
+                    ): str,
+                    vol.Optional(
+                        CONF_VECTOR_DB_TOP_K,
+                        default=current_options.get(
+                            CONF_VECTOR_DB_TOP_K,
+                            current_data.get(CONF_VECTOR_DB_TOP_K, DEFAULT_VECTOR_DB_TOP_K),
+                        ),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=50)),
+                    vol.Optional(
+                        CONF_VECTOR_DB_SIMILARITY_THRESHOLD,
+                        default=current_options.get(
+                            CONF_VECTOR_DB_SIMILARITY_THRESHOLD,
+                            current_data.get(
+                                CONF_VECTOR_DB_SIMILARITY_THRESHOLD,
+                                DEFAULT_VECTOR_DB_SIMILARITY_THRESHOLD,
+                            ),
+                        ),
+                    ): vol.All(vol.Coerce(float), vol.Range(min=0.0, max=1000.0)),
+                    vol.Optional(
+                        CONF_ADDITIONAL_COLLECTIONS,
+                        default=additional_collections_str,
+                    ): str,
+                    vol.Optional(
+                        CONF_ADDITIONAL_TOP_K,
+                        default=current_options.get(
+                            CONF_ADDITIONAL_TOP_K, DEFAULT_ADDITIONAL_TOP_K
+                        ),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=50)),
+                    vol.Optional(
+                        CONF_ADDITIONAL_L2_DISTANCE_THRESHOLD,
+                        default=current_options.get(
+                            CONF_ADDITIONAL_L2_DISTANCE_THRESHOLD,
+                            DEFAULT_ADDITIONAL_L2_DISTANCE_THRESHOLD,
+                        ),
+                    ): vol.All(vol.Coerce(float), vol.Range(min=0.0, max=2000.0)),
+                }
+            )
+
+        backend_label = "Milvus" if backend == VECTOR_DB_BACKEND_MILVUS else "ChromaDB"
+        return self.async_show_form(
+            step_id="vector_db_configure",
+            data_schema=vol.Schema(schema_fields),
+            description_placeholders={
+                "backend_name": backend_label,
+            },
+        )
+
+    async def async_step_vector_db_delete(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Confirm and delete vector DB configuration."""
+        if user_input is not None:
+            if user_input.get("confirm_delete", False):
+                # Clear vector DB config keys
+                vdb_keys = {
+                    CONF_VECTOR_DB_BACKEND, CONF_VECTOR_DB_HOST, CONF_VECTOR_DB_PORT,
+                    CONF_VECTOR_DB_COLLECTION, CONF_VECTOR_DB_TOP_K,
+                    CONF_VECTOR_DB_SIMILARITY_THRESHOLD, CONF_ADDITIONAL_COLLECTIONS,
+                    CONF_ADDITIONAL_TOP_K, CONF_ADDITIONAL_L2_DISTANCE_THRESHOLD,
+                    CONF_MILVUS_HOST, CONF_MILVUS_PORT, CONF_MILVUS_COLLECTION,
+                }
+                updated_options = {
+                    k: v for k, v in self._config_entry.options.items()
+                    if k not in vdb_keys
+                }
+                return self.async_create_entry(title="", data=updated_options)
+            return await self.async_step_init()
+
+        return self.async_show_form(
+            step_id="vector_db_delete",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("confirm_delete", default=False): bool,
                 }
             ),
-            description_placeholders={
-                "default_host": DEFAULT_VECTOR_DB_HOST,
-                "default_port": str(DEFAULT_VECTOR_DB_PORT),
-                "default_collection": DEFAULT_VECTOR_DB_COLLECTION,
-            },
         )
 
     # ===========================================================
@@ -1599,64 +1727,6 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
         )
 
     # ===========================================================
-    # PROMPT SETTINGS (unchanged from v1)
-    # ===========================================================
-
-    async def async_step_prompt_settings(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Configure system prompt settings."""
-        if user_input is not None:
-            updated_options = {**self._config_entry.options, **user_input}
-            return self.async_create_entry(title="", data=updated_options)
-
-        current_options = self._config_entry.options
-        current_data = self._config_entry.data
-
-        return self.async_show_form(
-            step_id="prompt_settings",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(
-                        CONF_PROMPT_USE_DEFAULT,
-                        default=current_options.get(
-                            CONF_PROMPT_USE_DEFAULT,
-                            current_data.get(
-                                CONF_PROMPT_USE_DEFAULT, DEFAULT_PROMPT_USE_DEFAULT
-                            ),
-                        ),
-                    ): bool,
-                    vol.Optional(
-                        CONF_PROMPT_INCLUDE_LABELS,
-                        default=current_options.get(
-                            CONF_PROMPT_INCLUDE_LABELS,
-                            current_data.get(
-                                CONF_PROMPT_INCLUDE_LABELS,
-                                DEFAULT_PROMPT_INCLUDE_LABELS,
-                            ),
-                        ),
-                    ): bool,
-                    vol.Optional(
-                        CONF_PROMPT_CUSTOM_ADDITIONS,
-                        description={
-                            "suggested_value": current_options.get(
-                                CONF_PROMPT_CUSTOM_ADDITIONS,
-                                current_data.get(CONF_PROMPT_CUSTOM_ADDITIONS, ""),
-                            )
-                        },
-                    ): selector.TemplateSelector(),
-                }
-            ),
-            description_placeholders={
-                "example_addition": (
-                    "Additional context about my home:\n"
-                    "- The thermostat prefers 68-72\u00b0F\n"
-                    "- Keep doors locked after 10 PM"
-                ),
-            },
-        )
-
-    # ===========================================================
     # TOOL SETTINGS (unchanged from v1)
     # ===========================================================
 
@@ -1728,25 +1798,9 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
         if not (memory_ready and embeddings_ready):
             return await self.async_step_memory_settings_gated()
 
-        errors: dict[str, str] = {}
-
         if user_input is not None:
-            if user_input.get(CONF_MEMORY_EXTRACTION_LLM) == "external":
-                current_data = self._config_entry.data
-                current_options = self._config_entry.options
-                # In v2, check if external_llm role is assigned
-                roles = current_data.get(CONF_ROLES, {})
-                ext_assigned = roles.get("external_llm") is not None
-                ext_enabled = current_options.get(
-                    CONF_EXTERNAL_LLM_ENABLED,
-                    current_data.get(CONF_EXTERNAL_LLM_ENABLED, DEFAULT_EXTERNAL_LLM_ENABLED),
-                )
-                if not ext_assigned and not ext_enabled:
-                    errors["base"] = "external_llm_required"
-
-            if not errors:
-                updated_options = {**self._config_entry.options, **user_input}
-                return self.async_create_entry(title="", data=updated_options)
+            updated_options = {**self._config_entry.options, **user_input}
+            return self.async_create_entry(title="", data=updated_options)
 
         current_options = self._config_entry.options
         current_data = self._config_entry.data
@@ -1759,91 +1813,56 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                         CONF_MEMORY_ENABLED,
                         default=current_options.get(
                             CONF_MEMORY_ENABLED,
-                            current_data.get(
-                                CONF_MEMORY_ENABLED, DEFAULT_MEMORY_ENABLED
-                            ),
+                            current_data.get(CONF_MEMORY_ENABLED, DEFAULT_MEMORY_ENABLED),
                         ),
                     ): bool,
                     vol.Required(
-                        CONF_MEMORY_EXTRACTION_ENABLED,
+                        CONF_MEMORY_UNIVERSAL_ACCESS,
                         default=current_options.get(
-                            CONF_MEMORY_EXTRACTION_ENABLED,
+                            CONF_MEMORY_UNIVERSAL_ACCESS,
                             current_data.get(
-                                CONF_MEMORY_EXTRACTION_ENABLED,
-                                DEFAULT_MEMORY_EXTRACTION_ENABLED,
+                                CONF_MEMORY_UNIVERSAL_ACCESS,
+                                DEFAULT_MEMORY_UNIVERSAL_ACCESS,
                             ),
                         ),
                     ): bool,
-                    vol.Required(
-                        CONF_MEMORY_EXTRACTION_LLM,
-                        default=current_options.get(
-                            CONF_MEMORY_EXTRACTION_LLM,
-                            current_data.get(
-                                CONF_MEMORY_EXTRACTION_LLM,
-                                DEFAULT_MEMORY_EXTRACTION_LLM,
-                            ),
-                        ),
-                    ): vol.In(["external", "local"]),
                     vol.Optional(
                         CONF_MEMORY_MAX_MEMORIES,
                         default=current_options.get(
                             CONF_MEMORY_MAX_MEMORIES,
-                            current_data.get(
-                                CONF_MEMORY_MAX_MEMORIES,
-                                DEFAULT_MEMORY_MAX_MEMORIES,
-                            ),
+                            current_data.get(CONF_MEMORY_MAX_MEMORIES, DEFAULT_MEMORY_MAX_MEMORIES),
                         ),
                     ): vol.All(vol.Coerce(int), vol.Range(min=10, max=1000)),
                     vol.Optional(
                         CONF_MEMORY_MIN_IMPORTANCE,
                         default=current_options.get(
                             CONF_MEMORY_MIN_IMPORTANCE,
-                            current_data.get(
-                                CONF_MEMORY_MIN_IMPORTANCE,
-                                DEFAULT_MEMORY_MIN_IMPORTANCE,
-                            ),
+                            current_data.get(CONF_MEMORY_MIN_IMPORTANCE, DEFAULT_MEMORY_MIN_IMPORTANCE),
                         ),
-                    ): vol.All(
-                        vol.Coerce(float), vol.Range(min=0.0, max=1.0)
-                    ),
+                    ): vol.All(vol.Coerce(float), vol.Range(min=0.0, max=1.0)),
                     vol.Optional(
                         CONF_MEMORY_MIN_WORDS,
                         default=current_options.get(
                             CONF_MEMORY_MIN_WORDS,
-                            current_data.get(
-                                CONF_MEMORY_MIN_WORDS, DEFAULT_MEMORY_MIN_WORDS
-                            ),
+                            current_data.get(CONF_MEMORY_MIN_WORDS, DEFAULT_MEMORY_MIN_WORDS),
                         ),
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=50)),
                     vol.Optional(
                         CONF_MEMORY_CONTEXT_TOP_K,
                         default=current_options.get(
                             CONF_MEMORY_CONTEXT_TOP_K,
-                            current_data.get(
-                                CONF_MEMORY_CONTEXT_TOP_K,
-                                DEFAULT_MEMORY_CONTEXT_TOP_K,
-                            ),
+                            current_data.get(CONF_MEMORY_CONTEXT_TOP_K, DEFAULT_MEMORY_CONTEXT_TOP_K),
                         ),
                     ): vol.All(vol.Coerce(int), vol.Range(min=1, max=20)),
                     vol.Optional(
                         CONF_MEMORY_COLLECTION_NAME,
                         default=current_options.get(
                             CONF_MEMORY_COLLECTION_NAME,
-                            current_data.get(
-                                CONF_MEMORY_COLLECTION_NAME,
-                                DEFAULT_MEMORY_COLLECTION_NAME,
-                            ),
+                            current_data.get(CONF_MEMORY_COLLECTION_NAME, DEFAULT_MEMORY_COLLECTION_NAME),
                         ),
                     ): str,
                 }
             ),
-            errors=errors,
-            description_placeholders={
-                "external_llm_note": (
-                    "Memory extraction using external LLM requires the "
-                    "external LLM role to be assigned in Role Assignments."
-                ),
-            },
         )
 
     # ===========================================================

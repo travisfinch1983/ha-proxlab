@@ -71,18 +71,19 @@ Usage Example:
     The mixin is used through inheritance in ProxLabAgent:
 
         class ProxLabAgent(LLMMixin, StreamingMixin, MemoryExtractionMixin):
-            async def process_message(self, text, conversation_id):
+            async def process_message(self, text, conversation_id, user_id):
                 # Process conversation normally
                 response = await self._process_conversation(text, ...)
 
                 # Extract memories asynchronously (fire and forget)
-                if self.config.get(CONF_MEMORY_EXTRACTION_ENABLED, True):
+                if self.config.get(CONF_MEMORY_ENABLED, True):
                     self.hass.async_create_task(
                         self._extract_and_store_memories(
                             conversation_id=conversation_id,
                             user_message=text,
                             assistant_response=response,
-                            full_messages=messages
+                            full_messages=messages,
+                            user_id=user_id,
                         )
                     )
 
@@ -97,24 +98,17 @@ Expected Host Class Attributes:
     - config: dict[str, Any]
         Configuration dictionary containing:
         - CONF_MEMORY_ENABLED: Enable memory system (default: True)
-        - CONF_MEMORY_EXTRACTION_ENABLED: Enable extraction (default: True)
-        - CONF_MEMORY_EXTRACTION_LLM: "local" or "external" (default: "local")
-        - CONF_EXTERNAL_LLM_ENABLED: Required if extraction_llm="external"
         - CONF_EMIT_EVENTS: Enable event emission (default: True)
-
-    - tool_handler: ToolHandler
-        Tool handler for executing query_external_llm tool
 
     - memory_manager: Any (property)
         MemoryManager instance for storing extracted memories
 
     - _call_llm(): Async method (from LLMMixin)
-        Used for local LLM extraction
+        Used for memory extraction
 
 Integration Points:
-    - MemoryManager: Stores validated memories with metadata
-    - LLMMixin: Provides _call_llm() for local extraction
-    - ToolHandler: Executes query_external_llm for external extraction
+    - MemoryManager: Stores validated memories with metadata and user_id
+    - LLMMixin: Provides _call_llm() for extraction
     - Home Assistant event bus: Emits memory_extracted events
 
 Extraction Prompt Structure:
@@ -127,18 +121,15 @@ Extraction Prompt Structure:
     - Rejection patterns to avoid low-value memories
     - JSON schema for structured output
 
-External vs Local LLM:
-    Local LLM (default):
-        - Uses the same LLM as conversations
-        - Lower latency, no additional API calls
-        - May have lower quality extraction with smaller models
-        - Temperature set to 0.3 for consistency
+LLM for Extraction:
+    Uses the memory agent's configured LLM connection.
+    Temperature set to 0.3 for consistent extraction results.
 
-    External LLM:
-        - Uses specialized external LLM (e.g., GPT-4, Claude)
-        - Higher quality extraction with larger models
-        - Additional API costs and latency
-        - Requires CONF_EXTERNAL_LLM_ENABLED: true
+Per-User Memory:
+    Memories are scoped per-user via user_id metadata:
+    - "personal" scope: Tagged with the user's ID, only visible to that user
+    - "global" scope: Tagged with "__global__", visible to all users
+    - Universal Access config toggle overrides scoping (shows all memories)
 
 Memory Storage Format:
     Each memory is stored with:
@@ -146,7 +137,9 @@ Memory Storage Format:
             "content": "User prefers bedroom at 68°F for sleeping",
             "type": "preference",  // fact, preference, context, event
             "importance": 0.8,  // 0.0 to 1.0
+            "scope": "personal",  // personal or global
             "conversation_id": "conv_123",
+            "user_id": "user_456",  // or "__global__" for global memories
             "metadata": {
                 "entities_involved": ["climate.bedroom"],
                 "topics": ["temperature", "bedroom", "sleep"],
@@ -159,26 +152,14 @@ Events:
         {
             "conversation_id": "conv_123",
             "memories_extracted": 3,
-            "extraction_llm": "local",
+            "user_id": "user_456",
             "timestamp": "2024-01-15T10:30:00"
         }
 
 Configuration Example:
-    # Use local LLM for extraction
     config = {
         CONF_MEMORY_ENABLED: True,
-        CONF_MEMORY_EXTRACTION_ENABLED: True,
-        CONF_MEMORY_EXTRACTION_LLM: "local",
-        CONF_EMIT_EVENTS: True
-    }
-
-    # Use external LLM for better quality
-    config = {
-        CONF_MEMORY_ENABLED: True,
-        CONF_MEMORY_EXTRACTION_ENABLED: True,
-        CONF_MEMORY_EXTRACTION_LLM: "external",
-        CONF_EXTERNAL_LLM_ENABLED: True,
-        CONF_EMIT_EVENTS: True
+        CONF_EMIT_EVENTS: True,
     }
 
 Error Handling:
@@ -196,23 +177,20 @@ from typing import TYPE_CHECKING, Any
 
 from ..const import (
     CONF_EMIT_EVENTS,
-    CONF_EXTERNAL_LLM_ENABLED,
     CONF_MEMORY_ENABLED,
-    CONF_MEMORY_EXTRACTION_LLM,
     CONF_MEMORY_MIN_IMPORTANCE,
     CONF_MEMORY_MIN_WORDS,
     DEFAULT_MEMORY_ENABLED,
-    DEFAULT_MEMORY_EXTRACTION_LLM,
     DEFAULT_MEMORY_MIN_WORDS,
     EVENT_MEMORY_EXTRACTED,
+    MEMORY_SCOPE_GLOBAL,
+    MEMORY_SCOPE_PERSONAL,
 )
 from ..helpers import strip_thinking_blocks
 from ..memory.validator import MemoryValidator
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
-
-    from ..tool_handler import ToolHandler
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -223,13 +201,11 @@ class MemoryExtractionMixin:
     This mixin expects the following attributes from the host class:
     - hass: HomeAssistant - Home Assistant instance
     - config: dict[str, Any] - Configuration dictionary
-    - tool_handler: ToolHandler - Tool handler instance
     - memory_manager: Any - Memory manager property
     """
 
     hass: "HomeAssistant"
     config: dict[str, Any]
-    tool_handler: "ToolHandler"
     _memory_validator: MemoryValidator | None = None
 
     @property
@@ -351,8 +327,13 @@ Extract memories as a JSON array. Each memory should have:
 - "type": One of "fact", "preference", "context", "event"
 - "content": Clear, concise description (1-2 sentences)
 - "importance": Score from 0.0 to 1.0 (1.0 = very important)
+- "scope": "personal" if specific to the current user, "global" if relevant to all household members
 - "entities": List of Home Assistant entity IDs mentioned (if any)
 - "topics": List of topic tags (e.g., ["temperature", "bedroom"])
+
+**Scope Guidelines:**
+- "personal": User-specific preferences, schedules, habits, birthdays, medical info
+- "global": Household facts, device info, shared routines, home layout
 
 **Importance Score Guidelines:**
 - 0.9-1.0: Critical personal info (birthdays, allergies, security codes, medical needs)
@@ -413,6 +394,7 @@ Return ONLY valid JSON, no other text:
     "type": "preference",
     "content": "User prefers bedroom temperature at 68°F for sleeping",
     "importance": 0.8,
+    "scope": "personal",
     "entities": ["climate.bedroom"],
     "topics": ["temperature", "bedroom", "sleep"]
   }}
@@ -478,12 +460,14 @@ Return ONLY valid JSON, no other text:
         self,
         extraction_result: str,
         conversation_id: str,
+        user_id: str | None = None,
     ) -> int:
         """Parse LLM extraction result and store memories.
 
         Args:
             extraction_result: JSON string from LLM
             conversation_id: Conversation ID
+            user_id: User who generated the conversation
 
         Returns:
             Number of memories stored
@@ -545,6 +529,9 @@ Return ONLY valid JSON, no other text:
 
                     content = memory_data["content"]
                     memory_type = memory_data.get("type", "fact")
+                    scope = memory_data.get("scope", MEMORY_SCOPE_GLOBAL)
+                    if scope not in (MEMORY_SCOPE_PERSONAL, MEMORY_SCOPE_GLOBAL):
+                        scope = MEMORY_SCOPE_GLOBAL
 
                     memory_id = await self.memory_manager.add_memory(
                         content=content,
@@ -556,6 +543,8 @@ Return ONLY valid JSON, no other text:
                             "topics": memory_data.get("topics", []),
                             "extraction_method": "automatic",
                         },
+                        user_id=user_id,
+                        scope=scope,
                     )
                     stored_count += 1
                     _LOGGER.debug("Stored memory %s: %s", memory_id, content[:50])
@@ -601,21 +590,22 @@ Return ONLY valid JSON, no other text:
         user_message: str,
         assistant_response: str,
         full_messages: list[dict[str, Any]],
+        user_id: str | None = None,
     ) -> None:
         """Extract memories from completed conversation using configured LLM.
 
         This method:
-        1. Determines which LLM to use (external or local)
-        2. Builds extraction prompt
-        3. Calls LLM to extract memories
-        4. Parses JSON response
-        5. Stores memories via MemoryManager
+        1. Builds extraction prompt
+        2. Calls the memory agent's LLM to extract memories
+        3. Parses JSON response
+        4. Stores memories via MemoryManager with user_id
 
         Args:
             conversation_id: Conversation ID
             user_message: User's message
             assistant_response: Assistant's response
             full_messages: Complete conversation history
+            user_id: User who generated the conversation
         """
         try:
             # Check if memory system is enabled
@@ -627,11 +617,6 @@ Return ONLY valid JSON, no other text:
                 _LOGGER.debug("Memory manager not available, skipping extraction")
                 return
 
-            # Determine which LLM to use for extraction
-            extraction_llm = self.config.get(
-                CONF_MEMORY_EXTRACTION_LLM, DEFAULT_MEMORY_EXTRACTION_LLM
-            )
-
             # Build extraction prompt
             extraction_prompt = self._build_extraction_prompt(
                 user_message=user_message,
@@ -639,50 +624,23 @@ Return ONLY valid JSON, no other text:
                 full_messages=full_messages,
             )
 
-            # Call appropriate LLM
-            if extraction_llm == "external":
-                # Check if external LLM is enabled
-                if not self.config.get(CONF_EXTERNAL_LLM_ENABLED, False):
-                    _LOGGER.warning(
-                        "Memory extraction configured to use external LLM, "
-                        "but external LLM is not enabled. Skipping extraction."
-                    )
-                    return
+            # Use primary/memory agent LLM for extraction
+            _LOGGER.debug("Using memory agent LLM for memory extraction")
+            result = await self._call_primary_llm_for_extraction(extraction_prompt)
 
-                # Use external LLM tool
-                _LOGGER.debug("Using external LLM for memory extraction")
-                result = await self.tool_handler.execute_tool(
-                    tool_name="query_external_llm",
-                    parameters={"prompt": extraction_prompt},
-                    conversation_id=conversation_id,
+            if not result.get("success"):
+                _LOGGER.error(
+                    "Memory extraction LLM call failed: %s", result.get("error")
                 )
+                return
 
-                if not result.get("success"):
-                    _LOGGER.error(
-                        "External LLM memory extraction failed: %s",
-                        result.get("error"),
-                    )
-                    return
+            extraction_result = result.get("result", "[]")
 
-                extraction_result = result.get("result", "[]")
-
-            else:
-                # Use local/primary LLM
-                _LOGGER.debug("Using local LLM for memory extraction")
-                result = await self._call_primary_llm_for_extraction(extraction_prompt)
-
-                if not result.get("success"):
-                    _LOGGER.error(
-                        "Local LLM memory extraction failed: %s", result.get("error")
-                    )
-                    return
-
-                extraction_result = result.get("result", "[]")
-
-            # Parse and store memories
+            # Parse and store memories with user_id
             stored_count = await self._parse_and_store_memories(
                 extraction_result=extraction_result,
                 conversation_id=conversation_id,
+                user_id=user_id,
             )
 
             # Fire event if memories were extracted
@@ -694,7 +652,7 @@ Return ONLY valid JSON, no other text:
                     {
                         "conversation_id": conversation_id,
                         "memories_extracted": stored_count,
-                        "extraction_llm": extraction_llm,
+                        "user_id": user_id,
                         "timestamp": datetime.now().isoformat(timespec='seconds'),
                     },
                 )
