@@ -25,11 +25,14 @@ from .const import (
     CAPABILITY_LABELS,
     CAP_CONVERSATION,
     CAP_EMBEDDINGS,
-    CAP_EXTERNAL_LLM,
     CAP_STT,
     CAP_TTS,
     CAP_TOOL_USE,
+    CLAUDE_API_BASE_URL,
+    CLAUDE_MODELS,
     CONFIG_VERSION,
+    CONNECTION_TYPE_CLAUDE,
+    CONNECTION_TYPE_LOCAL,
     CONF_ADDITIONAL_COLLECTIONS,
     CONF_ADDITIONAL_L2_DISTANCE_THRESHOLD,
     CONF_ADDITIONAL_TOP_K,
@@ -348,40 +351,30 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
     async def async_step_connections(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Connections action picker: add / edit / delete."""
+        """Connections picker: select existing or create new."""
         connections = dict(self._config_entry.data.get(CONF_CONNECTIONS, {}))
 
         if user_input is not None:
-            action = user_input.get("action", "")
-            if action == "__add__":
-                return await self.async_step_add_connection()
-            if action.startswith("edit:"):
-                self._editing_connection_id = action[5:]
-                self._editing_connection = dict(
-                    connections.get(self._editing_connection_id, {})
-                )
+            selected = user_input.get("connection", "")
+            if selected == "__new__":
+                return await self.async_step_add_connection_type()
+            if selected in connections:
+                self._editing_connection_id = selected
+                self._editing_connection = dict(connections[selected])
                 return await self.async_step_edit_connection()
-            if action.startswith("delete:"):
-                self._editing_connection_id = action[7:]
-                return await self.async_step_delete_connection()
-            # Unknown action, show menu again
             return await self.async_step_connections()
 
-        # Build action options
-        options = [{"value": "__add__", "label": "Add New Connection"}]
+        options = []
         for cid, conn in connections.items():
             name = conn.get("name", cid)
-            caps = ", ".join(conn.get("capabilities", []))
-            options.append({"value": f"edit:{cid}", "label": f"Edit: {name} [{caps}]"})
-        for cid, conn in connections.items():
-            name = conn.get("name", cid)
-            options.append({"value": f"delete:{cid}", "label": f"Delete: {name}"})
+            options.append({"value": cid, "label": name})
+        options.append({"value": "__new__", "label": "Create New Connection"})
 
         return self.async_show_form(
             step_id="connections",
             data_schema=vol.Schema(
                 {
-                    vol.Required("action"): selector.SelectSelector(
+                    vol.Required("connection"): selector.SelectSelector(
                         selector.SelectSelectorConfig(
                             options=options,
                             mode=selector.SelectSelectorMode.DROPDOWN,
@@ -392,13 +385,46 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
         )
 
     # -----------------------------------------------------------
-    # Add Connection (step 1: basics)
+    # Add Connection Type (new: Local vs Claude)
+    # -----------------------------------------------------------
+
+    async def async_step_add_connection_type(
+        self, user_input: dict[str, Any] | None = None
+    ) -> config_entries.ConfigFlowResult:
+        """Choose connection type: Local or Claude API."""
+        if user_input is not None:
+            conn_type = user_input.get("connection_type", CONNECTION_TYPE_LOCAL)
+            if conn_type == CONNECTION_TYPE_CLAUDE:
+                return await self.async_step_add_connection_claude()
+            return await self.async_step_add_connection()
+
+        return self.async_show_form(
+            step_id="add_connection_type",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        "connection_type", default=CONNECTION_TYPE_LOCAL
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                {"value": CONNECTION_TYPE_LOCAL, "label": "Local Connection"},
+                                {"value": CONNECTION_TYPE_CLAUDE, "label": "Claude API"},
+                            ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+            ),
+        )
+
+    # -----------------------------------------------------------
+    # Add Connection (local endpoint)
     # -----------------------------------------------------------
 
     async def async_step_add_connection(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Add connection step 1: name, URL, API key, model, capabilities."""
+        """Add local connection: name, URL, API key, model, capabilities."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
@@ -417,6 +443,7 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
             if not errors:
                 self._adding_connection = {
                     "name": user_input.get("name", "New Connection"),
+                    "connection_type": CONNECTION_TYPE_LOCAL,
                     "base_url": base_url,
                     "api_key": user_input.get("api_key", ""),
                     "model": user_input.get("model", ""),
@@ -520,63 +547,66 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
         )
 
     # -----------------------------------------------------------
-    # Edit Connection (step 1: basics)
+    # Add Connection (Claude API)
     # -----------------------------------------------------------
 
-    async def async_step_edit_connection(
+    async def async_step_add_connection_claude(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Edit connection step 1: name, URL, API key, model, capabilities."""
+        """Add Claude API connection: name, API key, model dropdown."""
         errors: dict[str, str] = {}
-        conn = self._editing_connection
 
         if user_input is not None:
-            base_url = user_input.get("base_url", "")
-            if base_url:
-                base_url = normalize_url(base_url)
-                parsed = urlparse(base_url)
-                if not parsed.scheme or not parsed.netloc:
-                    errors["base"] = "invalid_config"
-            user_input["base_url"] = base_url
+            name = user_input.get("name", "").strip()
+            api_key = user_input.get("api_key", "").strip()
+            model = user_input.get("model", CLAUDE_MODELS[0])
 
-            caps = user_input.get("capabilities", [])
-            if not caps:
+            if not name:
+                errors["base"] = "invalid_config"
+            if not api_key:
                 errors["base"] = "invalid_config"
 
             if not errors:
-                self._editing_connection = {
-                    **conn,
-                    "name": user_input.get("name", conn.get("name", "")),
-                    "base_url": base_url,
-                    "api_key": user_input.get("api_key", conn.get("api_key", "")),
-                    "model": user_input.get("model", conn.get("model", "")),
-                    "capabilities": caps,
+                conn = {
+                    "name": name,
+                    "connection_type": CONNECTION_TYPE_CLAUDE,
+                    "base_url": CLAUDE_API_BASE_URL,
+                    "api_key": api_key,
+                    "model": model,
+                    "capabilities": [CAP_CONVERSATION, CAP_TOOL_USE],
+                    "temperature": 1.0,
+                    "max_tokens": 4096,
+                    "top_p": 1.0,
                 }
-                return await self.async_step_edit_connection_details()
 
-        cap_options = [
-            {"value": cap, "label": CAPABILITY_LABELS.get(cap, cap)}
-            for cap in ALL_CAPABILITIES
+                cid = _new_connection_id()
+                new_data = dict(self._config_entry.data)
+                connections = dict(new_data.get(CONF_CONNECTIONS, {}))
+                connections[cid] = conn
+                new_data[CONF_CONNECTIONS] = connections
+                self.hass.config_entries.async_update_entry(
+                    self._config_entry, data=new_data
+                )
+                return self.async_create_entry(
+                    title="", data=self._config_entry.options
+                )
+
+        model_options = [
+            {"value": m, "label": m} for m in CLAUDE_MODELS
         ]
 
         return self.async_show_form(
-            step_id="edit_connection",
+            step_id="add_connection_claude",
             data_schema=vol.Schema(
                 {
-                    vol.Required("name", default=conn.get("name", "")): str,
-                    vol.Required("base_url", default=conn.get("base_url", "")): str,
-                    vol.Optional(
-                        "api_key",
-                        description={"suggested_value": conn.get("api_key", "")},
-                    ): str,
-                    vol.Optional("model", default=conn.get("model", "")): str,
-                    vol.Required(
-                        "capabilities", default=conn.get("capabilities", [])
-                    ): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            options=cap_options,
-                            multiple=True,
-                            mode=selector.SelectSelectorMode.DROPDOWN,
+                    vol.Required("name", default="Claude"): str,
+                    vol.Required("api_key"): str,
+                    vol.Required("model", default=CLAUDE_MODELS[0]): (
+                        selector.SelectSelector(
+                            selector.SelectSelectorConfig(
+                                options=model_options,
+                                mode=selector.SelectSelectorMode.DROPDOWN,
+                            )
                         )
                     ),
                 }
@@ -585,65 +615,21 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
         )
 
     # -----------------------------------------------------------
-    # Edit Connection (step 2: type-specific details)
+    # Edit Connection (merged: basics + details + delete toggle)
     # -----------------------------------------------------------
 
-    async def async_step_edit_connection_details(
+    async def async_step_edit_connection(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Edit connection step 2: type-specific fields."""
+        """Edit connection — single merged form with delete toggle."""
+        errors: dict[str, str] = {}
         conn = self._editing_connection
         cid = self._editing_connection_id
+        is_claude = conn.get("connection_type") == CONNECTION_TYPE_CLAUDE
 
         if user_input is not None:
-            conn.update(self._extract_detail_fields(user_input, conn["capabilities"]))
-
-            if "proxy_headers" in conn and isinstance(conn["proxy_headers"], str):
-                try:
-                    conn["proxy_headers"] = _validate_proxy_headers(conn["proxy_headers"])
-                except ValidationError:
-                    conn["proxy_headers"] = {}
-
-            # Save edited connection
-            new_data = dict(self._config_entry.data)
-            connections = dict(new_data.get(CONF_CONNECTIONS, {}))
-            connections[cid] = conn
-            new_data[CONF_CONNECTIONS] = connections
-            self.hass.config_entries.async_update_entry(
-                self._config_entry, data=new_data
-            )
-            self._editing_connection_id = None
-            self._editing_connection = {}
-            return self.async_create_entry(title="", data=self._config_entry.options)
-
-        caps = conn.get("capabilities", [])
-        schema_fields = self._build_detail_schema(caps, conn)
-
-        if not schema_fields:
-            return await self.async_step_edit_connection_details({})
-
-        return self.async_show_form(
-            step_id="edit_connection_details",
-            data_schema=vol.Schema(schema_fields),
-            description_placeholders={
-                "connection_name": conn.get("name", ""),
-            },
-        )
-
-    # -----------------------------------------------------------
-    # Delete Connection
-    # -----------------------------------------------------------
-
-    async def async_step_delete_connection(
-        self, user_input: dict[str, Any] | None = None
-    ) -> config_entries.ConfigFlowResult:
-        """Delete connection with confirmation."""
-        cid = self._editing_connection_id
-        connections = dict(self._config_entry.data.get(CONF_CONNECTIONS, {}))
-        conn = connections.get(cid, {})
-
-        if user_input is not None:
-            if user_input.get("confirm", False):
+            # Handle delete toggle
+            if user_input.get("__delete__", False):
                 new_data = dict(self._config_entry.data)
                 new_connections = dict(new_data.get(CONF_CONNECTIONS, {}))
                 new_connections.pop(cid, None)
@@ -659,15 +645,132 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                 self.hass.config_entries.async_update_entry(
                     self._config_entry, data=new_data
                 )
+                self._editing_connection_id = None
+                self._editing_connection = {}
+                return self.async_create_entry(
+                    title="", data=self._config_entry.options
+                )
 
-            self._editing_connection_id = None
-            return self.async_create_entry(title="", data=self._config_entry.options)
+            # Normal save flow
+            if is_claude:
+                # Claude connections: name, api_key, model only
+                conn["name"] = user_input.get("name", conn.get("name", ""))
+                conn["api_key"] = user_input.get("api_key", conn.get("api_key", ""))
+                conn["model"] = user_input.get("model", conn.get("model", ""))
+            else:
+                # Local connections: full field set
+                base_url = user_input.get("base_url", "")
+                if base_url:
+                    base_url = normalize_url(base_url)
+                    parsed = urlparse(base_url)
+                    if not parsed.scheme or not parsed.netloc:
+                        errors["base"] = "invalid_config"
+
+                caps = user_input.get("capabilities", [])
+                if not caps:
+                    errors["base"] = "invalid_config"
+
+                if not errors:
+                    conn["name"] = user_input.get("name", conn.get("name", ""))
+                    conn["base_url"] = base_url
+                    conn["api_key"] = user_input.get(
+                        "api_key", conn.get("api_key", "")
+                    )
+                    conn["model"] = user_input.get("model", conn.get("model", ""))
+                    conn["capabilities"] = caps
+
+                    # Extract detail fields
+                    conn.update(self._extract_detail_fields(user_input, caps))
+
+                    if "proxy_headers" in conn and isinstance(
+                        conn["proxy_headers"], str
+                    ):
+                        try:
+                            conn["proxy_headers"] = _validate_proxy_headers(
+                                conn["proxy_headers"]
+                            )
+                        except ValidationError:
+                            conn["proxy_headers"] = {}
+
+            if not errors:
+                new_data = dict(self._config_entry.data)
+                connections = dict(new_data.get(CONF_CONNECTIONS, {}))
+                connections[cid] = conn
+                new_data[CONF_CONNECTIONS] = connections
+                self.hass.config_entries.async_update_entry(
+                    self._config_entry, data=new_data
+                )
+                self._editing_connection_id = None
+                self._editing_connection = {}
+                return self.async_create_entry(
+                    title="", data=self._config_entry.options
+                )
+
+        # Build schema based on connection type
+        schema_fields: dict[Any, Any] = {}
+
+        if is_claude:
+            model_options = [
+                {"value": m, "label": m} for m in CLAUDE_MODELS
+            ]
+            schema_fields.update(
+                {
+                    vol.Required("name", default=conn.get("name", "")): str,
+                    vol.Required(
+                        "api_key",
+                        description={"suggested_value": conn.get("api_key", "")},
+                    ): str,
+                    vol.Required(
+                        "model", default=conn.get("model", CLAUDE_MODELS[0])
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=model_options,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+            )
+        else:
+            # Local connection: basics + detail fields merged
+            cap_options = [
+                {"value": cap, "label": CAPABILITY_LABELS.get(cap, cap)}
+                for cap in ALL_CAPABILITIES
+            ]
+            schema_fields.update(
+                {
+                    vol.Required("name", default=conn.get("name", "")): str,
+                    vol.Required(
+                        "base_url", default=conn.get("base_url", "")
+                    ): str,
+                    vol.Optional(
+                        "api_key",
+                        description={"suggested_value": conn.get("api_key", "")},
+                    ): str,
+                    vol.Optional("model", default=conn.get("model", "")): str,
+                    vol.Required(
+                        "capabilities", default=conn.get("capabilities", [])
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=cap_options,
+                            multiple=True,
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+            )
+
+            # Merge detail fields inline
+            caps = conn.get("capabilities", [])
+            detail_fields = self._build_detail_schema(caps, conn)
+            schema_fields.update(detail_fields)
+
+        # Delete toggle at the bottom
+        schema_fields[vol.Optional("__delete__", default=False)] = bool
 
         return self.async_show_form(
-            step_id="delete_connection",
-            data_schema=vol.Schema(
-                {vol.Required("confirm", default=False): bool}
-            ),
+            step_id="edit_connection",
+            data_schema=vol.Schema(schema_fields),
+            errors=errors,
             description_placeholders={
                 "connection_name": conn.get("name", cid or "Unknown"),
             },
@@ -794,23 +897,6 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
                 }
             )
 
-        # External LLM specific fields
-        if CAP_EXTERNAL_LLM in caps:
-            fields.update(
-                {
-                    vol.Optional(
-                        "tool_description",
-                        description={
-                            "suggested_value": defaults.get("tool_description", "")
-                        },
-                    ): str,
-                    vol.Optional(
-                        "auto_include_context",
-                        default=defaults.get("auto_include_context", True),
-                    ): bool,
-                }
-            )
-
         return fields
 
     def _extract_detail_fields(
@@ -854,11 +940,6 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
 
         if has_emb:
             for key in ("embedding_provider", "keep_alive"):
-                if key in user_input:
-                    fields[key] = user_input[key]
-
-        if CAP_EXTERNAL_LLM in caps:
-            for key in ("tool_description", "auto_include_context"):
                 if key in user_input:
                     fields[key] = user_input[key]
 

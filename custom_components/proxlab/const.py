@@ -29,6 +29,9 @@ CAP_RERANKER: Final = "reranker"
 CAP_MULTIMODAL_EMBEDDINGS: Final = "multimodal_embeddings"
 CAP_EXTERNAL_LLM: Final = "external_llm"
 
+CAP_SPECIALIZED: Final = "specialized"
+CAP_VISION: Final = "vision"
+
 ALL_CAPABILITIES: Final = [
     CAP_CONVERSATION,
     CAP_TOOL_USE,
@@ -37,7 +40,8 @@ ALL_CAPABILITIES: Final = [
     CAP_EMBEDDINGS,
     CAP_RERANKER,
     CAP_MULTIMODAL_EMBEDDINGS,
-    CAP_EXTERNAL_LLM,
+    CAP_SPECIALIZED,
+    CAP_VISION,
 ]
 
 # Role names (keys in roles dict)
@@ -70,15 +74,15 @@ ROLE_TO_CAPABILITY: Final = {
     ROLE_EMBEDDINGS: CAP_EMBEDDINGS,
     ROLE_RERANKER: CAP_RERANKER,
     ROLE_MULTIMODAL_EMBEDDINGS: CAP_MULTIMODAL_EMBEDDINGS,
-    ROLE_EXTERNAL_LLM: CAP_EXTERNAL_LLM,
+    ROLE_EXTERNAL_LLM: CAP_CONVERSATION,
 }
 
 # LLM-type capabilities (connections with these get LLM detail fields)
-LLM_CAPABILITIES: Final = {CAP_CONVERSATION, CAP_TOOL_USE, CAP_EXTERNAL_LLM}
+LLM_CAPABILITIES: Final = {CAP_CONVERSATION, CAP_TOOL_USE}
 
 # Capability display labels
 CAPABILITY_LABELS: Final = {
-    CAP_CONVERSATION: "Conversation (primary LLM)",
+    CAP_CONVERSATION: "Conversational LLM",
     CAP_TOOL_USE: "Tool Use (LLM)",
     CAP_TTS: "Text-to-Speech",
     CAP_STT: "Speech-to-Text",
@@ -86,6 +90,8 @@ CAPABILITY_LABELS: Final = {
     CAP_RERANKER: "Reranker",
     CAP_MULTIMODAL_EMBEDDINGS: "Multimodal Embeddings",
     CAP_EXTERNAL_LLM: "External LLM",
+    CAP_SPECIALIZED: "Specialized",
+    CAP_VISION: "Vision Capable",
 }
 
 # Role display labels
@@ -468,6 +474,23 @@ DEFAULT_MAX_CONTEXT_TOKENS: Final = 8000
 # Update intervals (seconds)
 CONTEXT_UPDATE_INTERVAL: Final = 60  # Update entity context every 60 seconds
 CLEANUP_INTERVAL: Final = 3600  # Cleanup old conversations every hour
+
+# Connection health monitoring
+HEALTH_CHECK_INTERVAL: Final = 300  # 5 minutes between health checks
+HEALTH_CHECK_TIMEOUT: Final = 5  # Seconds per connection check
+
+# Connection type constants
+CONNECTION_TYPE_LOCAL: Final = "local"
+CONNECTION_TYPE_CLAUDE: Final = "claude_api"
+
+# Claude API models available for selection
+CLAUDE_MODELS: Final = [
+    "claude-sonnet-4-6",
+    "claude-opus-4-6",
+    "claude-haiku-4-5-20251001",
+]
+
+CLAUDE_API_BASE_URL: Final = "https://api.anthropic.com"
 
 # Custom tool handler types
 CUSTOM_TOOL_HANDLER_REST: Final = "rest"

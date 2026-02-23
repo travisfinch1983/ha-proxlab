@@ -17,6 +17,7 @@ from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.helpers.typing import ConfigType
 
 from .agent import ProxLabAgent
+from .connection_health import ConnectionHealthCoordinator
 from .connection_manager import resolve_connections_to_flat_config
 from .const import (
     ALL_ROLES,
@@ -300,6 +301,14 @@ def _get_platforms(config: dict[str, Any]) -> list[Platform]:
         platforms.append(Platform.TTS)
     if config.get(CONF_STT_BASE_URL):
         platforms.append(Platform.STT)
+    # Connection health monitoring entities
+    if config.get(CONF_CONNECTIONS):
+        platforms.extend([
+            Platform.SENSOR,
+            Platform.BINARY_SENSOR,
+            Platform.TEXT,
+            Platform.BUTTON,
+        ])
     return platforms
 
 
@@ -392,6 +401,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "agent": agent,
         "session_manager": session_manager,
     }
+
+    # Set up connection health coordinator if connections exist
+    if entry.data.get(CONF_CONNECTIONS):
+        coordinator = ConnectionHealthCoordinator(hass, entry)
+        await coordinator.async_config_entry_first_refresh()
+        hass.data[DOMAIN][entry.entry_id]["coordinator"] = coordinator
+        _LOGGER.info(
+            "Connection health coordinator started for %d connection(s)",
+            len(entry.data[CONF_CONNECTIONS]),
+        )
 
     # Perform health checks if using vector DB mode
     context_mode = config.get(CONF_CONTEXT_MODE)
@@ -531,6 +550,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Clean up agent, memory manager, and vector DB manager
     if entry.entry_id in hass.data[DOMAIN]:
         entry_data = hass.data[DOMAIN][entry.entry_id]
+
+        # Shut down health coordinator if it exists
+        if "coordinator" in entry_data:
+            await entry_data["coordinator"].async_shutdown()
 
         # Shut down memory manager if it exists
         if "memory_manager" in entry_data:

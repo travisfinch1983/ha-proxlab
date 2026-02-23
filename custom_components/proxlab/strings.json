@@ -47,13 +47,23 @@
         }
       },
       "connections": {
-        "title": "Manage Connections",
-        "description": "Add, edit, or delete endpoint connections. Each connection defines a named API endpoint with its capabilities.",
+        "title": "Connections",
+        "description": "Select a connection to edit, or create a new one.",
         "data": {
-          "action": "Action"
+          "connection": "Connection"
         },
         "data_description": {
-          "action": "Choose an action to perform"
+          "connection": "Choose a connection to edit or create a new one"
+        }
+      },
+      "add_connection_type": {
+        "title": "New Connection",
+        "description": "Choose the type of connection to add.",
+        "data": {
+          "connection_type": "Connection Type"
+        },
+        "data_description": {
+          "connection_type": "Local Connection for self-hosted endpoints, or Claude API for Anthropic's cloud models"
         }
       },
       "add_connection": {
@@ -90,9 +100,7 @@
           "speed": "Speed (0.25-4.0)",
           "format": "Audio Format",
           "language": "Language Hint",
-          "embedding_provider": "Embedding Provider",
-          "tool_description": "Tool Description",
-          "auto_include_context": "Auto-include Context"
+          "embedding_provider": "Embedding Provider"
         },
         "data_description": {
           "temperature": "Controls randomness (0.0-2.0)",
@@ -105,33 +113,32 @@
           "speed": "Speech speed multiplier (1.0 = normal)",
           "format": "Output audio format",
           "language": "Language hint for STT (ISO 639-1 code)",
-          "embedding_provider": "Choose between OpenAI or Ollama for embeddings",
-          "tool_description": "Description of when to use this external LLM",
-          "auto_include_context": "Automatically pass conversation context to this LLM"
+          "embedding_provider": "Choose between OpenAI or Ollama for embeddings"
+        }
+      },
+      "add_connection_claude": {
+        "title": "Claude API Connection",
+        "description": "Configure a connection to Anthropic's Claude API.",
+        "data": {
+          "name": "Connection Name",
+          "api_key": "API Key",
+          "model": "Model"
+        },
+        "data_description": {
+          "name": "A friendly name for this connection (e.g., 'Claude Sonnet')",
+          "api_key": "Your Anthropic API key (sk-ant-...)",
+          "model": "Claude model to use"
         }
       },
       "edit_connection": {
-        "title": "Edit Connection",
-        "description": "Modify the connection settings.",
+        "title": "Edit Connection: {connection_name}",
+        "description": "Modify connection settings. Check 'Delete' at the bottom to remove this connection.",
         "data": {
           "name": "Connection Name",
           "base_url": "Base URL",
           "api_key": "API Key",
-          "model": "Model Name",
-          "capabilities": "Capabilities"
-        },
-        "data_description": {
-          "name": "A friendly name for this connection",
-          "base_url": "OpenAI-compatible API endpoint",
-          "api_key": "API key for authentication",
-          "model": "Model name to use",
-          "capabilities": "What this endpoint can do"
-        }
-      },
-      "edit_connection_details": {
-        "title": "Edit Connection Details: {connection_name}",
-        "description": "Modify type-specific settings.",
-        "data": {
+          "model": "Model",
+          "capabilities": "Capabilities",
           "temperature": "Temperature",
           "max_tokens": "Max Tokens",
           "top_p": "Top P",
@@ -143,10 +150,14 @@
           "format": "Audio Format",
           "language": "Language Hint",
           "embedding_provider": "Embedding Provider",
-          "tool_description": "Tool Description",
-          "auto_include_context": "Auto-include Context"
+          "__delete__": "Delete this connection"
         },
         "data_description": {
+          "name": "A friendly name for this connection",
+          "base_url": "OpenAI-compatible API endpoint",
+          "api_key": "API key for authentication",
+          "model": "Model name or ID to use",
+          "capabilities": "What this endpoint can do",
           "temperature": "Controls randomness (0.0-2.0)",
           "max_tokens": "Maximum tokens per response",
           "top_p": "Nucleus sampling parameter (0.0-1.0)",
@@ -158,22 +169,14 @@
           "format": "Output audio format",
           "language": "Language hint for STT",
           "embedding_provider": "Embedding provider",
-          "tool_description": "Description of when to use this external LLM",
-          "auto_include_context": "Automatically pass context to this LLM"
-        }
-      },
-      "delete_connection": {
-        "title": "Delete Connection",
-        "description": "Are you sure you want to delete '{connection_name}'? Any roles assigned to this connection will be unassigned.",
-        "data": {
-          "confirm": "Yes, delete this connection"
+          "__delete__": "Check this box and submit to permanently delete this connection and unassign its roles"
         }
       },
       "role_assignments": {
         "title": "Role Assignments",
         "description": "Assign connections to functional roles. Each dropdown only shows connections with the matching capability.",
         "data": {
-          "conversation": "Conversation (primary LLM)",
+          "conversation": "Conversational LLM",
           "tool_use": "Tool Use (LLM)",
           "tts": "Text-to-Speech",
           "stt": "Speech-to-Text",
@@ -183,7 +186,7 @@
           "external_llm": "External LLM"
         },
         "data_description": {
-          "conversation": "The LLM used for conversation responses",
+          "conversation": "LLM used for conversation responses",
           "tool_use": "The LLM used for tool calling (often same as conversation)",
           "tts": "OpenAI-compatible text-to-speech endpoint",
           "stt": "OpenAI-compatible speech-to-text endpoint",
