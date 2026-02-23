@@ -109,7 +109,7 @@
           "keep_alive": "How long to keep model loaded (e.g., 5m, 1h)",
           "proxy_headers": "Optional custom HTTP headers as JSON",
           "thinking_enabled": "Allow reasoning models to use extended thinking",
-          "voice": "Default TTS voice (e.g., alloy, echo, fable)",
+          "voice": "Default voice for speech synthesis. Fetched automatically from the server when available.",
           "speed": "Speech speed multiplier (1.0 = normal)",
           "format": "Output audio format",
           "language": "Language hint for STT (ISO 639-1 code)",

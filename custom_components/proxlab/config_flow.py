@@ -611,7 +611,14 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
             return self.async_create_entry(title="", data=self._config_entry.options)
 
         caps = self._adding_connection.get("capabilities", [])
-        schema_fields = self._build_detail_schema(caps, {})
+        tts_voices = None
+        if CAP_TTS in caps:
+            base_url = self._adding_connection.get("base_url", "")
+            if base_url:
+                from .helpers import fetch_tts_voices
+
+                tts_voices = await fetch_tts_voices(base_url)
+        schema_fields = self._build_detail_schema(caps, {}, tts_voices=tts_voices)
 
         if not schema_fields:
             # No detail fields needed, save directly
@@ -862,7 +869,14 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
 
             # Merge detail fields inline
             caps = conn.get("capabilities", [])
-            detail_fields = self._build_detail_schema(caps, conn)
+            tts_voices = None
+            if CAP_TTS in caps:
+                edit_base_url = conn.get("base_url", "")
+                if edit_base_url:
+                    from .helpers import fetch_tts_voices
+
+                    tts_voices = await fetch_tts_voices(edit_base_url)
+            detail_fields = self._build_detail_schema(caps, conn, tts_voices=tts_voices)
             schema_fields.update(detail_fields)
 
         # Delete toggle at the bottom
@@ -882,13 +896,17 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
     # -----------------------------------------------------------
 
     def _build_detail_schema(
-        self, caps: list[str], defaults: dict[str, Any]
+        self,
+        caps: list[str],
+        defaults: dict[str, Any],
+        tts_voices: list[str] | None = None,
     ) -> dict[Any, Any]:
         """Build type-specific detail fields based on capabilities.
 
         Args:
             caps: List of capability strings.
             defaults: Existing values for pre-population.
+            tts_voices: Dynamically fetched voice IDs, or None to use defaults.
 
         Returns:
             Dict of voluptuous schema fields.
@@ -936,21 +954,21 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
             )
 
         if has_tts:
+            voice_options = tts_voices or [
+                "alloy", "echo", "fable", "onyx", "nova", "shimmer",
+            ]
+            voice_default = defaults.get(
+                "voice",
+                voice_options[0] if voice_options else DEFAULT_TTS_VOICE,
+            )
             fields.update(
                 {
                     vol.Optional(
                         "voice",
-                        default=defaults.get("voice", DEFAULT_TTS_VOICE),
+                        default=voice_default,
                     ): selector.SelectSelector(
                         selector.SelectSelectorConfig(
-                            options=[
-                                "alloy",
-                                "echo",
-                                "fable",
-                                "onyx",
-                                "nova",
-                                "shimmer",
-                            ],
+                            options=voice_options,
                             custom_value=True,
                         )
                     ),

@@ -26,10 +26,12 @@ from .const import (
     HEALTH_CHECK_INTERVAL,
     HEALTH_CHECK_TIMEOUT,
 )
+from .helpers import is_ollama_backend
 
 _LOGGER = logging.getLogger(__name__)
 
 # Capabilities that use specific API endpoints beyond /models
+_LLM_CAPS = {"conversation", "tool_use"}
 _TTS_CAPS = {"tts"}
 _STT_CAPS = {"stt"}
 _EMBEDDING_CAPS = {"embeddings"}
@@ -124,8 +126,8 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
                 session, conn, base_url, model_name
             )
 
-        # Check if this is an Ollama connection
-        if conn.get("embedding_provider") == EMBEDDING_PROVIDER_OLLAMA:
+        # Check if this is an Ollama connection (by embedding_provider OR URL heuristic)
+        if conn.get("embedding_provider") == EMBEDDING_PROVIDER_OLLAMA or is_ollama_backend(base_url):
             return await self._check_ollama_connection(
                 session, conn, base_url, model_name, capabilities
             )
@@ -291,6 +293,29 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
                     reachable=True,
                     api_valid=False,
                     detail="Ollama /api/embeddings timed out",
+                    error="API Mismatch",
+                    model_name=model_name,
+                )
+
+        if capabilities & _LLM_CAPS:
+            try:
+                async with session.post(
+                    f"{native_base}/api/chat", json={}
+                ) as resp:
+                    if resp.status == 404:
+                        return ConnectionCheckResult(
+                            reachable=True,
+                            api_valid=False,
+                            detail="Ollama /api/chat not found",
+                            error="API Mismatch",
+                            model_name=model_name,
+                        )
+                    # 400 is expected (empty payload) — endpoint exists
+            except (aiohttp.ClientError, asyncio.TimeoutError, OSError):
+                return ConnectionCheckResult(
+                    reachable=True,
+                    api_valid=False,
+                    detail="Ollama /api/chat timed out",
                     error="API Mismatch",
                     model_name=model_name,
                 )

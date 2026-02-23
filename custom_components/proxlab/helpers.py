@@ -575,6 +575,50 @@ async def check_chromadb_health(host: str, port: int, timeout: int = 5) -> tuple
         return False, f"ChromaDB health check error: {err}"
 
 
+async def fetch_tts_voices(base_url: str, timeout: int = 5) -> list[str]:
+    """Fetch available voice IDs from a TTS endpoint.
+
+    Tries GET {base_url}/voices (for /v1 base URLs).
+    Returns list of voice ID strings, or empty list on failure.
+    """
+    url = f"{base_url.rstrip('/')}/voices"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                url, timeout=aiohttp.ClientTimeout(total=timeout)
+            ) as resp:
+                if resp.status == 200:
+                    body = await resp.json()
+                    # proxlab-tts format: {"voices": [{"id": "name", ...}]}
+                    if isinstance(body, dict) and "voices" in body:
+                        return [v["id"] for v in body["voices"] if "id" in v]
+    except Exception:  # noqa: BLE001
+        pass
+    return []
+
+
+async def fetch_tts_models(base_url: str, timeout: int = 5) -> list[str]:
+    """Fetch available model IDs from a TTS endpoint.
+
+    Tries GET {base_url}/models.
+    Returns list of model ID strings, or empty list on failure.
+    """
+    url = f"{base_url.rstrip('/')}/models"
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                url, timeout=aiohttp.ClientTimeout(total=timeout)
+            ) as resp:
+                if resp.status == 200:
+                    body = await resp.json()
+                    # OpenAI format: {"data": [{"id": "name", ...}]}
+                    if isinstance(body, dict) and "data" in body:
+                        return [m["id"] for m in body["data"] if "id" in m]
+    except Exception:  # noqa: BLE001
+        pass
+    return []
+
+
 def is_ollama_backend(base_url: str) -> bool:
     """Check if the LLM base URL points to an Ollama server.
 
