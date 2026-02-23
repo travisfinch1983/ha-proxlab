@@ -22,6 +22,7 @@ from .const import (
     CONF_CONNECTIONS,
     CONNECTION_TYPE_CLAUDE,
     DOMAIN,
+    EMBEDDING_PROVIDER_OLLAMA,
     HEALTH_CHECK_INTERVAL,
     HEALTH_CHECK_TIMEOUT,
 )
@@ -123,6 +124,12 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
                 session, conn, base_url, model_name
             )
 
+        # Check if this is an Ollama connection
+        if conn.get("embedding_provider") == EMBEDDING_PROVIDER_OLLAMA:
+            return await self._check_ollama_connection(
+                session, conn, base_url, model_name, capabilities
+            )
+
         # Phase 1: Connectivity — hit /models
         reachable = False
         try:
@@ -214,6 +221,87 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
                 error="Unreachable",
                 model_name=model_name,
             )
+
+    async def _check_ollama_connection(
+        self,
+        session: aiohttp.ClientSession,
+        conn: dict[str, Any],
+        base_url: str,
+        model_name: str | None,
+        capabilities: set[str],
+    ) -> ConnectionCheckResult:
+        """Check an Ollama connection using native API endpoints.
+
+        Ollama uses /api/tags (list models) and /api/embeddings instead of
+        the OpenAI-compatible /v1/models and /v1/embeddings.
+        """
+        # Strip /v1 suffix if present to get native Ollama base URL
+        native_base = base_url.removesuffix("/v1")
+
+        # Phase 1: Connectivity — GET /api/tags
+        try:
+            async with session.get(f"{native_base}/api/tags") as resp:
+                if resp.status != 200:
+                    return ConnectionCheckResult(
+                        reachable=True,
+                        api_valid=False,
+                        detail=f"Ollama /api/tags returned {resp.status}",
+                        error="API Error",
+                        model_name=model_name,
+                    )
+                # Try to extract model info from response
+                try:
+                    body = await resp.json()
+                    if isinstance(body, dict) and "models" in body:
+                        models = body["models"]
+                        if models and isinstance(models, list):
+                            # Use configured model name, or fall back to first
+                            if not model_name:
+                                model_name = models[0].get(
+                                    "name", models[0].get("model")
+                                )
+                except Exception:
+                    pass
+        except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
+            return ConnectionCheckResult(
+                reachable=False,
+                api_valid=False,
+                detail=f"Connection failed: {err}",
+                error="Unreachable",
+                model_name=model_name,
+            )
+
+        # Phase 2: Probe Ollama-native capability endpoints
+        if capabilities & _EMBEDDING_CAPS:
+            try:
+                async with session.post(
+                    f"{native_base}/api/embeddings", json={}
+                ) as resp:
+                    if resp.status == 404:
+                        return ConnectionCheckResult(
+                            reachable=True,
+                            api_valid=False,
+                            detail="Ollama /api/embeddings not found",
+                            error="API Mismatch",
+                            model_name=model_name,
+                        )
+                    # 400 is expected (empty payload) — endpoint exists
+            except (aiohttp.ClientError, asyncio.TimeoutError, OSError):
+                return ConnectionCheckResult(
+                    reachable=True,
+                    api_valid=False,
+                    detail="Ollama /api/embeddings timed out",
+                    error="API Mismatch",
+                    model_name=model_name,
+                )
+
+        return ConnectionCheckResult(
+            reachable=True,
+            api_valid=True,
+            detail="OK",
+            error=None,
+            model_name=model_name,
+        )
 
     async def _probe_api(
         self,
