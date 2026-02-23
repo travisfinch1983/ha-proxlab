@@ -427,30 +427,54 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
     ) -> config_entries.ConfigFlowResult:
         """Add local connection: name, URL, API key, model, capabilities."""
         errors: dict[str, str] = {}
+        prefill: dict[str, Any] = {}
 
         if user_input is not None:
-            base_url = user_input.get("base_url", "")
-            if base_url:
-                base_url = normalize_url(base_url)
-                parsed = urlparse(base_url)
-                if not parsed.scheme or not parsed.netloc:
+            # Check if this is a ProxLab import request
+            import_url = user_input.get("import_from_proxlab")
+            if import_url and import_url != "__none__":
+                # Look up the service and re-render with populated defaults
+                services = await self._get_proxlab_services()
+                svc = next(
+                    (s for s in services if s.base_url == import_url), None
+                )
+                if svc:
+                    cap_map = {
+                        "llm": [CAP_CONVERSATION, CAP_TOOL_USE],
+                        "tts": [CAP_TTS],
+                        "stt": [CAP_STT],
+                    }
+                    prefill = {
+                        "name": f"{svc.provider} {svc.model}",
+                        "base_url": svc.base_url,
+                        "model": svc.model,
+                        "capabilities": cap_map.get(svc.service_type, []),
+                    }
+                # Fall through to re-render form with prefilled values
+            else:
+                # Normal form submission — validate and proceed
+                base_url = user_input.get("base_url", "")
+                if base_url:
+                    base_url = normalize_url(base_url)
+                    parsed = urlparse(base_url)
+                    if not parsed.scheme or not parsed.netloc:
+                        errors["base"] = "invalid_config"
+                user_input["base_url"] = base_url
+
+                caps = user_input.get("capabilities", [])
+                if not caps:
                     errors["base"] = "invalid_config"
-            user_input["base_url"] = base_url
 
-            caps = user_input.get("capabilities", [])
-            if not caps:
-                errors["base"] = "invalid_config"
-
-            if not errors:
-                self._adding_connection = {
-                    "name": user_input.get("name", "New Connection"),
-                    "connection_type": CONNECTION_TYPE_LOCAL,
-                    "base_url": base_url,
-                    "api_key": user_input.get("api_key", ""),
-                    "model": user_input.get("model", ""),
-                    "capabilities": caps,
-                }
-                return await self.async_step_connection_details()
+                if not errors:
+                    self._adding_connection = {
+                        "name": user_input.get("name", "New Connection"),
+                        "connection_type": CONNECTION_TYPE_LOCAL,
+                        "base_url": base_url,
+                        "api_key": user_input.get("api_key", ""),
+                        "model": user_input.get("model", ""),
+                        "capabilities": caps,
+                    }
+                    return await self.async_step_connection_details()
 
         # Build capabilities multi-select options
         cap_options = [
@@ -481,11 +505,20 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
 
         schema_fields.update(
             {
-                vol.Required("name", default="New Connection"): str,
-                vol.Required("base_url", default=""): str,
+                vol.Required(
+                    "name", default=prefill.get("name", "New Connection")
+                ): str,
+                vol.Required(
+                    "base_url", default=prefill.get("base_url", "")
+                ): str,
                 vol.Optional("api_key", default=""): str,
-                vol.Optional("model", default=""): str,
-                vol.Required("capabilities"): selector.SelectSelector(
+                vol.Optional(
+                    "model", default=prefill.get("model", "")
+                ): str,
+                vol.Required(
+                    "capabilities",
+                    default=prefill.get("capabilities"),
+                ): selector.SelectSelector(
                     selector.SelectSelectorConfig(
                         options=cap_options,
                         multiple=True,
