@@ -17,6 +17,7 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.helpers.typing import ConfigType
 
+from homeassistant.components.frontend import async_register_built_in_panel, async_remove_panel
 from homeassistant.components.http import StaticPathConfig
 
 from .agent import ProxLabAgent
@@ -546,7 +547,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             [StaticPathConfig(panel_url, str(panel_dir), cache_headers=False)]
         )
 
-        hass.components.frontend.async_register_built_in_panel(
+        async_register_built_in_panel(
+            hass,
             component_name="iframe",
             sidebar_title="ProxLab",
             sidebar_icon="mdi:robot-happy",
@@ -629,7 +631,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await async_remove_services(hass)
         # Remove sidebar panel
         if hass.data.get(DOMAIN, {}).get("_panel_registered"):
-            hass.components.frontend.async_remove_panel("proxlab")
+            async_remove_panel(hass, "proxlab")
             hass.data[DOMAIN]["_panel_registered"] = False
             _LOGGER.info("Removed ProxLab sidebar panel")
 
