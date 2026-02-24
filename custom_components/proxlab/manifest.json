@@ -4,7 +4,7 @@
   "after_dependencies": ["recorder"],
   "codeowners": ["@claude"],
   "config_flow": true,
-  "dependencies": ["conversation"],
+  "dependencies": ["conversation", "frontend", "http", "panel_custom", "websocket_api"],
   "documentation": "https://github.com/travisfinch1983/ha-proxlab",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/travisfinch1983/ha-proxlab/issues",

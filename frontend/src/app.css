@@ -1,0 +1,12 @@
+@import "tailwindcss";
+@plugin "daisyui";
+
+@layer base {
+  /* Collapse sidebar width when toggled */
+  .sidebar-collapsed {
+    width: 4.5rem;
+  }
+  .sidebar-expanded {
+    width: 16rem;
+  }
+}

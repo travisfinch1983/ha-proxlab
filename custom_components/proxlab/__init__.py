@@ -7,6 +7,7 @@ tool calling, context injection, and conversation history management.
 from __future__ import annotations
 
 import logging
+import pathlib
 from typing import Any, cast
 from uuid import uuid4
 
@@ -16,9 +17,12 @@ from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
 from homeassistant.helpers.typing import ConfigType
 
+from homeassistant.components.http import StaticPathConfig
+
 from .agent import ProxLabAgent
 from .connection_health import ConnectionHealthCoordinator
 from .connection_manager import resolve_connections_to_flat_config
+from .websocket_api import async_register_websocket_commands
 from .const import (
     ALL_ROLES,
     CAP_CONVERSATION,
@@ -528,6 +532,31 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         await hass.config_entries.async_forward_entry_setups(entry, platforms)
         _LOGGER.info("Forwarded platforms: %s", [p.value for p in platforms])
 
+    # --- WebSocket API + Panel Registration (once per hass) ---
+    if not hass.data[DOMAIN].get("_ws_registered"):
+        async_register_websocket_commands(hass)
+        hass.data[DOMAIN]["_ws_registered"] = True
+        _LOGGER.info("Registered ProxLab WebSocket commands")
+
+    if not hass.data[DOMAIN].get("_panel_registered"):
+        panel_dir = pathlib.Path(__file__).parent / "panel"
+        panel_url = f"/proxlab_panel"
+
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(panel_url, str(panel_dir), cache_headers=False)]
+        )
+
+        hass.components.frontend.async_register_built_in_panel(
+            component_name="iframe",
+            sidebar_title="ProxLab",
+            sidebar_icon="mdi:robot-happy",
+            frontend_url_path="proxlab",
+            config={"url": f"{panel_url}/index.html?entry_id={entry.entry_id}"},
+            require_admin=False,
+        )
+        hass.data[DOMAIN]["_panel_registered"] = True
+        _LOGGER.info("Registered ProxLab sidebar panel")
+
     # Register update listener to reload on config changes
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
 
@@ -593,9 +622,16 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         del hass.data[DOMAIN][entry.entry_id]
 
-    # Remove services if this was the last entry
-    if not hass.data[DOMAIN]:
+    # Remove services and panel if this was the last entry
+    if not hass.data[DOMAIN] or all(
+        k.startswith("_") for k in hass.data[DOMAIN]
+    ):
         await async_remove_services(hass)
+        # Remove sidebar panel
+        if hass.data.get(DOMAIN, {}).get("_panel_registered"):
+            hass.components.frontend.async_remove_panel("proxlab")
+            hass.data[DOMAIN]["_panel_registered"] = False
+            _LOGGER.info("Removed ProxLab sidebar panel")
 
     return True
 
