@@ -193,6 +193,8 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_settings_get)
     websocket_api.async_register_command(hass, ws_settings_update)
     websocket_api.async_register_command(hass, ws_discovery_services)
+    websocket_api.async_register_command(hass, ws_debug_traces)
+    websocket_api.async_register_command(hass, ws_debug_clear)
 
 
 # ---------------------------------------------------------------------------
@@ -1098,3 +1100,34 @@ async def ws_discovery_services(
     except Exception as err:
         _LOGGER.error("Service discovery failed: %s", err)
         connection.send_error(msg["id"], "discovery_failed", str(err))
+
+
+# ---------------------------------------------------------------------------
+# Debug traces
+# ---------------------------------------------------------------------------
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "proxlab/debug/traces", vol.Optional("entry_id"): str}
+)
+@callback
+def ws_debug_traces(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Return recent conversation traces for the debug panel."""
+    traces = list(hass.data.get(DOMAIN, {}).get("_debug_traces", []))
+    connection.send_result(msg["id"], {"traces": traces})
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "proxlab/debug/clear", vol.Optional("entry_id"): str}
+)
+@callback
+def ws_debug_clear(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Clear the debug trace buffer."""
+    traces = hass.data.get(DOMAIN, {}).get("_debug_traces")
+    if traces is not None:
+        traces.clear()
+    connection.send_result(msg["id"], {"cleared": True})

@@ -14,7 +14,7 @@ from uuid import uuid4
 from homeassistant.components import conversation as ha_conversation
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
-from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse
+from homeassistant.core import HomeAssistant, ServiceCall, SupportsResponse, callback
 from homeassistant.helpers.typing import ConfigType
 
 from homeassistant.components.frontend import async_register_built_in_panel, async_remove_panel
@@ -566,6 +566,22 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             _LOGGER.warning("ProxLab: Sidebar panel registered successfully")
         except Exception as err:
             _LOGGER.error("ProxLab: PANEL REGISTRATION FAILED: %s", err, exc_info=True)
+
+    # --- Debug trace collector (once per hass) ---
+    if not hass.data[DOMAIN].get("_trace_listener"):
+        from collections import deque
+        from .const import EVENT_CONVERSATION_FINISHED
+
+        traces: deque = deque(maxlen=50)
+        hass.data[DOMAIN]["_debug_traces"] = traces
+
+        @callback
+        def _on_conversation_finished(event):
+            """Capture conversation trace for debug panel."""
+            traces.append(dict(event.data))
+
+        unsub = hass.bus.async_listen(EVENT_CONVERSATION_FINISHED, _on_conversation_finished)
+        hass.data[DOMAIN]["_trace_listener"] = unsub
 
     # Register update listener to reload on config changes
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
