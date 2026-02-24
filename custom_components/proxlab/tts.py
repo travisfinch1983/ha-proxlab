@@ -13,9 +13,10 @@ import aiohttp
 from homeassistant.components.tts import (
     TextToSpeechEntity,
     TtsAudioType,
+    Voice,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .connection_manager import resolve_connections_to_flat_config
@@ -81,6 +82,7 @@ class ProxLabTTSEntity(TextToSpeechEntity):
         self._config = config
         self._attr_unique_id = f"{config_entry.entry_id}_tts"
         self._session: aiohttp.ClientSession | None = None
+        self._voices: list[Voice] | None = None
 
     @property
     def default_language(self) -> str:
@@ -100,6 +102,39 @@ class ProxLabTTSEntity(TextToSpeechEntity):
     def supported_options(self) -> list[str]:
         """Return list of supported options."""
         return ["voice", "speed"]
+
+    @callback
+    def async_get_supported_voices(self, language: str) -> list[Voice] | None:
+        """Return a list of supported voices for a language."""
+        return self._voices
+
+    async def async_added_to_hass(self) -> None:
+        """Fetch available voices when entity is added."""
+        await self._fetch_voices()
+
+    async def _fetch_voices(self) -> None:
+        """Fetch available voices from the TTS server."""
+        base_url = self._config.get(CONF_TTS_BASE_URL, "").rstrip("/")
+        if not base_url:
+            return
+        try:
+            session = await self._ensure_session()
+            async with session.get(f"{base_url}/voices", timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    voice_list = data.get("voices", [])
+                    self._voices = [
+                        Voice(
+                            voice_id=v["id"] if isinstance(v, dict) else v,
+                            name=v["id"] if isinstance(v, dict) else v,
+                        )
+                        for v in voice_list
+                    ]
+                    _LOGGER.debug("Fetched %d TTS voices", len(self._voices))
+                else:
+                    _LOGGER.debug("TTS voices endpoint returned %d", resp.status)
+        except Exception as err:
+            _LOGGER.debug("Could not fetch TTS voices: %s", err)
 
     async def _ensure_session(self) -> aiohttp.ClientSession:
         """Ensure aiohttp session is available."""
@@ -131,9 +166,13 @@ class ProxLabTTSEntity(TextToSpeechEntity):
             return (None, None)
 
         model = self._config.get(CONF_TTS_MODEL, DEFAULT_TTS_MODEL)
-        voice = (options or {}).get(
-            "voice", self._config.get(CONF_TTS_VOICE, DEFAULT_TTS_VOICE)
-        )
+        # Use first server voice as fallback instead of OpenAI default
+        default_voice = DEFAULT_TTS_VOICE
+        if self._voices:
+            default_voice = self._voices[0].voice_id
+        voice = (options or {}).get("voice") or self._config.get(
+            CONF_TTS_VOICE
+        ) or default_voice
         speed = float(
             (options or {}).get(
                 "speed", self._config.get(CONF_TTS_SPEED, DEFAULT_TTS_SPEED)
