@@ -569,6 +569,35 @@ EVENT_TOOL_PROGRESS: Final = f"{DOMAIN}.tool.progress"
 TOOL_HA_CONTROL: Final = "ha_control"
 TOOL_HA_QUERY: Final = "ha_query"
 TOOL_QUERY_EXTERNAL_LLM: Final = "query_external_llm"
+TOOL_ROUTE_TO_AGENT: Final = "route_to_agent"
+
+# Orchestrator events
+EVENT_ORCHESTRATOR_ROUTED: Final = f"{DOMAIN}.orchestrator.routed"
+
+# Agent -> tool name mapping (None = only route_to_agent injected at runtime, [] = no tools)
+AGENT_TOOL_MAP: Final[dict[str, list[str] | None]] = {
+    AGENT_ORCHESTRATOR: None,
+    AGENT_CONVERSATION: [],
+    AGENT_WORKER: [TOOL_HA_CONTROL, TOOL_HA_QUERY],
+    AGENT_REPAIRMAN: [TOOL_HA_CONTROL, TOOL_HA_QUERY],
+    AGENT_REPORTING: [TOOL_HA_QUERY],
+    AGENT_SECURITY_GUARD: [TOOL_HA_QUERY],
+    AGENT_MEMORY: [],
+    AGENT_CYBERSECURITY: [],
+    AGENT_MEDICAL_ADVISOR: [],
+}
+
+# Agents the orchestrator can route to (excludes system agents + orchestrator itself)
+ROUTABLE_AGENTS: Final = [
+    AGENT_CONVERSATION,
+    AGENT_WORKER,
+    AGENT_MEMORY,
+    AGENT_REPAIRMAN,
+    AGENT_REPORTING,
+    AGENT_SECURITY_GUARD,
+    AGENT_CYBERSECURITY,
+    AGENT_MEDICAL_ADVISOR,
+]
 
 # Tool actions (for ha_control)
 ACTION_TURN_ON: Final = "turn_on"

@@ -201,53 +201,61 @@ class StreamingMixin:
         return True
 
     async def _call_llm_streaming(
-        self, messages: list[dict[str, Any]]
+        self,
+        messages: list[dict[str, Any]],
+        config_override: dict[str, Any] | None = None,
+        tools_override: list[dict] | None = None,
     ) -> AsyncGenerator[str, None]:
         """Call LLM API with streaming enabled.
 
         Args:
             messages: Conversation messages
+            config_override: Optional dict to overlay on self.config for this call.
+            tools_override: If not None, use these tool definitions instead of
+                self.tool_handler.get_tool_definitions(). Pass [] for no tools.
 
         Yields:
             SSE lines from the streaming response
         """
         session = await self._ensure_session()
 
-        base_url = self.config[CONF_LLM_BASE_URL]
+        cfg = {**self.config, **config_override} if config_override else self.config
+
+        base_url = cfg[CONF_LLM_BASE_URL]
         url = build_api_url(
             base_url,
-            self.config[CONF_LLM_MODEL],
-            self.config.get(CONF_AZURE_API_VERSION),
+            cfg[CONF_LLM_MODEL],
+            cfg.get(CONF_AZURE_API_VERSION),
         )
         headers: dict[str, str] = {
             "Content-Type": "application/json",
         }
 
         # Add authentication headers (Azure uses api-key, others use Bearer token)
-        api_key = render_template_value(self.hass, self.config.get(CONF_LLM_API_KEY, ""))
+        api_key = render_template_value(self.hass, cfg.get(CONF_LLM_API_KEY, ""))
         headers.update(build_auth_headers(base_url, api_key))
 
         # Add custom proxy headers if configured
-        proxy_headers = self.config.get(CONF_LLM_PROXY_HEADERS, {})
+        proxy_headers = cfg.get(CONF_LLM_PROXY_HEADERS, {})
         if proxy_headers:
             headers.update(proxy_headers)
 
         payload: dict[str, Any] = {
-            "model": self.config[CONF_LLM_MODEL],
+            "model": cfg[CONF_LLM_MODEL],
             "messages": messages,
-            "temperature": self.config.get(CONF_LLM_TEMPERATURE, 0.7),
-            "max_tokens": self.config.get(CONF_LLM_MAX_TOKENS, 1000),
-            "top_p": self.config.get(CONF_LLM_TOP_P, 1.0),
+            "temperature": cfg.get(CONF_LLM_TEMPERATURE, 0.7),
+            "max_tokens": cfg.get(CONF_LLM_MAX_TOKENS, 1000),
+            "top_p": cfg.get(CONF_LLM_TOP_P, 1.0),
             "stream": True,  # Enable streaming!
         }
 
         # Only include keep_alive for Ollama backends (not supported by OpenAI, etc.)
         # See: https://github.com/aradlein/home-agent/issues/65
-        if is_ollama_backend(self.config[CONF_LLM_BASE_URL]):
-            payload["keep_alive"] = self.config.get(CONF_LLM_KEEP_ALIVE, DEFAULT_LLM_KEEP_ALIVE)
+        if is_ollama_backend(cfg[CONF_LLM_BASE_URL]):
+            payload["keep_alive"] = cfg.get(CONF_LLM_KEEP_ALIVE, DEFAULT_LLM_KEEP_ALIVE)
 
-        # Add tools if available
-        tool_definitions = self.tool_handler.get_tool_definitions()
+        # Add tools — use override if provided, otherwise query tool_handler
+        tool_definitions = tools_override if tools_override is not None else self.tool_handler.get_tool_definitions()
         if tool_definitions:
             payload["tools"] = tool_definitions
             payload["tool_choice"] = "auto"
@@ -255,10 +263,10 @@ class StreamingMixin:
         # Request usage statistics in stream
         payload["stream_options"] = {"include_usage": True}
 
-        if self.config.get(CONF_DEBUG_LOGGING):
+        if cfg.get(CONF_DEBUG_LOGGING):
             _LOGGER.debug(
                 "Calling LLM (streaming) at %s with %d messages and %d tools",
-                redact_sensitive_data(url, [self.config[CONF_LLM_API_KEY]]),
+                redact_sensitive_data(url, [cfg[CONF_LLM_API_KEY]]),
                 len(messages),
                 len(tool_definitions) if tool_definitions else 0,
             )

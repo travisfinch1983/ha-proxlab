@@ -157,6 +157,39 @@ class ToolHandler:
         _LOGGER.debug("Returning %d tool definitions", len(definitions))
         return definitions
 
+    def get_tool_definitions_for_agent(
+        self, tool_names: list[str] | None
+    ) -> list[dict[str, Any]]:
+        """Return tool definitions filtered by allowed tool names.
+
+        Args:
+            tool_names: List of tool names to include.
+                None = all registered tools, [] = no tools.
+
+        Returns:
+            Filtered list of tool definitions in OpenAI format.
+        """
+        if tool_names is None:
+            return self.get_tool_definitions()
+        if not tool_names:
+            return []
+        definitions = []
+        for name in tool_names:
+            tool = self.tools.get(name)
+            if tool is None:
+                _LOGGER.debug("Tool '%s' not registered, skipping", name)
+                continue
+            try:
+                definitions.append(tool.to_openai_format())
+            except Exception as error:
+                _LOGGER.error(
+                    "Failed to get definition for tool '%s': %s",
+                    name,
+                    error,
+                    exc_info=True,
+                )
+        return definitions
+
     def validate_tool_call(self, tool_name: str, parameters: dict[str, Any]) -> None:
         """Validate a tool call before execution.
 

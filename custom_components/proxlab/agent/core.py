@@ -163,6 +163,7 @@ from ..tools.custom import CustomToolHandler
 from ..tools.external_llm import ExternalLLMTool
 
 from .llm import LLMMixin
+from .orchestrator import AgentContext, OrchestratorMixin
 from .streaming import StreamingMixin
 from .memory_extraction import MemoryExtractionMixin
 
@@ -170,6 +171,7 @@ _LOGGER = logging.getLogger(__name__)
 
 
 class ProxLabAgent(
+    OrchestratorMixin,
     LLMMixin,
     StreamingMixin,
     MemoryExtractionMixin,
@@ -290,10 +292,25 @@ class ProxLabAgent(
             # Ensure tools are registered (lazy initialization)
             self._ensure_tools_registered()
 
+            # --- Orchestrator routing ---
+            agent_context: AgentContext | None = None
+            if self._is_orchestrator_enabled():
+                try:
+                    agent_context = await self._orchestrator_classify(
+                        user_input.text
+                    )
+                except Exception as err:
+                    _LOGGER.warning(
+                        "Orchestrator classification failed, using default: %s",
+                        err,
+                    )
+
             # Check if we can stream
             if self._can_stream():
                 try:
-                    return await self._async_process_streaming(user_input)
+                    return await self._async_process_streaming(
+                        user_input, agent_context=agent_context
+                    )
                 except Exception as err:
                     # Fallback to synchronous on streaming errors
                     _LOGGER.warning(
@@ -312,7 +329,9 @@ class ProxLabAgent(
                     # Fall through to synchronous processing
 
             # Synchronous processing (existing code path)
-            return await self._async_process_synchronous(user_input)
+            return await self._async_process_synchronous(
+                user_input, agent_context=agent_context
+            )
 
         except AuthenticationError as err:
             _LOGGER.error("Authentication error: %s", err, exc_info=True)
@@ -716,6 +735,7 @@ class ProxLabAgent(
         conversation_id: str | None = None,
         user_id: str | None = None,
         device_id: str | None = None,
+        agent_context: AgentContext | None = None,
     ) -> str:
         """Process a user message and return the agent's response.
 
@@ -726,6 +746,7 @@ class ProxLabAgent(
             conversation_id: Optional conversation ID for history tracking
             user_id: Optional user ID for the conversation
             device_id: Optional device ID that triggered the conversation
+            agent_context: Optional orchestrator-resolved agent context
 
         Returns:
             Agent's response text
@@ -804,6 +825,8 @@ class ProxLabAgent(
                     "conversation_id": conversation_id,
                     "user_id": user_id,
                     "device_id": device_id,
+                    "user_message": text,
+                    "model": self.config.get(CONF_LLM_MODEL, "unknown"),
                     "timestamp": time.time(),
                     "context_mode": self.config.get(CONF_CONTEXT_MODE),
                 },
@@ -813,7 +836,12 @@ class ProxLabAgent(
             # Preprocess user message (e.g., append /no_think if thinking mode disabled)
             preprocessed_text = self._preprocess_user_message(text)
             response = await self._process_conversation(
-                preprocessed_text, conversation_id, device_id, metrics, user_id=user_id
+                preprocessed_text,
+                conversation_id,
+                device_id,
+                metrics,
+                user_id=user_id,
+                agent_context=agent_context,
             )
 
             # Calculate total duration
@@ -839,6 +867,9 @@ class ProxLabAgent(
                     event_data = {
                         "conversation_id": conversation_id,
                         "user_id": user_id,
+                        "user_message": text,
+                        "response_text": response[:500] if response else "",
+                        "model": self.config.get(CONF_LLM_MODEL, "unknown"),
                         "duration_ms": duration_ms,
                         "tokens": metrics["tokens"],
                         "performance": metrics["performance"],
@@ -883,12 +914,15 @@ class ProxLabAgent(
             raise
 
     async def _async_process_streaming(
-        self, user_input: ha_conversation.ConversationInput
+        self,
+        user_input: ha_conversation.ConversationInput,
+        agent_context: AgentContext | None = None,
     ) -> ha_conversation.ConversationResult:
         """Process conversation with streaming support.
 
         Args:
             user_input: The conversation input
+            agent_context: Optional orchestrator-resolved agent context
 
         Returns:
             ConversationResult with the response
@@ -1017,13 +1051,19 @@ class ProxLabAgent(
         context_latency_ms = int((time.time() - context_start) * 1000)
         metrics["performance"]["context_latency_ms"] = context_latency_ms
 
-        # Build system prompt with full context
-        system_prompt = self._build_system_prompt(
-            entity_context=context,
-            conversation_id=conversation_id,
-            device_id=device_id,
-            user_message=user_message,
-        )
+        # Build system prompt — use orchestrator-routed agent prompt when available
+        if agent_context and agent_context.system_prompt:
+            # Start with the agent-specific prompt, then append entity context
+            system_prompt = agent_context.system_prompt
+            if context:
+                system_prompt += "\n\n## Available Devices\n\n" + context
+        else:
+            system_prompt = self._build_system_prompt(
+                entity_context=context,
+                conversation_id=conversation_id,
+                device_id=device_id,
+                user_message=user_message,
+            )
 
         # Build messages list
         messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
@@ -1040,6 +1080,15 @@ class ProxLabAgent(
 
         # Add current user message
         messages.append({"role": "user", "content": user_message})
+
+        # Resolve tool definitions for this agent
+        streaming_config_override: dict[str, Any] | None = None
+        streaming_tools_override: list[dict] | None = None
+        if agent_context:
+            streaming_config_override = agent_context.flat_config or None
+            streaming_tools_override = self.tool_handler.get_tool_definitions_for_agent(
+                agent_context.tool_names
+            )
 
         # Tool calling loop (max iterations to prevent infinite loops)
         max_iterations = self.config.get(
@@ -1069,7 +1118,11 @@ class ProxLabAgent(
             _LOGGER.debug("Starting streaming iteration %d/%d", iteration + 1, max_iterations)
             # Call LLM with streaming
             llm_start = time.time()
-            stream = self._call_llm_streaming(messages)
+            stream = self._call_llm_streaming(
+                messages,
+                config_override=streaming_config_override,
+                tools_override=streaming_tools_override,
+            )
 
             # Transform and send to chat log
             handler = OpenAIStreamingHandler()
@@ -1303,9 +1356,13 @@ class ProxLabAgent(
         # Fire conversation finished event with enhanced metrics
         if self.config.get(CONF_EMIT_EVENTS, True):
             try:
-                event_data = {
+                _resp_text = final_response[:500] if final_response else ""
+                event_data: dict[str, Any] = {
                     "conversation_id": conversation_id,
                     "user_id": user_id,
+                    "user_message": user_message,
+                    "response_text": _resp_text,
+                    "model": self.config.get(CONF_LLM_MODEL, "unknown"),
                     "duration_ms": duration_ms,
                     "tokens": metrics["tokens"],
                     "performance": metrics["performance"],
@@ -1314,6 +1371,9 @@ class ProxLabAgent(
                     "tool_breakdown": tool_breakdown,
                     "used_external_llm": used_external_llm,
                 }
+                if agent_context:
+                    event_data["routed_agent"] = agent_context.agent_id
+                    event_data["routing_reason"] = agent_context.routing_reason
                 self.hass.bus.async_fire(EVENT_CONVERSATION_FINISHED, event_data)
             except Exception as event_err:
                 _LOGGER.warning("Failed to fire conversation finished event: %s", event_err)
@@ -1328,7 +1388,9 @@ class ProxLabAgent(
         return conversation.async_get_result_from_chat_log(user_input, chat_log)
 
     async def _async_process_synchronous(
-        self, user_input: ha_conversation.ConversationInput
+        self,
+        user_input: ha_conversation.ConversationInput,
+        agent_context: AgentContext | None = None,
     ) -> ha_conversation.ConversationResult:
         """Process conversation without streaming (backward compatible mode).
 
@@ -1337,6 +1399,7 @@ class ProxLabAgent(
 
         Args:
             user_input: The conversation input
+            agent_context: Optional orchestrator-resolved agent context
 
         Returns:
             ConversationResult with the complete response
@@ -1347,6 +1410,7 @@ class ProxLabAgent(
             conversation_id=user_input.conversation_id,
             user_id=user_input.context.user_id if user_input.context else None,
             device_id=user_input.device_id,
+            agent_context=agent_context,
         )
 
         # Create and return conversation result
@@ -1365,6 +1429,7 @@ class ProxLabAgent(
         device_id: str | None = None,
         metrics: dict[str, Any] | None = None,
         user_id: str | None = None,
+        agent_context: AgentContext | None = None,
     ) -> str:
         """Process a conversation with tool calling loop.
 
@@ -1374,6 +1439,7 @@ class ProxLabAgent(
             device_id: Device ID that triggered the conversation
             metrics: Optional metrics dictionary to populate
             user_id: User ID for the conversation
+            agent_context: Optional orchestrator-resolved agent context
 
         Returns:
             Final response text
@@ -1391,13 +1457,18 @@ class ProxLabAgent(
         if "performance" in metrics:
             metrics["performance"]["context_latency_ms"] = context_latency_ms
 
-        # Build system prompt with full context including device_id
-        system_prompt = self._build_system_prompt(
-            entity_context=context,
-            conversation_id=conversation_id,
-            device_id=device_id,
-            user_message=user_message,
-        )
+        # Build system prompt — use orchestrator-routed agent prompt when available
+        if agent_context and agent_context.system_prompt:
+            system_prompt = agent_context.system_prompt
+            if context:
+                system_prompt += "\n\n## Available Devices\n\n" + context
+        else:
+            system_prompt = self._build_system_prompt(
+                entity_context=context,
+                conversation_id=conversation_id,
+                device_id=device_id,
+                user_message=user_message,
+            )
 
         # Debug: Log context injection
         if context:
@@ -1423,8 +1494,16 @@ class ProxLabAgent(
         # Add current user message
         messages.append({"role": "user", "content": user_message})
 
-        # Get tool definitions
-        tool_definitions = self.tool_handler.get_tool_definitions()
+        # Get tool definitions — filtered by agent if routed
+        if agent_context:
+            tool_definitions = self.tool_handler.get_tool_definitions_for_agent(
+                agent_context.tool_names
+            )
+        else:
+            tool_definitions = self.tool_handler.get_tool_definitions()
+
+        # Resolve LLM config override for this agent
+        sync_config_override = agent_context.flat_config if agent_context else None
 
         # Tool calling loop
         max_iterations = self.config.get(CONF_TOOLS_MAX_CALLS_PER_TURN, 5)
@@ -1437,7 +1516,9 @@ class ProxLabAgent(
 
             # Call LLM with timing
             llm_start = time.time()
-            llm_response = await self._call_llm(messages, tools=tool_definitions)
+            llm_response = await self._call_llm(
+                messages, tools=tool_definitions, config_override=sync_config_override
+            )
             llm_latency_ms = int((time.time() - llm_start) * 1000)
             total_llm_latency_ms += llm_latency_ms
 

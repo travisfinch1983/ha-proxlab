@@ -186,6 +186,7 @@ class LLMMixin:
         tools: list[dict[str, Any]] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        config_override: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Call the LLM API.
 
@@ -194,6 +195,8 @@ class LLMMixin:
             tools: Optional list of tool definitions
             temperature: Optional temperature override (uses config if not provided)
             max_tokens: Optional max_tokens override (uses config if not provided)
+            config_override: Optional dict to overlay on self.config for this call.
+                Allows routing to a different LLM endpoint without mutating self.config.
 
         Returns:
             LLM response dictionary
@@ -204,11 +207,13 @@ class LLMMixin:
         """
         session = await self._ensure_session()
 
-        base_url = self.config[CONF_LLM_BASE_URL]
+        cfg = {**self.config, **config_override} if config_override else self.config
+
+        base_url = cfg[CONF_LLM_BASE_URL]
         url = build_api_url(
             base_url,
-            self.config[CONF_LLM_MODEL],
-            self.config.get(CONF_AZURE_API_VERSION),
+            cfg[CONF_LLM_MODEL],
+            cfg.get(CONF_AZURE_API_VERSION),
         )
         headers: dict[str, str] = {
             "Content-Type": "application/json",
@@ -216,41 +221,41 @@ class LLMMixin:
 
         # Add authentication headers (Azure uses api-key, others use Bearer token)
         # Render template if value contains {{ }} (e.g., from input_text helper)
-        api_key = render_template_value(self.hass, self.config.get(CONF_LLM_API_KEY, ""))
+        api_key = render_template_value(self.hass, cfg.get(CONF_LLM_API_KEY, ""))
         headers.update(build_auth_headers(base_url, api_key))
 
         # Add custom proxy headers if configured
-        proxy_headers = self.config.get(CONF_LLM_PROXY_HEADERS, {})
+        proxy_headers = cfg.get(CONF_LLM_PROXY_HEADERS, {})
         if proxy_headers:
             headers.update(proxy_headers)
 
         payload: dict[str, Any] = {
-            "model": self.config[CONF_LLM_MODEL],
+            "model": cfg[CONF_LLM_MODEL],
             "messages": messages,
             "temperature": (
                 temperature
                 if temperature is not None
-                else self.config.get(CONF_LLM_TEMPERATURE, 0.7)
+                else cfg.get(CONF_LLM_TEMPERATURE, 0.7)
             ),
             "max_tokens": (
-                max_tokens if max_tokens is not None else self.config.get(CONF_LLM_MAX_TOKENS, 500)
+                max_tokens if max_tokens is not None else cfg.get(CONF_LLM_MAX_TOKENS, 500)
             ),
-            "top_p": self.config.get(CONF_LLM_TOP_P, 1.0),
+            "top_p": cfg.get(CONF_LLM_TOP_P, 1.0),
         }
 
         # Only include keep_alive for Ollama backends (not supported by OpenAI, etc.)
         # See: https://github.com/aradlein/home-agent/issues/65
-        if is_ollama_backend(self.config[CONF_LLM_BASE_URL]):
-            payload["keep_alive"] = self.config.get(CONF_LLM_KEEP_ALIVE, DEFAULT_LLM_KEEP_ALIVE)
+        if is_ollama_backend(cfg[CONF_LLM_BASE_URL]):
+            payload["keep_alive"] = cfg.get(CONF_LLM_KEEP_ALIVE, DEFAULT_LLM_KEEP_ALIVE)
 
         if tools:
             payload["tools"] = tools
             payload["tool_choice"] = "auto"
 
-        if self.config.get(CONF_DEBUG_LOGGING):
+        if cfg.get(CONF_DEBUG_LOGGING):
             _LOGGER.debug(
                 "Calling LLM at %s with %d messages and %d tools",
-                redact_sensitive_data(url, [self.config[CONF_LLM_API_KEY]]),
+                redact_sensitive_data(url, [cfg[CONF_LLM_API_KEY]]),
                 len(messages),
                 len(tools) if tools else 0,
             )

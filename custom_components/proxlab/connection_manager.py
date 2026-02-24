@@ -193,6 +193,39 @@ def _get_agent_connection(
     return connections.get(conn_id)
 
 
+def resolve_agent_to_flat_config(
+    config: dict[str, Any], agent_id: str
+) -> dict[str, Any] | None:
+    """Resolve an agent's primary connection to a flat CONF_LLM_* config dict.
+
+    This allows the orchestrator to build per-agent LLM configs without
+    mutating the shared config dict.
+
+    Args:
+        config: The integration config dict (with connections/agents).
+        agent_id: The agent whose connection to resolve.
+
+    Returns:
+        Dict with CONF_LLM_* keys, or None if the agent has no connection.
+    """
+    from .config_flow import normalize_url
+
+    conn = _get_agent_connection(config, agent_id)
+    if not conn:
+        return None
+    return {
+        CONF_LLM_BASE_URL: normalize_url(conn.get("base_url", "")),
+        CONF_LLM_API_KEY: conn.get("api_key", ""),
+        CONF_LLM_MODEL: conn.get("model", ""),
+        CONF_LLM_TEMPERATURE: conn.get("temperature", DEFAULT_TEMPERATURE),
+        CONF_LLM_MAX_TOKENS: conn.get("max_tokens", DEFAULT_MAX_TOKENS),
+        CONF_LLM_TOP_P: conn.get("top_p", DEFAULT_TOP_P),
+        CONF_LLM_KEEP_ALIVE: conn.get("keep_alive", DEFAULT_LLM_KEEP_ALIVE),
+        CONF_LLM_PROXY_HEADERS: conn.get("proxy_headers", {}),
+        CONF_THINKING_ENABLED: conn.get("thinking_enabled", DEFAULT_THINKING_ENABLED),
+    }
+
+
 def resolve_connections_to_flat_config(config: dict[str, Any]) -> dict[str, Any]:
     """Resolution shim: populate flat CONF_* keys from connections+roles.
 
@@ -205,13 +238,17 @@ def resolve_connections_to_flat_config(config: dict[str, Any]) -> dict[str, Any]
     Returns:
         The same config dict with flat keys populated.
     """
+    # Import URL normalizer to strip endpoint suffixes from stored URLs.
+    # Connections created before the WS API may have /chat/completions baked in.
+    from .config_flow import normalize_url
+
     # --- Conversation / primary LLM ---
     # Prefer agent-based config; fall back to role-based
     conv_conn = _get_agent_connection(config, AGENT_CONVERSATION) or get_connection_for_role(
         config, ROLE_CONVERSATION
     )
     if conv_conn:
-        config[CONF_LLM_BASE_URL] = conv_conn.get("base_url", "")
+        config[CONF_LLM_BASE_URL] = normalize_url(conv_conn.get("base_url", ""))
         config[CONF_LLM_API_KEY] = conv_conn.get("api_key", "")
         config[CONF_LLM_MODEL] = conv_conn.get("model", "")
         config[CONF_LLM_TEMPERATURE] = conv_conn.get("temperature", DEFAULT_TEMPERATURE)
@@ -228,7 +265,7 @@ def resolve_connections_to_flat_config(config: dict[str, Any]) -> dict[str, Any]
         config, ROLE_TTS
     )
     if tts_conn:
-        config[CONF_TTS_BASE_URL] = tts_conn.get("base_url", "")
+        config[CONF_TTS_BASE_URL] = normalize_url(tts_conn.get("base_url", ""))
         config[CONF_TTS_MODEL] = tts_conn.get("model", DEFAULT_TTS_MODEL)
         config[CONF_TTS_VOICE] = tts_conn.get("voice", DEFAULT_TTS_VOICE)
         config[CONF_TTS_SPEED] = tts_conn.get("speed", DEFAULT_TTS_SPEED)
@@ -239,7 +276,7 @@ def resolve_connections_to_flat_config(config: dict[str, Any]) -> dict[str, Any]
         config, ROLE_STT
     )
     if stt_conn:
-        config[CONF_STT_BASE_URL] = stt_conn.get("base_url", "")
+        config[CONF_STT_BASE_URL] = normalize_url(stt_conn.get("base_url", ""))
         config[CONF_STT_MODEL] = stt_conn.get("model", DEFAULT_STT_MODEL)
         config[CONF_STT_LANGUAGE] = stt_conn.get("language", DEFAULT_STT_LANGUAGE)
 
@@ -247,7 +284,7 @@ def resolve_connections_to_flat_config(config: dict[str, Any]) -> dict[str, Any]
     ext_conn = get_connection_for_role(config, ROLE_EXTERNAL_LLM)
     if ext_conn:
         config[CONF_EXTERNAL_LLM_ENABLED] = True
-        config[CONF_EXTERNAL_LLM_BASE_URL] = ext_conn.get("base_url", "")
+        config[CONF_EXTERNAL_LLM_BASE_URL] = normalize_url(ext_conn.get("base_url", ""))
         config[CONF_EXTERNAL_LLM_API_KEY] = ext_conn.get("api_key", "")
         config[CONF_EXTERNAL_LLM_MODEL] = ext_conn.get("model", "")
         config[CONF_EXTERNAL_LLM_TEMPERATURE] = ext_conn.get(
@@ -274,7 +311,7 @@ def resolve_connections_to_flat_config(config: dict[str, Any]) -> dict[str, Any]
         config, ROLE_EMBEDDINGS
     )
     if emb_conn:
-        config[CONF_VECTOR_DB_EMBEDDING_BASE_URL] = emb_conn.get("base_url", "")
+        config[CONF_VECTOR_DB_EMBEDDING_BASE_URL] = normalize_url(emb_conn.get("base_url", ""))
         config[CONF_VECTOR_DB_EMBEDDING_MODEL] = emb_conn.get("model", "")
         config[CONF_VECTOR_DB_EMBEDDING_PROVIDER] = emb_conn.get(
             "embedding_provider", DEFAULT_VECTOR_DB_EMBEDDING_PROVIDER
