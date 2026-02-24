@@ -396,9 +396,10 @@ class ContextManager:
         # Check if truncation is needed
         max_chars = self._max_context_tokens * 4  # Rough char-to-token ratio
         was_truncated = False
+        truncation_suffix = "\n... [truncated]"
         if len(optimized) > max_chars:
             _LOGGER.warning("Context truncated from %d to %d characters", len(optimized), max_chars)
-            optimized = optimized[:max_chars] + "... [truncated]"
+            optimized = optimized[:max_chars - len(truncation_suffix)] + truncation_suffix
             was_truncated = True
 
         optimized_tokens = len(optimized) // 4

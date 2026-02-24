@@ -150,7 +150,12 @@ OPENAI_BASE_URL = "https://api.openai.com/v1"
 
 
 def normalize_url(url: str) -> str:
-    """Normalize a URL for OpenAI-compatible endpoints."""
+    """Normalize a URL for OpenAI-compatible endpoints.
+
+    Strips known endpoint suffixes (/chat/completions, /embeddings, etc.)
+    so the base URL can be reused for any endpoint type. Adds /v1 if no
+    path is present (bare IP:PORT).
+    """
     url = url.strip().rstrip("/")
     if not url:
         return url
@@ -159,6 +164,18 @@ def normalize_url(url: str) -> str:
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https"):
         return url
+    # Strip known endpoint suffixes that the code appends automatically
+    _ENDPOINT_SUFFIXES = (
+        "/chat/completions",
+        "/audio/speech",
+        "/audio/transcriptions",
+        "/embeddings",
+        "/models",
+    )
+    for suffix in _ENDPOINT_SUFFIXES:
+        if url.endswith(suffix):
+            url = url[:-len(suffix)].rstrip("/")
+            break
     if not parsed.path or parsed.path == "/":
         url = f"{url}/v1"
     return url

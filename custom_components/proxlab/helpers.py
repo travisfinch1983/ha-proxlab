@@ -706,12 +706,18 @@ def build_api_url(base_url: str, model: str, azure_api_version: str | None = Non
     """
     from .const import DEFAULT_AZURE_API_VERSION
 
+    base_url = base_url.rstrip("/")
+
     if is_azure_openai_backend(base_url):
         api_version = azure_api_version or DEFAULT_AZURE_API_VERSION
         return (
-            f"{base_url.rstrip('/')}/openai/deployments/{model}"
+            f"{base_url}/openai/deployments/{model}"
             f"/chat/completions?api-version={api_version}"
         )
+
+    # Strip /chat/completions if already in URL to avoid doubling
+    if base_url.endswith("/chat/completions"):
+        return base_url
     return f"{base_url}/chat/completions"
 
 

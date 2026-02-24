@@ -237,8 +237,10 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
         Ollama uses /api/tags (list models) and /api/embeddings instead of
         the OpenAI-compatible /v1/models and /v1/embeddings.
         """
-        # Strip /v1 suffix if present to get native Ollama base URL
-        native_base = base_url.removesuffix("/v1")
+        # Strip any path to get native Ollama base URL (scheme://host:port)
+        from urllib.parse import urlparse
+        parsed = urlparse(base_url)
+        native_base = f"{parsed.scheme}://{parsed.netloc}"
 
         # Phase 1: Connectivity — GET /api/tags
         try:
