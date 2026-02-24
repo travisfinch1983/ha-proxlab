@@ -36,15 +36,8 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# Map response_format to MIME type
-_FORMAT_TO_CONTENT_TYPE = {
-    "mp3": "audio/mpeg",
-    "opus": "audio/ogg",
-    "aac": "audio/aac",
-    "flac": "audio/flac",
-    "wav": "audio/wav",
-    "pcm": "audio/pcm",
-}
+# Valid audio extensions for TtsAudioType (HA expects file extension, not MIME)
+_VALID_EXTENSIONS = {"mp3", "opus", "aac", "flac", "wav", "pcm"}
 
 
 async def async_setup_entry(
@@ -158,7 +151,7 @@ class ProxLabTTSEntity(TextToSpeechEntity):
             options: Additional options (voice, speed).
 
         Returns:
-            Tuple of (content_type, audio_bytes) or (None, None) on failure.
+            Tuple of (extension, audio_bytes) or (None, None) on failure.
         """
         base_url = self._config.get(CONF_TTS_BASE_URL, "").rstrip("/")
         if not base_url:
@@ -200,18 +193,16 @@ class ProxLabTTSEntity(TextToSpeechEntity):
                     return (None, None)
 
                 audio_bytes = await response.read()
-                content_type = _FORMAT_TO_CONTENT_TYPE.get(
-                    response_format, "audio/mpeg"
-                )
+                extension = response_format if response_format in _VALID_EXTENSIONS else "mp3"
 
                 _LOGGER.debug(
-                    "TTS generated %d bytes (%s) for %d chars",
+                    "TTS generated %d bytes (.%s) for %d chars",
                     len(audio_bytes),
-                    content_type,
+                    extension,
                     len(message),
                 )
 
-                return (content_type, audio_bytes)
+                return (extension, audio_bytes)
 
         except aiohttp.ClientError as err:
             _LOGGER.error("TTS connection error: %s", err)
