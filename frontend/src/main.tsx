@@ -4,95 +4,76 @@ import { useStore } from "./store";
 import App from "./App";
 import "./app.css";
 
-// HA panel_custom iframe bridge: HA sets `panel` property on the
-// <ha-panel-custom> element, which includes `hass` and `config`.
-// For embed_iframe panels, HA posts messages to the iframe.
+/**
+ * HA iframe panel connection bridge.
+ *
+ * We're loaded as a built-in "iframe" panel from the same origin as HA,
+ * so we can access window.parent.hassConnection directly. This is a
+ * Promise<{ auth, conn }> set by the HA frontend.
+ *
+ * conn.sendMessagePromise(msg) sends a WS command and returns the result.
+ */
 
 function extractEntryId(): string | null {
-  // HA encodes the config entry ID in the panel config
   const params = new URLSearchParams(window.location.search);
   return params.get("entry_id") || null;
 }
 
-// Listen for hass updates from parent HA frame
-window.addEventListener("message", (event) => {
-  if (event.data?.type === "config/panel") {
-    const panel = event.data.panel;
-    if (panel?.config?.entry_id) {
-      useStore.getState().setEntryId(panel.config.entry_id);
+interface HassConn {
+  sendMessagePromise: (
+    msg: Record<string, unknown>
+  ) => Promise<unknown>;
+}
+
+interface HassAuth {
+  data: { access_token: string; hassUrl: string };
+}
+
+async function connectToHA(): Promise<void> {
+  const store = useStore.getState();
+
+  // Set entry ID from URL params
+  const entryId = extractEntryId();
+  if (entryId) {
+    store.setEntryId(entryId);
+  }
+
+  try {
+    // Access parent frame's hassConnection (same-origin)
+    const parent = window.parent as unknown as Record<string, unknown>;
+    const hassConnectionPromise = parent.hassConnection as
+      | Promise<{ auth: HassAuth; conn: HassConn }>
+      | undefined;
+
+    if (!hassConnectionPromise) {
+      throw new Error(
+        "hassConnection not found on parent frame. " +
+          "Make sure the panel is loaded within Home Assistant."
+      );
     }
-  }
-});
 
-// Poll for hass object on window (HA injects it for iframe panels)
-function pollForHass() {
-  const w = window as unknown as Record<string, unknown>;
-  if (w.hassConnection) {
-    // hassConnection is a promise that resolves to { conn, auth }
-    (w.hassConnection as Promise<{ conn: unknown }>).then(({ conn }) => {
-      // conn has subscribeEvents, sendMessagePromise, etc.
-      // We wrap it to provide callWS
-      const hass = buildHassProxy(conn);
-      useStore.getState().setHass(hass);
-    });
-    return;
-  }
+    const { conn } = await hassConnectionPromise;
 
-  // For embed_iframe, HA sends hass via the parent
-  if (window.parent !== window) {
-    // Request hass from parent
-    window.parent.postMessage({ type: "config/get" }, "*");
-  }
+    // Build a hass-like object with callWS for our api.ts
+    const hass = {
+      callWS: async <T,>(msg: Record<string, unknown>): Promise<T> => {
+        return conn.sendMessagePromise(msg) as Promise<T>;
+      },
+      // Minimal stubs for the Hass interface
+      states: {},
+      user: { id: "", name: "", is_admin: true },
+      language: "en",
+    };
 
-  // Also check if __hass is already set (some HA versions)
-  if (w.__hass) {
-    useStore.getState().setHass(w.__hass as never);
-    return;
+    store.setHass(hass);
+  } catch (err) {
+    console.error("ProxLab: Failed to connect to HA:", err);
+    // Retry after a short delay (HA might still be initializing)
+    setTimeout(connectToHA, 1000);
   }
-
-  setTimeout(pollForHass, 100);
 }
 
-function buildHassProxy(conn: unknown): never {
-  // The conn object from hassConnection provides sendMessagePromise
-  return new Proxy({} as never, {
-    get(_target, prop) {
-      if (prop === "callWS") {
-        return async (msg: Record<string, unknown>) => {
-          return (conn as { sendMessagePromise: (msg: Record<string, unknown>) => Promise<unknown> }).sendMessagePromise(msg);
-        };
-      }
-      return undefined;
-    },
-  });
-}
-
-// For development: allow setting hass from console
-(window as unknown as Record<string, unknown>).__setHass = (hass: unknown) => {
-  useStore.getState().setHass(hass as never);
-};
-
-// HA embed_iframe panels receive messages like:
-// { id: N, type: "result", result: { hass, panel } }
-window.addEventListener("message", (event) => {
-  const data = event.data;
-  if (!data) return;
-
-  // Direct hass object injection
-  if (data.hass) {
-    useStore.getState().setHass(data.hass);
-    if (data.panel?.config?.entry_id) {
-      useStore.getState().setEntryId(data.panel.config.entry_id);
-    }
-  }
-});
-
-pollForHass();
-
-const entryId = extractEntryId();
-if (entryId) {
-  useStore.getState().setEntryId(entryId);
-}
+connectToHA();
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

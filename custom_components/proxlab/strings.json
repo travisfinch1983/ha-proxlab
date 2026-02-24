@@ -31,19 +31,8 @@
   "options": {
     "step": {
       "init": {
-        "title": "Configure ProxLab",
-        "description": "Manage your ProxLab configuration.",
-        "menu_options": {
-          "connections": "Connections",
-          "agents": "Agents",
-          "proxlab_settings": "ProxLab Discovery",
-          "context_settings": "Context Settings",
-          "vector_db_settings": "Vector Database",
-          "history_settings": "Conversation History",
-          "memory_settings": "Memory System",
-          "tool_settings": "Tool Configuration",
-          "debug_settings": "Debug Settings"
-        }
+        "title": "ProxLab Configuration",
+        "description": "ProxLab is configured through its dedicated sidebar panel.\n\nClick **ProxLab** in the sidebar (robot icon) or navigate to [{panel_url}]({panel_url}) to manage connections, agents, and all settings."
       },
       "connections": {
         "title": "Connections",

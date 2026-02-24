@@ -535,29 +535,37 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # --- WebSocket API + Panel Registration (once per hass) ---
     if not hass.data[DOMAIN].get("_ws_registered"):
-        async_register_websocket_commands(hass)
-        hass.data[DOMAIN]["_ws_registered"] = True
-        _LOGGER.info("Registered ProxLab WebSocket commands")
+        try:
+            async_register_websocket_commands(hass)
+            hass.data[DOMAIN]["_ws_registered"] = True
+            _LOGGER.warning("ProxLab: Registered WebSocket commands")
+        except Exception as err:
+            _LOGGER.error("ProxLab: Failed to register WebSocket commands: %s", err)
 
     if not hass.data[DOMAIN].get("_panel_registered"):
-        panel_dir = pathlib.Path(__file__).parent / "panel"
-        panel_url = f"/proxlab_panel"
+        try:
+            panel_dir = pathlib.Path(__file__).parent / "panel"
+            panel_url = "/proxlab_panel"
+            _LOGGER.warning("ProxLab: Registering panel from %s", panel_dir)
 
-        await hass.http.async_register_static_paths(
-            [StaticPathConfig(panel_url, str(panel_dir), cache_headers=False)]
-        )
+            await hass.http.async_register_static_paths(
+                [StaticPathConfig(panel_url, str(panel_dir), cache_headers=False)]
+            )
+            _LOGGER.warning("ProxLab: Static paths registered at %s", panel_url)
 
-        async_register_built_in_panel(
-            hass,
-            component_name="iframe",
-            sidebar_title="ProxLab",
-            sidebar_icon="mdi:robot-happy",
-            frontend_url_path="proxlab",
-            config={"url": f"{panel_url}/index.html?entry_id={entry.entry_id}"},
-            require_admin=False,
-        )
-        hass.data[DOMAIN]["_panel_registered"] = True
-        _LOGGER.info("Registered ProxLab sidebar panel")
+            async_register_built_in_panel(
+                hass,
+                component_name="iframe",
+                sidebar_title="ProxLab",
+                sidebar_icon="mdi:robot-happy",
+                frontend_url_path="proxlab",
+                config={"url": f"{panel_url}/index.html?entry_id={entry.entry_id}"},
+                require_admin=False,
+            )
+            hass.data[DOMAIN]["_panel_registered"] = True
+            _LOGGER.warning("ProxLab: Sidebar panel registered successfully")
+        except Exception as err:
+            _LOGGER.error("ProxLab: PANEL REGISTRATION FAILED: %s", err, exc_info=True)
 
     # Register update listener to reload on config changes
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
@@ -624,18 +632,29 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         del hass.data[DOMAIN][entry.entry_id]
 
-    # Remove services and panel if this was the last entry
-    if not hass.data[DOMAIN] or all(
-        k.startswith("_") for k in hass.data[DOMAIN]
-    ):
+    # Remove services if this was the last entry
+    # (but keep panel + WS commands registered — they survive reloads
+    # and will be cleaned up by HA if the integration is fully removed)
+    remaining = [k for k in hass.data.get(DOMAIN, {}) if not k.startswith("_")]
+    if not remaining:
         await async_remove_services(hass)
-        # Remove sidebar panel
-        if hass.data.get(DOMAIN, {}).get("_panel_registered"):
-            async_remove_panel(hass, "proxlab")
-            hass.data[DOMAIN]["_panel_registered"] = False
-            _LOGGER.info("Removed ProxLab sidebar panel")
 
     return True
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Clean up when the integration is permanently removed."""
+    # Remove sidebar panel
+    if hass.data.get(DOMAIN, {}).get("_panel_registered"):
+        async_remove_panel(hass, "proxlab")
+        hass.data[DOMAIN]["_panel_registered"] = False
+        _LOGGER.info("Removed ProxLab sidebar panel")
+
+    # Clean up domain data
+    if DOMAIN in hass.data and not any(
+        k for k in hass.data[DOMAIN] if not k.startswith("_")
+    ):
+        hass.data.pop(DOMAIN, None)
 
 
 async def async_setup_services(
