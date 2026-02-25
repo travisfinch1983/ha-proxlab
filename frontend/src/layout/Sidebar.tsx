@@ -46,7 +46,11 @@ export default function Sidebar() {
     >
       {/* Brand */}
       <div className="flex items-center gap-3 px-4 h-16 border-b border-base-300">
-        <span className="text-2xl">🤖</span>
+        <img
+          src="./proxlab-logo.svg"
+          alt="ProxLab"
+          className="w-8 h-8 shrink-0"
+        />
         {!collapsed && (
           <span className="font-bold text-lg text-primary">ProxLab</span>
         )}
