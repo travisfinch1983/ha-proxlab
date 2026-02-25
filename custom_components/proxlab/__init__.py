@@ -6,6 +6,7 @@ tool calling, context injection, and conversation history management.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import pathlib
 from typing import Any, cast
@@ -485,9 +486,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 from .vector_db_milvus import MilvusVectorDB
 
                 vector_manager = MilvusVectorDB(hass, config)
-                await vector_manager.async_setup()
+                await asyncio.wait_for(vector_manager.async_setup(), timeout=15.0)
                 hass.data[DOMAIN][entry.entry_id]["vector_manager"] = vector_manager
                 _LOGGER.info("Milvus Vector DB backend enabled for this entry")
+            except asyncio.TimeoutError:
+                _LOGGER.warning(
+                    "Milvus Vector DB setup timed out after 15s — "
+                    "continuing without Milvus"
+                )
             except Exception as err:
                 _LOGGER.error("Failed to set up Milvus backend: %s", err)
         else:
@@ -495,9 +501,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 from .vector_db_manager import VectorDBManager
 
                 vector_manager = VectorDBManager(hass, config)
-                await vector_manager.async_setup()
+                await asyncio.wait_for(vector_manager.async_setup(), timeout=15.0)
                 hass.data[DOMAIN][entry.entry_id]["vector_manager"] = vector_manager
                 _LOGGER.info("ChromaDB Vector DB backend enabled for this entry")
+            except asyncio.TimeoutError:
+                _LOGGER.warning(
+                    "ChromaDB Vector DB setup timed out after 15s — "
+                    "continuing without ChromaDB"
+                )
             except Exception as err:
                 _LOGGER.error("Failed to set up ChromaDB backend: %s", err)
 

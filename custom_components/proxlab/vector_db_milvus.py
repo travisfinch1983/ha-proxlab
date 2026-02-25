@@ -116,6 +116,7 @@ class MilvusVectorDB:
             alias=alias,
             host=self.host,
             port=self.port,
+            timeout=10,
         )
 
         if not utility.has_collection(self.collection_name, using=alias):
