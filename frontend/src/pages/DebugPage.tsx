@@ -41,10 +41,12 @@ function msToReadable(ms: number): string {
 function ContextModal({
   messages,
   agentName,
+  tools,
   onClose,
 }: {
   messages: Array<{ role: string; content: string }>;
   agentName: string;
+  tools?: Array<Record<string, unknown>>;
   onClose: () => void;
 }) {
   const systemMsg = messages.find((m) => m.role === "system");
@@ -108,6 +110,21 @@ function ContextModal({
               </div>
             </div>
           )}
+
+          {/* Tool definitions */}
+          {tools && tools.length > 0 && (
+            <div>
+              <div className="text-[10px] font-semibold text-success mb-1 flex items-center gap-1">
+                TOOL DEFINITIONS
+                <span className="badge badge-xs badge-outline font-mono">
+                  {tools.length} tool{tools.length !== 1 ? "s" : ""}
+                </span>
+              </div>
+              <pre className="bg-base-200 rounded-lg p-3 text-xs whitespace-pre-wrap break-words max-h-96 overflow-y-auto font-mono leading-relaxed">
+                {JSON.stringify(tools, null, 2)}
+              </pre>
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -128,7 +145,7 @@ function StepCard({
   const toolNames = Object.entries(step.tool_breakdown || {});
   const hasTools = toolNames.length > 0;
   const isClaude = step.connection_type === "claude_api";
-  const hasContext = (step.context_messages?.length ?? 0) > 0;
+  const hasContext = (step.context_messages?.length ?? 0) > 0 || (step.tools?.length ?? 0) > 0;
 
   return (
     <div className="flex gap-3">
@@ -284,6 +301,7 @@ function StepCard({
         <ContextModal
           messages={step.context_messages}
           agentName={step.agent_name}
+          tools={step.tools}
           onClose={() => setShowContext(false)}
         />
       )}

@@ -52,6 +52,9 @@ class AgentContext:
     orchestrator_context_messages: list[dict[str, Any]] = field(
         default_factory=list
     )
+    orchestrator_tools: list[dict[str, Any]] = field(
+        default_factory=list
+    )
 
 
 class OrchestratorMixin:
@@ -299,6 +302,7 @@ class OrchestratorMixin:
                 {"role": m["role"], "content": m.get("content", "")[:100000]}
                 for m in messages
             ]
+            ctx.orchestrator_tools = [route_tool]
             return ctx
 
         _LOGGER.warning("No route_to_agent tool call found in orchestrator response")

@@ -673,6 +673,7 @@ class ProxLabAgent(
         response_text: str,
         user_input: str = "",
         context_messages: list[dict[str, Any]] | None = None,
+        tools: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
         """Build a multi-step trace array for the debug panel.
 
@@ -721,6 +722,7 @@ class ProxLabAgent(
                 "user_input": user_input,
                 "connection_type": orch_conn_type,
                 "context_messages": agent_context.orchestrator_context_messages or [],
+                "tools": agent_context.orchestrator_tools or [],
             }
             if orch_cost is not None:
                 orch_step["cost_estimate"] = round(orch_cost, 6)
@@ -767,6 +769,7 @@ class ProxLabAgent(
                 "user_input": user_input,
                 "connection_type": agent_conn_type,
                 "context_messages": context_messages or [],
+                "tools": tools or [],
             }
             if agent_cost is not None:
                 agent_step["cost_estimate"] = round(agent_cost, 6)
@@ -801,6 +804,7 @@ class ProxLabAgent(
                 "user_input": user_input,
                 "connection_type": single_conn_type,
                 "context_messages": context_messages or [],
+                "tools": tools or [],
             }
             if single_cost is not None:
                 single_step["cost_estimate"] = round(single_cost, 6)
@@ -1017,6 +1021,7 @@ class ProxLabAgent(
                 tool_breakdown, response or "",
                 user_input=text,
                 context_messages=metrics.get("_context_messages"),
+                tools=metrics.get("_tools"),
             )
             # Aggregate tokens_per_sec from target step
             llm_lat_sync = metrics.get("performance", {}).get("llm_latency_ms", 0)
@@ -1266,6 +1271,9 @@ class ProxLabAgent(
             streaming_tools_override = self.tool_handler.get_tool_definitions_for_agent(
                 agent_context.tool_names
             )
+
+        # Snapshot tool definitions for debug trace
+        metrics["_tools"] = streaming_tools_override or self.tool_handler.get_tool_definitions() or []
 
         # Tool calling loop (max iterations to prevent infinite loops)
         max_iterations = self.config.get(
@@ -1536,6 +1544,7 @@ class ProxLabAgent(
             tool_breakdown, final_response or "",
             user_input=user_message,
             context_messages=metrics.get("_context_messages"),
+            tools=metrics.get("_tools"),
         )
         # Aggregate tokens_per_sec from target step
         llm_lat_stream = metrics.get("performance", {}).get("llm_latency_ms", 0)
@@ -1702,6 +1711,10 @@ class ProxLabAgent(
             )
         else:
             tool_definitions = self.tool_handler.get_tool_definitions()
+
+        # Snapshot tool definitions for debug trace
+        if metrics is not None:
+            metrics["_tools"] = tool_definitions or []
 
         # Resolve LLM config override for this agent
         sync_config_override = agent_context.flat_config if agent_context else None
