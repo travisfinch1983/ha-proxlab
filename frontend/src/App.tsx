@@ -12,6 +12,7 @@ import VectorDbPage from "./pages/VectorDbPage";
 import SettingsPage from "./pages/SettingsPage";
 import DebugPage from "./pages/DebugPage";
 import ApiInfoPage from "./pages/ApiInfoPage";
+import IssuesPage from "./pages/IssuesPage";
 
 export default function App() {
   const hass = useStore((s) => s.hass);
@@ -99,6 +100,7 @@ export default function App() {
           <Route path="settings" element={<SettingsPage />} />
           <Route path="debug" element={<DebugPage />} />
           <Route path="api-info" element={<ApiInfoPage />} />
+          <Route path="issues" element={<IssuesPage />} />
         </Route>
       </Routes>
     </HashRouter>

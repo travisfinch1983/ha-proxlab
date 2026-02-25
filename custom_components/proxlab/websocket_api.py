@@ -201,6 +201,10 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_api_usage_reset)
     websocket_api.async_register_command(hass, ws_api_admin_report)
     websocket_api.async_register_command(hass, ws_api_config)
+    websocket_api.async_register_command(hass, ws_issues_list)
+    websocket_api.async_register_command(hass, ws_issues_create)
+    websocket_api.async_register_command(hass, ws_issues_update)
+    websocket_api.async_register_command(hass, ws_issues_delete)
 
 
 # ---------------------------------------------------------------------------
@@ -1311,3 +1315,129 @@ async def ws_api_config(
         admin_key = new_options.get("admin_api_key", "")
         budget = new_options.get("api_budget")
         connection.send_result(msg["id"], {"admin_key": admin_key, "budget": budget})
+
+
+# ---------------------------------------------------------------------------
+# Issues Tracker
+# ---------------------------------------------------------------------------
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "proxlab/issues/list", vol.Optional("entry_id"): str}
+)
+@callback
+def ws_issues_list(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Return all issues."""
+    issues_data = hass.data.get(DOMAIN, {}).get("_issues", {"items": []})
+    connection.send_result(msg["id"], {"items": issues_data.get("items", [])})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/issues/create",
+        vol.Optional("entry_id"): str,
+        vol.Required("category"): vol.In(["bug", "feature"]),
+        vol.Required("text"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_issues_create(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Create a new issue."""
+    import time
+
+    domain_data = hass.data.get(DOMAIN, {})
+    issues_data = domain_data.get("_issues")
+    store = domain_data.get("_issues_store")
+
+    if issues_data is None or store is None:
+        connection.send_error(msg["id"], "not_ready", "Issues store not initialized")
+        return
+
+    issue_id = uuid4().hex[:8]
+    item = {
+        "id": issue_id,
+        "category": msg["category"],
+        "text": msg["text"],
+        "completed": False,
+        "created_at": time.time(),
+        "completed_at": None,
+    }
+    issues_data["items"].append(item)
+    await store.async_save(issues_data)
+
+    connection.send_result(msg["id"], {"id": issue_id})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/issues/update",
+        vol.Optional("entry_id"): str,
+        vol.Required("issue_id"): str,
+        vol.Optional("completed"): bool,
+        vol.Optional("text"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_issues_update(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Update an existing issue (toggle completed, edit text)."""
+    import time
+
+    domain_data = hass.data.get(DOMAIN, {})
+    issues_data = domain_data.get("_issues")
+    store = domain_data.get("_issues_store")
+
+    if issues_data is None or store is None:
+        connection.send_error(msg["id"], "not_ready", "Issues store not initialized")
+        return
+
+    issue_id = msg["issue_id"]
+    for item in issues_data["items"]:
+        if item["id"] == issue_id:
+            if "completed" in msg:
+                item["completed"] = msg["completed"]
+                item["completed_at"] = time.time() if msg["completed"] else None
+            if "text" in msg:
+                item["text"] = msg["text"]
+            await store.async_save(issues_data)
+            connection.send_result(msg["id"], {})
+            return
+
+    connection.send_error(msg["id"], "not_found", f"Issue {issue_id} not found")
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/issues/delete",
+        vol.Optional("entry_id"): str,
+        vol.Required("issue_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_issues_delete(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Delete an issue."""
+    domain_data = hass.data.get(DOMAIN, {})
+    issues_data = domain_data.get("_issues")
+    store = domain_data.get("_issues_store")
+
+    if issues_data is None or store is None:
+        connection.send_error(msg["id"], "not_ready", "Issues store not initialized")
+        return
+
+    issue_id = msg["issue_id"]
+    original_len = len(issues_data["items"])
+    issues_data["items"] = [i for i in issues_data["items"] if i["id"] != issue_id]
+
+    if len(issues_data["items"]) == original_len:
+        connection.send_error(msg["id"], "not_found", f"Issue {issue_id} not found")
+        return
+
+    await store.async_save(issues_data)
+    connection.send_result(msg["id"], {})

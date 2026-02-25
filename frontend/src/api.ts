@@ -306,3 +306,37 @@ export async function saveApiConfig(adminKey: string): Promise<void> {
 export async function saveApiBudget(budget: number | null): Promise<void> {
   await callWS("proxlab/api/config", { budget });
 }
+
+// --- Issues ---
+
+export interface IssueItem {
+  id: string;
+  category: "bug" | "feature";
+  text: string;
+  completed: boolean;
+  created_at: number;
+  completed_at: number | null;
+}
+
+export async function listIssues(): Promise<IssueItem[]> {
+  const res = await callWS<{ items: IssueItem[] }>("proxlab/issues/list");
+  return res.items;
+}
+
+export async function createIssue(
+  category: "bug" | "feature",
+  text: string
+): Promise<{ id: string }> {
+  return callWS("proxlab/issues/create", { category, text });
+}
+
+export async function updateIssue(
+  issueId: string,
+  fields: Partial<Pick<IssueItem, "completed" | "text">>
+): Promise<void> {
+  return callWS("proxlab/issues/update", { issue_id: issueId, ...fields });
+}
+
+export async function deleteIssue(issueId: string): Promise<void> {
+  return callWS("proxlab/issues/delete", { issue_id: issueId });
+}

@@ -637,6 +637,10 @@ HISTORY_STORAGE_KEY: Final = f"{DOMAIN}.history"
 MEMORY_STORAGE_KEY: Final = f"{DOMAIN}.memories"
 MEMORY_STORAGE_VERSION: Final = 1
 
+# Issues tracker storage
+ISSUES_STORAGE_KEY: Final = f"{DOMAIN}.issues"
+ISSUES_STORAGE_VERSION: Final = 1
+
 # HTTP timeouts (seconds)
 HTTP_TIMEOUT_DEFAULT: Final = 60
 HTTP_TIMEOUT: Final = 60  # Alias for default timeout

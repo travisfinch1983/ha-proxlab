@@ -574,6 +574,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             API_USAGE_STORAGE_KEY,
             API_USAGE_STORAGE_VERSION,
             EVENT_CONVERSATION_FINISHED,
+            ISSUES_STORAGE_KEY,
+            ISSUES_STORAGE_VERSION,
         )
         from .helpers import estimate_claude_cost
 
@@ -611,6 +613,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         }
         hass.data[DOMAIN]["_api_usage"] = usage_data
         hass.data[DOMAIN]["_api_usage_store"] = usage_store
+
+        # -- Persistent issues tracker storage --
+        issues_store = Store(hass, ISSUES_STORAGE_VERSION, ISSUES_STORAGE_KEY)
+        issues_data = await issues_store.async_load() or {"items": []}
+        hass.data[DOMAIN]["_issues"] = issues_data
+        hass.data[DOMAIN]["_issues_store"] = issues_store
 
         @callback
         def _on_conversation_finished(event):
