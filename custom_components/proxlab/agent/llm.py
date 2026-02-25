@@ -187,6 +187,7 @@ class LLMMixin:
         temperature: float | None = None,
         max_tokens: int | None = None,
         config_override: dict[str, Any] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Call the LLM API.
 
@@ -197,6 +198,7 @@ class LLMMixin:
             max_tokens: Optional max_tokens override (uses config if not provided)
             config_override: Optional dict to overlay on self.config for this call.
                 Allows routing to a different LLM endpoint without mutating self.config.
+            tool_choice: Override for tool_choice (default "auto" when tools given).
 
         Returns:
             LLM response dictionary
@@ -250,7 +252,7 @@ class LLMMixin:
 
         if tools:
             payload["tools"] = tools
-            payload["tool_choice"] = "auto"
+            payload["tool_choice"] = tool_choice if tool_choice is not None else "auto"
 
         if cfg.get(CONF_DEBUG_LOGGING):
             _LOGGER.debug(

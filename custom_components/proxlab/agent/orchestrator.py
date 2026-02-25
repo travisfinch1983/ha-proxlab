@@ -198,11 +198,14 @@ class OrchestratorMixin:
         ]
 
         # 4. Call orchestrator LLM (non-streaming, with route_to_agent tool)
+        #    Use tool_choice="required" to force the model to always produce
+        #    a route_to_agent call rather than answering directly.
         try:
             response = await self._call_llm(  # type: ignore[attr-defined]
                 messages,
                 tools=[route_tool],
                 config_override=orch_config,
+                tool_choice="required",
             )
         except Exception:
             _LOGGER.warning(
@@ -211,13 +214,19 @@ class OrchestratorMixin:
             return None
 
         # 5. Parse the tool call from the response
-        choice = response.get("choices", [{}])[0].get("message", {})
-        tool_calls = choice.get("tool_calls", [])
+        choices = response.get("choices")
+        if not choices:
+            _LOGGER.warning("Orchestrator response has no choices")
+            return None
+        message = choices[0].get("message") if choices[0] else None
+        if message is None:
+            message = {}
+        tool_calls = message.get("tool_calls") or []
 
         if not tool_calls:
             _LOGGER.warning(
                 "Orchestrator did not return a tool call — content: %s",
-                choice.get("content", "")[:200],
+                str(message.get("content", ""))[:200],
             )
             return None
 
