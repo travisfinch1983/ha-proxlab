@@ -206,6 +206,7 @@ export interface TraceStep {
   user_input?: string;
   connection_type?: string;
   cost_estimate?: number;
+  context_messages?: Array<{ role: string; content: string }>;
 }
 
 export interface ConversationTrace {

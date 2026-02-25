@@ -49,6 +49,9 @@ class AgentContext:
     orchestrator_tokens: dict[str, int] = field(
         default_factory=lambda: {"prompt": 0, "completion": 0, "total": 0}
     )
+    orchestrator_context_messages: list[dict[str, Any]] = field(
+        default_factory=list
+    )
 
 
 class OrchestratorMixin:
@@ -292,6 +295,10 @@ class OrchestratorMixin:
             ctx.orchestrator_connection_type = orch_config.get("connection_type", "local")
             ctx.orchestrator_duration_ms = orch_duration_ms
             ctx.orchestrator_tokens = orch_tokens
+            ctx.orchestrator_context_messages = [
+                {"role": m["role"], "content": m.get("content", "")[:100000]}
+                for m in messages
+            ]
             return ctx
 
         _LOGGER.warning("No route_to_agent tool call found in orchestrator response")

@@ -15,6 +15,8 @@ import {
   faGear,
   faCalendarXmark,
   faDollarSign,
+  faFileLines,
+  faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import NavBar from "../layout/NavBar";
 import {
@@ -36,6 +38,82 @@ function msToReadable(ms: number): string {
 /*  StepCard — renders one step in the routing chain                  */
 /* ------------------------------------------------------------------ */
 
+function ContextModal({
+  messages,
+  agentName,
+  onClose,
+}: {
+  messages: Array<{ role: string; content: string }>;
+  agentName: string;
+  onClose: () => void;
+}) {
+  const systemMsg = messages.find((m) => m.role === "system");
+  const historyMsgs = messages.filter(
+    (m) => m.role !== "system"
+  );
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+      <div className="bg-base-100 rounded-xl shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-base-300">
+          <h3 className="text-sm font-semibold flex items-center gap-2">
+            <FontAwesomeIcon icon={faFileLines} className="text-info" />
+            Context sent to {agentName}
+            <span className="badge badge-xs badge-outline">
+              {messages.length} message{messages.length !== 1 ? "s" : ""}
+            </span>
+          </h3>
+          <button className="btn btn-ghost btn-xs btn-circle" onClick={onClose}>
+            <FontAwesomeIcon icon={faXmark} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {/* System prompt */}
+          {systemMsg && (
+            <div>
+              <div className="text-[10px] font-semibold text-warning mb-1 flex items-center gap-1">
+                SYSTEM PROMPT
+                <span className="badge badge-xs badge-outline font-mono">
+                  {systemMsg.content.length.toLocaleString()} chars
+                </span>
+              </div>
+              <pre className="bg-base-200 rounded-lg p-3 text-xs whitespace-pre-wrap break-words max-h-96 overflow-y-auto font-mono leading-relaxed">
+                {systemMsg.content}
+              </pre>
+            </div>
+          )}
+
+          {/* History + user messages */}
+          {historyMsgs.length > 0 && (
+            <div>
+              <div className="text-[10px] font-semibold text-info mb-1">
+                CONVERSATION MESSAGES ({historyMsgs.length})
+              </div>
+              <div className="space-y-2">
+                {historyMsgs.map((m, i) => (
+                  <div key={i} className="bg-base-200 rounded-lg p-2">
+                    <div className="text-[9px] font-semibold mb-0.5" style={{
+                      color: m.role === "user" ? "oklch(var(--p))" : "oklch(var(--s))"
+                    }}>
+                      {m.role.toUpperCase()}
+                    </div>
+                    <div className="text-xs whitespace-pre-wrap break-words max-h-48 overflow-y-auto">
+                      {m.content}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StepCard({
   step,
   stepNumber,
@@ -45,10 +123,12 @@ function StepCard({
   stepNumber: number;
   isLast: boolean;
 }) {
+  const [showContext, setShowContext] = useState(false);
   const isOrchestrator = step.agent_id === "orchestrator";
   const toolNames = Object.entries(step.tool_breakdown || {});
   const hasTools = toolNames.length > 0;
   const isClaude = step.connection_type === "claude_api";
+  const hasContext = (step.context_messages?.length ?? 0) > 0;
 
   return (
     <div className="flex gap-3">
@@ -162,6 +242,22 @@ function StepCard({
           </div>
         )}
 
+        {/* Context viewer button */}
+        {hasContext && (
+          <div className="mb-2">
+            <button
+              className="btn btn-xs btn-outline gap-1"
+              onClick={() => setShowContext(true)}
+            >
+              <FontAwesomeIcon icon={faFileLines} className="text-[10px]" />
+              View Context
+              <span className="badge badge-xs badge-outline font-mono">
+                {step.context_messages!.length} msg
+              </span>
+            </button>
+          </div>
+        )}
+
         {/* User input text box */}
         {step.user_input && (
           <div className="mb-2">
@@ -182,6 +278,15 @@ function StepCard({
           </div>
         )}
       </div>
+
+      {/* Context modal */}
+      {showContext && step.context_messages && (
+        <ContextModal
+          messages={step.context_messages}
+          agentName={step.agent_name}
+          onClose={() => setShowContext(false)}
+        />
+      )}
     </div>
   );
 }

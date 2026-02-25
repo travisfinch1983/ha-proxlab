@@ -23,12 +23,12 @@ async def fetch_usage_report(
     now = datetime.now(timezone.utc)
     start = now - timedelta(days=days)
 
-    url = f"{_ADMIN_BASE}/usage"
+    url = f"{_ADMIN_BASE}/usage_report/messages"
     params = {
         "starting_at": start.strftime("%Y-%m-%dT00:00:00Z"),
         "ending_at": now.strftime("%Y-%m-%dT23:59:59Z"),
         "bucket_width": "1d",
-        "group_by": "model",
+        "group_by[]": "model",
     }
     headers = {
         "x-api-key": admin_key,
@@ -61,7 +61,7 @@ async def fetch_cost_report(
     now = datetime.now(timezone.utc)
     start = now - timedelta(days=days)
 
-    url = f"{_ADMIN_BASE}/cost"
+    url = f"{_ADMIN_BASE}/cost_report"
     params = {
         "starting_at": start.strftime("%Y-%m-%dT00:00:00Z"),
         "ending_at": now.strftime("%Y-%m-%dT23:59:59Z"),

@@ -672,6 +672,7 @@ class ProxLabAgent(
         tool_breakdown: dict[str, int],
         response_text: str,
         user_input: str = "",
+        context_messages: list[dict[str, Any]] | None = None,
     ) -> list[dict[str, Any]]:
         """Build a multi-step trace array for the debug panel.
 
@@ -719,6 +720,7 @@ class ProxLabAgent(
                 "tool_breakdown": {},
                 "user_input": user_input,
                 "connection_type": orch_conn_type,
+                "context_messages": agent_context.orchestrator_context_messages or [],
             }
             if orch_cost is not None:
                 orch_step["cost_estimate"] = round(orch_cost, 6)
@@ -764,6 +766,7 @@ class ProxLabAgent(
                 "tool_breakdown": dict(tool_breakdown),
                 "user_input": user_input,
                 "connection_type": agent_conn_type,
+                "context_messages": context_messages or [],
             }
             if agent_cost is not None:
                 agent_step["cost_estimate"] = round(agent_cost, 6)
@@ -797,6 +800,7 @@ class ProxLabAgent(
                 "tool_breakdown": dict(tool_breakdown),
                 "user_input": user_input,
                 "connection_type": single_conn_type,
+                "context_messages": context_messages or [],
             }
             if single_cost is not None:
                 single_step["cost_estimate"] = round(single_cost, 6)
@@ -1012,6 +1016,7 @@ class ProxLabAgent(
                 agent_context, metrics, duration_ms,
                 tool_breakdown, response or "",
                 user_input=text,
+                context_messages=metrics.get("_context_messages"),
             )
             # Aggregate tokens_per_sec from target step
             llm_lat_sync = metrics.get("performance", {}).get("llm_latency_ms", 0)
@@ -1246,6 +1251,12 @@ class ProxLabAgent(
 
         # Add current user message
         messages.append({"role": "user", "content": user_message})
+
+        # Snapshot initial context for debug trace (before tool loop mutates messages)
+        metrics["_context_messages"] = [
+            {"role": m["role"], "content": m.get("content", "")[:100000]}
+            for m in messages
+        ]
 
         # Resolve tool definitions for this agent
         streaming_config_override: dict[str, Any] | None = None
@@ -1524,6 +1535,7 @@ class ProxLabAgent(
             agent_context, metrics, duration_ms,
             tool_breakdown, final_response or "",
             user_input=user_message,
+            context_messages=metrics.get("_context_messages"),
         )
         # Aggregate tokens_per_sec from target step
         llm_lat_stream = metrics.get("performance", {}).get("llm_latency_ms", 0)
@@ -1675,6 +1687,13 @@ class ProxLabAgent(
 
         # Add current user message
         messages.append({"role": "user", "content": user_message})
+
+        # Snapshot initial context for debug trace (before tool loop mutates messages)
+        if metrics is not None:
+            metrics["_context_messages"] = [
+                {"role": m["role"], "content": m.get("content", "")[:100000]}
+                for m in messages
+            ]
 
         # Get tool definitions — filtered by agent if routed
         if agent_context:
