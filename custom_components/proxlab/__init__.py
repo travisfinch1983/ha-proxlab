@@ -476,66 +476,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             else:
                 _LOGGER.info("Ollama health check passed: %s", ollama_msg)
 
-    # Set up vector DB manager if using vector DB mode
-    vector_manager = None
-    if context_mode == CONTEXT_MODE_VECTOR_DB:
-        vector_backend = config.get(CONF_VECTOR_DB_BACKEND, DEFAULT_VECTOR_DB_BACKEND)
-
-        if vector_backend == VECTOR_DB_BACKEND_MILVUS:
-            try:
-                from .vector_db_milvus import MilvusVectorDB
-
-                vector_manager = MilvusVectorDB(hass, config)
-                await asyncio.wait_for(vector_manager.async_setup(), timeout=15.0)
-                hass.data[DOMAIN][entry.entry_id]["vector_manager"] = vector_manager
-                _LOGGER.info("Milvus Vector DB backend enabled for this entry")
-            except asyncio.TimeoutError:
-                _LOGGER.warning(
-                    "Milvus Vector DB setup timed out after 15s — "
-                    "continuing without Milvus"
-                )
-            except Exception as err:
-                _LOGGER.error("Failed to set up Milvus backend: %s", err)
-        else:
-            try:
-                from .vector_db_manager import VectorDBManager
-
-                vector_manager = VectorDBManager(hass, config)
-                await asyncio.wait_for(vector_manager.async_setup(), timeout=15.0)
-                hass.data[DOMAIN][entry.entry_id]["vector_manager"] = vector_manager
-                _LOGGER.info("ChromaDB Vector DB backend enabled for this entry")
-            except asyncio.TimeoutError:
-                _LOGGER.warning(
-                    "ChromaDB Vector DB setup timed out after 15s — "
-                    "continuing without ChromaDB"
-                )
-            except Exception as err:
-                _LOGGER.error("Failed to set up ChromaDB backend: %s", err)
-
-    # Set up memory manager if enabled
-    memory_enabled = config.get(CONF_MEMORY_ENABLED, DEFAULT_MEMORY_ENABLED)
-    if memory_enabled:
-        try:
-            from .memory_manager import MemoryManager
-
-            memory_manager = MemoryManager(
-                hass=hass,
-                vector_db_manager=vector_manager,
-                config=config,
-            )
-            await memory_manager.async_initialize()
-            hass.data[DOMAIN][entry.entry_id]["memory_manager"] = memory_manager
-            _LOGGER.info("Memory Manager enabled for this entry")
-        except Exception as err:
-            _LOGGER.error("Failed to set up Memory Manager: %s", err)
-            # Continue setup without memory manager
-
     # Register as a conversation agent (only if agent was created)
     if agent:
         ha_conversation.async_set_agent(hass, entry, agent)
         agent.conversation_manager.setup_scheduled_cleanup()
 
-    # Register services
+    # Register services (before vector DB so Milvus can't block registration)
     await async_setup_services(hass, entry.entry_id)
 
     # Forward TTS/STT platforms if configured
@@ -709,6 +655,81 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         unsub = hass.bus.async_listen(EVENT_CONVERSATION_FINISHED, _on_conversation_finished)
         hass.data[DOMAIN]["_trace_listener"] = unsub
+
+    # --- Vector DB + Memory Manager (background, non-blocking) ---
+    # Moved after service/WS/panel registration so Milvus/ChromaDB can't block them.
+    async def _setup_vector_and_memory() -> None:
+        """Set up vector DB backend and memory manager in background."""
+        vector_manager = None
+        if context_mode == CONTEXT_MODE_VECTOR_DB:
+            vector_backend = config.get(
+                CONF_VECTOR_DB_BACKEND, DEFAULT_VECTOR_DB_BACKEND
+            )
+
+            if vector_backend == VECTOR_DB_BACKEND_MILVUS:
+                try:
+                    # Import pymilvus in executor (heavy blocking I/O at import)
+                    await asyncio.wait_for(
+                        hass.async_add_executor_job(__import__, "pymilvus"),
+                        timeout=30.0,
+                    )
+                    from .vector_db_milvus import MilvusVectorDB
+
+                    vector_manager = MilvusVectorDB(hass, config)
+                    await asyncio.wait_for(
+                        vector_manager.async_setup(), timeout=15.0
+                    )
+                    hass.data[DOMAIN][entry.entry_id][
+                        "vector_manager"
+                    ] = vector_manager
+                    _LOGGER.info("Milvus Vector DB backend enabled for this entry")
+                except asyncio.TimeoutError:
+                    _LOGGER.warning(
+                        "Milvus Vector DB setup timed out — "
+                        "continuing without Milvus"
+                    )
+                except Exception as err:
+                    _LOGGER.error("Failed to set up Milvus backend: %s", err)
+            else:
+                try:
+                    from .vector_db_manager import VectorDBManager
+
+                    vector_manager = VectorDBManager(hass, config)
+                    await asyncio.wait_for(
+                        vector_manager.async_setup(), timeout=15.0
+                    )
+                    hass.data[DOMAIN][entry.entry_id][
+                        "vector_manager"
+                    ] = vector_manager
+                    _LOGGER.info("ChromaDB Vector DB backend enabled for this entry")
+                except asyncio.TimeoutError:
+                    _LOGGER.warning(
+                        "ChromaDB Vector DB setup timed out — "
+                        "continuing without ChromaDB"
+                    )
+                except Exception as err:
+                    _LOGGER.error("Failed to set up ChromaDB backend: %s", err)
+
+        # Set up memory manager if enabled
+        memory_enabled = config.get(CONF_MEMORY_ENABLED, DEFAULT_MEMORY_ENABLED)
+        if memory_enabled:
+            try:
+                from .memory_manager import MemoryManager
+
+                memory_manager = MemoryManager(
+                    hass=hass,
+                    vector_db_manager=vector_manager,
+                    config=config,
+                )
+                await memory_manager.async_initialize()
+                hass.data[DOMAIN][entry.entry_id][
+                    "memory_manager"
+                ] = memory_manager
+                _LOGGER.info("Memory Manager enabled for this entry")
+            except Exception as err:
+                _LOGGER.error("Failed to set up Memory Manager: %s", err)
+
+    hass.async_create_task(_setup_vector_and_memory())
 
     # Register update listener to reload on config changes
     entry.async_on_unload(entry.add_update_listener(async_reload_entry))
