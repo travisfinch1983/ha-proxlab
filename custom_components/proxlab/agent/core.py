@@ -481,6 +481,11 @@ class ProxLabAgent(
         ha_query = HomeAssistantQueryTool(self.hass, exposed_entity_ids)
         self.tool_handler.register_tool(ha_query)
 
+        # Register ha_system_log tool
+        from ..tools.ha_system_log import HomeAssistantSystemLogTool
+        ha_system_log = HomeAssistantSystemLogTool(self.hass)
+        self.tool_handler.register_tool(ha_system_log)
+
         # Register external LLM tool if enabled
         if self.config.get(CONF_EXTERNAL_LLM_ENABLED, False):
             external_llm = ExternalLLMTool(self.hass, self.config)

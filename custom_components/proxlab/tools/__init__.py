@@ -8,10 +8,12 @@ from __future__ import annotations
 
 from .ha_control import HomeAssistantControlTool
 from .ha_query import HomeAssistantQueryTool
+from .ha_system_log import HomeAssistantSystemLogTool
 from .registry import ToolRegistry
 
 __all__ = [
     "ToolRegistry",
     "HomeAssistantControlTool",
     "HomeAssistantQueryTool",
+    "HomeAssistantSystemLogTool",
 ]
