@@ -823,6 +823,22 @@ async def check_ollama_health(base_url: str, timeout: int = 5) -> tuple[bool, st
         return False, f"Ollama health check error: {err}"
 
 
+def normalize_usage(usage: dict[str, Any]) -> dict[str, int]:
+    """Normalize LLM usage data to a consistent format.
+
+    Handles field-name differences across providers:
+      - OpenAI:     prompt_tokens / completion_tokens / total_tokens
+      - Anthropic:  input_tokens  / output_tokens     (no total)
+      - Ollama:     prompt_eval_count / eval_count     (handled separately)
+
+    Returns a dict with keys: prompt, completion, total.
+    """
+    prompt = usage.get("prompt_tokens") or usage.get("input_tokens") or 0
+    completion = usage.get("completion_tokens") or usage.get("output_tokens") or 0
+    total = usage.get("total_tokens") or (prompt + completion)
+    return {"prompt": prompt, "completion": completion, "total": total}
+
+
 def estimate_claude_cost(
     model: str, prompt_tokens: int, completion_tokens: int
 ) -> float | None:

@@ -20,6 +20,7 @@ import {
   fetchAdminReport,
   getApiConfig,
   saveApiConfig,
+  saveApiBudget,
   type ApiUsageData,
 } from "../api";
 
@@ -61,6 +62,8 @@ export default function ApiInfoPage() {
     usage: Record<string, unknown>;
     cost: Record<string, unknown>;
   } | null>(null);
+  const [budget, setBudget] = useState<string>("");
+  const [budgetSaved, setBudgetSaved] = useState(false);
   const [loading, setLoading] = useState(true);
   const [adminLoading, setAdminLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +80,7 @@ export default function ApiInfoPage() {
       ]);
       setUsage(u);
       setAdminKey(cfg.admin_key || "");
+      setBudget(cfg.budget != null ? String(cfg.budget) : "");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -98,6 +102,32 @@ export default function ApiInfoPage() {
     setKeySaved(true);
     setTimeout(() => setKeySaved(false), 2000);
   };
+
+  const handleSaveBudget = async () => {
+    const val = budget.trim() ? parseFloat(budget) : null;
+    await saveApiBudget(val);
+    setBudgetSaved(true);
+    setTimeout(() => setBudgetSaved(false), 2000);
+  };
+
+  // Compute total spend from admin cost report
+  const adminTotalSpend =
+    adminReport?.cost &&
+    !("error" in adminReport.cost) &&
+    Array.isArray((adminReport.cost as { data?: unknown[] }).data)
+      ? (
+          (adminReport.cost as { data: Array<Record<string, unknown>> }).data || []
+        ).reduce(
+          (sum, row) => sum + Number(row.cost_usd || row.amount || 0),
+          0
+        )
+      : null;
+
+  const budgetNum = budget.trim() ? parseFloat(budget) : null;
+  const remaining =
+    budgetNum != null && adminTotalSpend != null
+      ? budgetNum - adminTotalSpend
+      : null;
 
   const handleFetchAdmin = async () => {
     if (!adminKey) {
@@ -198,6 +228,72 @@ export default function ApiInfoPage() {
               <span>
                 Required for Anthropic usage/cost reports. Get one at{" "}
                 <span className="font-mono">console.anthropic.com &gt; Settings &gt; Admin Keys</span>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Budget & Balance */}
+        <div className="card bg-base-100 shadow-sm">
+          <div className="card-body p-4 space-y-3">
+            <h3 className="text-sm font-semibold flex items-center gap-2">
+              <FontAwesomeIcon icon={faDollarSign} className="text-success" />
+              Budget &amp; Balance
+            </h3>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-base-content/60 whitespace-nowrap">Credit loaded ($)</span>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                className="input input-sm input-bordered w-32 font-mono"
+                placeholder="50.00"
+                value={budget}
+                onChange={(e) => setBudget(e.target.value)}
+              />
+              <button
+                className={`btn btn-sm ${budgetSaved ? "btn-success" : "btn-primary"}`}
+                onClick={handleSaveBudget}
+              >
+                <FontAwesomeIcon icon={faFloppyDisk} />
+                {budgetSaved ? "Saved" : "Save"}
+              </button>
+            </div>
+            {budgetNum != null && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <StatCard
+                  label="Budget"
+                  value={`$${budgetNum.toFixed(2)}`}
+                  icon={faCoins}
+                  color="text-info"
+                />
+                <StatCard
+                  label="Spent (30d)"
+                  value={
+                    adminTotalSpend != null
+                      ? `$${adminTotalSpend.toFixed(4)}`
+                      : "Fetch report"
+                  }
+                  icon={faChartColumn}
+                  color="text-warning"
+                />
+                <StatCard
+                  label="Remaining"
+                  value={
+                    remaining != null
+                      ? `$${remaining.toFixed(2)}`
+                      : "—"
+                  }
+                  icon={faDollarSign}
+                  color={remaining != null && remaining < 5 ? "text-error" : "text-success"}
+                />
+              </div>
+            )}
+            <div className="flex items-start gap-2 text-xs text-base-content/50">
+              <FontAwesomeIcon icon={faCircleInfo} className="mt-0.5" />
+              <span>
+                Enter the amount of credits you loaded on your Anthropic account.
+                Fetch the admin report below to see actual spend and estimated remaining balance.
               </span>
             </div>
           </div>

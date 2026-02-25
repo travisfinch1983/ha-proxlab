@@ -224,11 +224,12 @@ class OrchestratorMixin:
         orch_duration_ms = int((time.time() - orch_start) * 1000)
 
         # Extract token usage from orchestrator response
+        # Handles both OpenAI (prompt_tokens) and Anthropic (input_tokens) formats
+        from ..helpers import normalize_usage
+
         orch_usage = response.get("usage", {})
-        orch_tokens = {
-            "prompt": orch_usage.get("prompt_tokens", 0),
-            "completion": orch_usage.get("completion_tokens", 0),
-            "total": orch_usage.get("total_tokens", 0),
+        orch_tokens = normalize_usage(orch_usage) if orch_usage else {
+            "prompt": 0, "completion": 0, "total": 0,
         }
 
         # 5. Parse the tool call from the response

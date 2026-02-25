@@ -293,10 +293,14 @@ export async function fetchAdminReport(
   });
 }
 
-export async function getApiConfig(): Promise<{ admin_key: string }> {
+export async function getApiConfig(): Promise<{ admin_key: string; budget: number | null }> {
   return callWS("proxlab/api/config");
 }
 
 export async function saveApiConfig(adminKey: string): Promise<void> {
   await callWS("proxlab/api/config", { admin_key: adminKey });
+}
+
+export async function saveApiBudget(budget: number | null): Promise<void> {
+  await callWS("proxlab/api/config", { budget });
 }

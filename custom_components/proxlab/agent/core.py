@@ -1355,12 +1355,12 @@ class ProxLabAgent(
             llm_latency = int((time.time() - llm_start) * 1000)
             metrics["performance"]["llm_latency_ms"] += llm_latency
 
-            # Track token usage from stream
+            # Track token usage from stream (already normalized by handler)
             usage = handler.get_usage()
             if usage:
-                metrics["tokens"]["prompt"] += usage.get("prompt_tokens", 0)
-                metrics["tokens"]["completion"] += usage.get("completion_tokens", 0)
-                metrics["tokens"]["total"] += usage.get("total_tokens", 0)
+                metrics["tokens"]["prompt"] += usage.get("prompt", 0)
+                metrics["tokens"]["completion"] += usage.get("completion", 0)
+                metrics["tokens"]["total"] += usage.get("total", 0)
                 _LOGGER.info("Received token usage from LLM stream: %s", usage)
             else:
                 _LOGGER.info("No token usage data received from LLM stream")
@@ -1709,11 +1709,15 @@ class ProxLabAgent(
                 metrics["performance"]["ttft_ms"] = llm_latency_ms
 
             # Track token usage from LLM response
+            # Handles both OpenAI (prompt_tokens) and Anthropic (input_tokens) formats
             usage = llm_response.get("usage", {})
             if usage and "tokens" in metrics:
-                metrics["tokens"]["prompt"] += usage.get("prompt_tokens", 0)
-                metrics["tokens"]["completion"] += usage.get("completion_tokens", 0)
-                metrics["tokens"]["total"] += usage.get("total_tokens", 0)
+                from ..helpers import normalize_usage
+
+                norm = normalize_usage(usage)
+                metrics["tokens"]["prompt"] += norm["prompt"]
+                metrics["tokens"]["completion"] += norm["completion"]
+                metrics["tokens"]["total"] += norm["total"]
 
             # Extract response message
             response_message = llm_response.get("choices", [{}])[0].get("message", {})

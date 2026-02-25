@@ -185,19 +185,23 @@ class OpenAIStreamingHandler:
 
                 # Capture usage data if present
                 # (check BEFORE choices, as usage chunks may have empty choices)
-                # OpenAI format: chunk["usage"] = {prompt_tokens, completion_tokens, total_tokens}
+                # OpenAI format: {prompt_tokens, completion_tokens, total_tokens}
+                # Anthropic format: {input_tokens, output_tokens}
                 if "usage" in chunk:
-                    self._usage = chunk["usage"]
-                    _LOGGER.info("Token usage received (OpenAI format): %s", self._usage)
+                    from .helpers import normalize_usage
+
+                    raw_usage = chunk["usage"]
+                    self._usage = normalize_usage(raw_usage)
+                    _LOGGER.info("Token usage received: %s (raw: %s)", self._usage, raw_usage)
 
                 # Ollama format: chunk has prompt_eval_count, eval_count at root level
                 elif "prompt_eval_count" in chunk or "eval_count" in chunk:
                     prompt_tokens = chunk.get("prompt_eval_count", 0)
                     completion_tokens = chunk.get("eval_count", 0)
                     self._usage = {
-                        "prompt_tokens": prompt_tokens,
-                        "completion_tokens": completion_tokens,
-                        "total_tokens": prompt_tokens + completion_tokens,
+                        "prompt": prompt_tokens,
+                        "completion": completion_tokens,
+                        "total": prompt_tokens + completion_tokens,
                     }
                     _LOGGER.info("Token usage received (Ollama format): %s", self._usage)
 

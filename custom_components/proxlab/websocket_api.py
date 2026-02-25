@@ -1280,23 +1280,34 @@ async def ws_api_admin_report(
         vol.Required("type"): "proxlab/api/config",
         vol.Optional("entry_id"): str,
         vol.Optional("admin_key"): str,
+        vol.Optional("budget"): vol.Any(float, int, None),
     }
 )
 @websocket_api.async_response
 async def ws_api_config(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    """Save or load admin API config."""
+    """Save or load admin API config (admin key + budget)."""
     entry = _get_entry(hass, msg)
     if not entry:
         connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
         return
 
+    save_needed = False
+    new_options = dict(entry.options)
+
     if "admin_key" in msg:
-        new_options = dict(entry.options)
         new_options["admin_api_key"] = msg["admin_key"]
+        save_needed = True
+
+    if "budget" in msg:
+        new_options["api_budget"] = msg["budget"]
+        save_needed = True
+
+    if save_needed:
         hass.config_entries.async_update_entry(entry, options=new_options)
         connection.send_result(msg["id"], {"saved": True})
     else:
-        admin_key = dict(entry.options).get("admin_api_key", "")
-        connection.send_result(msg["id"], {"admin_key": admin_key})
+        admin_key = new_options.get("admin_api_key", "")
+        budget = new_options.get("api_budget")
+        connection.send_result(msg["id"], {"admin_key": admin_key, "budget": budget})
