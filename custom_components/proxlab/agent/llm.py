@@ -149,7 +149,7 @@ from ..const import (
     HTTP_TIMEOUT,
 )
 from ..exceptions import AuthenticationError, ProxLabAgentError
-from ..helpers import build_api_url, build_auth_headers, is_ollama_backend, redact_sensitive_data, render_template_value, retry_async
+from ..helpers import build_api_url, build_auth_headers, is_anthropic_backend, is_ollama_backend, redact_sensitive_data, render_template_value, retry_async
 
 if TYPE_CHECKING:
     pass
@@ -242,8 +242,12 @@ class LLMMixin:
             "max_tokens": (
                 max_tokens if max_tokens is not None else cfg.get(CONF_LLM_MAX_TOKENS, 500)
             ),
-            "top_p": cfg.get(CONF_LLM_TOP_P, 1.0),
         }
+
+        # Anthropic's API rejects requests with both temperature and top_p.
+        # Only include top_p for non-Anthropic backends.
+        if not is_anthropic_backend(base_url):
+            payload["top_p"] = cfg.get(CONF_LLM_TOP_P, 1.0)
 
         # Only include keep_alive for Ollama backends (not supported by OpenAI, etc.)
         # See: https://github.com/aradlein/home-agent/issues/65

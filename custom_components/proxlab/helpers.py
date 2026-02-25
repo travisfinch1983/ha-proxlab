@@ -663,6 +663,44 @@ def is_ollama_backend(base_url: str) -> bool:
     return False
 
 
+def is_anthropic_backend(base_url: str) -> bool:
+    """Check if the LLM base URL points to Anthropic's Claude API.
+
+    Detects Anthropic backends by checking for:
+    1. 'anthropic.com' in the hostname
+    2. 'anthropic' in the URL path (for proxied setups)
+
+    This is used to conditionally omit parameters that Anthropic's
+    OpenAI-compatible API does not support (e.g. sending both
+    ``temperature`` and ``top_p`` together).
+
+    Args:
+        base_url: The LLM API base URL to check
+
+    Returns:
+        True if the URL appears to be an Anthropic endpoint, False otherwise
+
+    Example:
+        >>> is_anthropic_backend("https://api.anthropic.com/v1")
+        True
+        >>> is_anthropic_backend("http://localhost:5001/v1")
+        False
+    """
+    if not base_url:
+        return False
+
+    url_lower = base_url.lower()
+
+    if "anthropic.com" in url_lower:
+        return True
+
+    # Catch proxied setups like /anthropic/v1
+    if "/anthropic" in url_lower or "://anthropic" in url_lower:
+        return True
+
+    return False
+
+
 def is_azure_openai_backend(base_url: str) -> bool:
     """Check if the LLM base URL points to an Azure OpenAI endpoint.
 

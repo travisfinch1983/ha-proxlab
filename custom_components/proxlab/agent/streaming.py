@@ -154,7 +154,7 @@ from ..const import (
     DEFAULT_STREAMING_ENABLED,
 )
 from ..exceptions import AuthenticationError, ProxLabAgentError
-from ..helpers import build_api_url, build_auth_headers, is_ollama_backend, redact_sensitive_data, render_template_value
+from ..helpers import build_api_url, build_auth_headers, is_anthropic_backend, is_ollama_backend, redact_sensitive_data, render_template_value
 
 if TYPE_CHECKING:
     from ..tool_handler import ToolHandler
@@ -245,9 +245,13 @@ class StreamingMixin:
             "messages": messages,
             "temperature": cfg.get(CONF_LLM_TEMPERATURE, 0.7),
             "max_tokens": cfg.get(CONF_LLM_MAX_TOKENS, 1000),
-            "top_p": cfg.get(CONF_LLM_TOP_P, 1.0),
             "stream": True,  # Enable streaming!
         }
+
+        # Anthropic's API rejects requests with both temperature and top_p.
+        # Only include top_p for non-Anthropic backends.
+        if not is_anthropic_backend(base_url):
+            payload["top_p"] = cfg.get(CONF_LLM_TOP_P, 1.0)
 
         # Only include keep_alive for Ollama backends (not supported by OpenAI, etc.)
         # See: https://github.com/aradlein/home-agent/issues/65
@@ -260,8 +264,9 @@ class StreamingMixin:
             payload["tools"] = tool_definitions
             payload["tool_choice"] = "auto"
 
-        # Request usage statistics in stream
-        payload["stream_options"] = {"include_usage": True}
+        # Request usage statistics in stream (not supported by Anthropic)
+        if not is_anthropic_backend(base_url):
+            payload["stream_options"] = {"include_usage": True}
 
         if cfg.get(CONF_DEBUG_LOGGING):
             _LOGGER.debug(

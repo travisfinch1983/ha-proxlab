@@ -223,6 +223,7 @@ def resolve_agent_to_flat_config(
         CONF_LLM_KEEP_ALIVE: conn.get("keep_alive", DEFAULT_LLM_KEEP_ALIVE),
         CONF_LLM_PROXY_HEADERS: conn.get("proxy_headers", {}),
         CONF_THINKING_ENABLED: conn.get("thinking_enabled", DEFAULT_THINKING_ENABLED),
+        "connection_type": conn.get("connection_type", "local"),
     }
 
 
