@@ -8,6 +8,7 @@ import {
   faBrain,
   faMagnifyingGlass,
   faCogs,
+  faBug,
   faAnglesLeft,
   faAnglesRight,
 } from "@fortawesome/free-solid-svg-icons";
@@ -28,6 +29,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/memory", icon: faBrain, label: "Memory" },
   { to: "/vector-db", icon: faMagnifyingGlass, label: "Vector DB" },
   { to: "/settings", icon: faCogs, label: "Settings" },
+  { to: "/debug", icon: faBug, label: "Debug" },
 ];
 
 export default function Sidebar() {

@@ -117,6 +117,12 @@ class MemoryManager:
             CONF_MEMORY_QUALITY_VALIDATION_INTERVAL, DEFAULT_MEMORY_QUALITY_VALIDATION_INTERVAL
         )
 
+        # Detect backend type: ChromaDB VectorDBManager has _client; MilvusVectorDB does not
+        self._is_chromadb_backend = (
+            vector_db_manager is not None
+            and hasattr(vector_db_manager, "_client")
+        )
+
         # State
         self._store: Store[dict[str, Any]] = Store(hass, MEMORY_STORAGE_VERSION, MEMORY_STORAGE_KEY)
         self._memories: dict[str, dict[str, Any]] = {}
@@ -150,8 +156,8 @@ class MemoryManager:
                 self._memories = {}
                 _LOGGER.info("No existing memories found, starting fresh")
 
-            # Initialize ChromaDB collection if available
-            if CHROMADB_AVAILABLE and self.vector_db_manager:
+            # Initialize vector DB collection for memories if applicable
+            if self._is_chromadb_backend and CHROMADB_AVAILABLE and self.vector_db_manager:
                 try:
                     await self._ensure_chromadb_initialized()
                     self._chromadb_available = True
@@ -165,8 +171,14 @@ class MemoryManager:
                         err,
                     )
                     self._chromadb_available = False
+            elif not self._is_chromadb_backend and self.vector_db_manager:
+                _LOGGER.info(
+                    "Milvus backend detected — using store-only mode for memories "
+                    "(semantic memory search via Milvus coming soon)"
+                )
+                self._chromadb_available = False
             else:
-                _LOGGER.info("ChromaDB not available, using store-only mode")
+                _LOGGER.info("No vector DB backend available, using store-only mode")
                 self._chromadb_available = False
 
             # Run initial quality validation on startup (if enabled)
@@ -457,8 +469,10 @@ class MemoryManager:
             List of memories sorted by relevance
         """
         if not self._chromadb_available:
-            _LOGGER.warning("ChromaDB not available for memory search")
-            return []
+            _LOGGER.debug("Vector DB not available for memory search, using fallback")
+            return await self._fallback_search(
+                query, top_k, min_importance, memory_types, user_id
+            )
 
         if self._collection is None:
             _LOGGER.warning("ChromaDB collection not initialized")

@@ -183,3 +183,59 @@ export async function discoverServices(): Promise<DiscoveredService[]> {
   );
   return res.services;
 }
+
+// --- Debug ---
+
+export interface TraceStep {
+  agent_id: string;
+  agent_name: string;
+  model: string;
+  duration_ms: number;
+  tokens: { prompt: number; completion: number; total: number };
+  tokens_per_sec: number;
+  performance: {
+    llm_latency_ms: number;
+    tool_latency_ms: number;
+    context_latency_ms: number;
+    ttft_ms: number;
+  };
+  routing_decision?: { target_agent: string; reason: string };
+  response_text?: string;
+  tool_calls: number;
+  tool_breakdown: Record<string, number>;
+}
+
+export interface ConversationTrace {
+  conversation_id: string;
+  user_id: string;
+  user_message: string;
+  response_text: string;
+  model: string;
+  duration_ms: number;
+  tokens: { prompt: number; completion: number; total: number };
+  performance: {
+    llm_latency_ms: number;
+    tool_latency_ms: number;
+    context_latency_ms: number;
+    ttft_ms: number;
+  };
+  context: Record<string, unknown>;
+  tool_calls: number;
+  tool_breakdown: Record<string, number>;
+  used_external_llm: boolean;
+  tokens_per_sec?: number;
+  routed_agent?: string;
+  routing_reason?: string;
+  steps?: TraceStep[];
+}
+
+export async function fetchDebugTraces(): Promise<ConversationTrace[]> {
+  const res = await callWS<{ traces: ConversationTrace[] }>(
+    "proxlab/debug/traces"
+  );
+  return res.traces;
+}
+
+export async function clearDebugTraces(): Promise<void> {
+  await callWS("proxlab/debug/clear");
+}

@@ -10,6 +10,7 @@ import ContextPage from "./pages/ContextPage";
 import MemoryPage from "./pages/MemoryPage";
 import VectorDbPage from "./pages/VectorDbPage";
 import SettingsPage from "./pages/SettingsPage";
+import DebugPage from "./pages/DebugPage";
 
 export default function App() {
   const hass = useStore((s) => s.hass);
@@ -95,6 +96,7 @@ export default function App() {
           <Route path="memory" element={<MemoryPage />} />
           <Route path="vector-db" element={<VectorDbPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="debug" element={<DebugPage />} />
         </Route>
       </Routes>
     </HashRouter>

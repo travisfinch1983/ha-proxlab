@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -24,6 +25,7 @@ from ..const import (
     AGENT_ORCHESTRATOR,
     AGENT_TOOL_MAP,
     CONF_AGENTS,
+    CONF_LLM_MODEL,
     EVENT_ORCHESTRATOR_ROUTED,
     ROUTABLE_AGENTS,
     TOOL_ROUTE_TO_AGENT,
@@ -41,6 +43,11 @@ class AgentContext:
     system_prompt: str
     tool_names: list[str] | None  # None=all registered, []=none
     routing_reason: str = ""
+    orchestrator_model: str = ""
+    orchestrator_duration_ms: int = 0
+    orchestrator_tokens: dict[str, int] = field(
+        default_factory=lambda: {"prompt": 0, "completion": 0, "total": 0}
+    )
 
 
 class OrchestratorMixin:
@@ -200,6 +207,7 @@ class OrchestratorMixin:
         # 4. Call orchestrator LLM (non-streaming, with route_to_agent tool)
         #    Use tool_choice="required" to force the model to always produce
         #    a route_to_agent call rather than answering directly.
+        orch_start = time.time()
         try:
             response = await self._call_llm(  # type: ignore[attr-defined]
                 messages,
@@ -212,6 +220,15 @@ class OrchestratorMixin:
                 "Orchestrator LLM call failed", exc_info=True
             )
             return None
+        orch_duration_ms = int((time.time() - orch_start) * 1000)
+
+        # Extract token usage from orchestrator response
+        orch_usage = response.get("usage", {})
+        orch_tokens = {
+            "prompt": orch_usage.get("prompt_tokens", 0),
+            "completion": orch_usage.get("completion_tokens", 0),
+            "total": orch_usage.get("total_tokens", 0),
+        }
 
         # 5. Parse the tool call from the response
         choices = response.get("choices")
@@ -268,7 +285,11 @@ class OrchestratorMixin:
                 },
             )
 
-            return self._build_agent_context(target_id, reason)
+            ctx = self._build_agent_context(target_id, reason)
+            ctx.orchestrator_model = orch_config.get(CONF_LLM_MODEL, "unknown")
+            ctx.orchestrator_duration_ms = orch_duration_ms
+            ctx.orchestrator_tokens = orch_tokens
+            return ctx
 
         _LOGGER.warning("No route_to_agent tool call found in orchestrator response")
         return None

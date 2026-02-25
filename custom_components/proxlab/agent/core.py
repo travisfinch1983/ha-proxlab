@@ -110,6 +110,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import intent, template
 
 from ..const import (
+    AGENT_DEFINITIONS,
     CONF_CONTEXT_ENTITIES,
     CONF_CONTEXT_MODE,
     CONF_DEBUG_LOGGING,
@@ -658,6 +659,107 @@ class ProxLabAgent(
                 return text.strip() + "\n/no_think"
         return text
 
+    def _build_trace_steps(
+        self,
+        agent_context: AgentContext | None,
+        metrics: dict[str, Any],
+        duration_ms: int,
+        tool_breakdown: dict[str, int],
+        response_text: str,
+    ) -> list[dict[str, Any]]:
+        """Build a multi-step trace array for the debug panel.
+
+        Returns a list of step dicts. If an orchestrator was used, step 1 is
+        the orchestrator classification and step 2 is the target agent. If no
+        orchestrator, returns a single step for the conversation agent.
+        """
+        steps: list[dict[str, Any]] = []
+
+        if agent_context and agent_context.orchestrator_model:
+            # Step 1: Orchestrator classification
+            orch_dur = agent_context.orchestrator_duration_ms
+            orch_comp = agent_context.orchestrator_tokens.get("completion", 0)
+            orch_tps = (
+                round(orch_comp / (orch_dur / 1000), 1)
+                if orch_dur > 0
+                else 0
+            )
+            steps.append({
+                "agent_id": "orchestrator",
+                "agent_name": "Orchestrator",
+                "model": agent_context.orchestrator_model,
+                "duration_ms": orch_dur,
+                "tokens": dict(agent_context.orchestrator_tokens),
+                "tokens_per_sec": orch_tps,
+                "performance": {
+                    "llm_latency_ms": orch_dur,
+                    "tool_latency_ms": 0,
+                    "context_latency_ms": 0,
+                    "ttft_ms": 0,
+                },
+                "routing_decision": {
+                    "target_agent": agent_context.agent_id,
+                    "reason": agent_context.routing_reason,
+                },
+                "tool_calls": 0,
+                "tool_breakdown": {},
+            })
+
+            # Step 2: Target agent
+            defn = AGENT_DEFINITIONS.get(agent_context.agent_id)
+            agent_name = defn.name if defn else agent_context.agent_id
+            agent_model = (
+                agent_context.flat_config.get(CONF_LLM_MODEL)
+                if agent_context.flat_config
+                else None
+            ) or self.config.get(CONF_LLM_MODEL, "unknown")
+            agent_dur = max(0, duration_ms - orch_dur)
+
+            llm_lat = metrics.get("performance", {}).get("llm_latency_ms", 0)
+            comp_tokens = metrics.get("tokens", {}).get("completion", 0)
+            agent_tps = (
+                round(comp_tokens / (llm_lat / 1000), 1)
+                if llm_lat > 0
+                else 0
+            )
+
+            steps.append({
+                "agent_id": agent_context.agent_id,
+                "agent_name": agent_name,
+                "model": agent_model,
+                "duration_ms": agent_dur,
+                "tokens": dict(metrics.get("tokens", {})),
+                "tokens_per_sec": agent_tps,
+                "performance": dict(metrics.get("performance", {})),
+                "response_text": response_text[:500] if response_text else "",
+                "tool_calls": metrics.get("tool_calls", 0),
+                "tool_breakdown": dict(tool_breakdown),
+            })
+        else:
+            # Single step: no orchestrator
+            llm_lat = metrics.get("performance", {}).get("llm_latency_ms", 0)
+            comp_tokens = metrics.get("tokens", {}).get("completion", 0)
+            tps = (
+                round(comp_tokens / (llm_lat / 1000), 1)
+                if llm_lat > 0
+                else 0
+            )
+
+            steps.append({
+                "agent_id": "conversation_agent",
+                "agent_name": "Conversation",
+                "model": self.config.get(CONF_LLM_MODEL, "unknown"),
+                "duration_ms": duration_ms,
+                "tokens": dict(metrics.get("tokens", {})),
+                "tokens_per_sec": tps,
+                "performance": dict(metrics.get("performance", {})),
+                "response_text": response_text[:500] if response_text else "",
+                "tool_calls": metrics.get("tool_calls", 0),
+                "tool_breakdown": dict(tool_breakdown),
+            })
+
+        return steps
+
     def _build_system_prompt(
         self,
         entity_context: str = "",
@@ -861,14 +963,29 @@ class ProxLabAgent(
                 and tool_breakdown[TOOL_QUERY_EXTERNAL_LLM] > 0
             )
 
+            # Build trace steps
+            _resp_text_sync = response[:500] if response else ""
+            steps = self._build_trace_steps(
+                agent_context, metrics, duration_ms,
+                tool_breakdown, _resp_text_sync,
+            )
+            # Aggregate tokens_per_sec from target step
+            llm_lat_sync = metrics.get("performance", {}).get("llm_latency_ms", 0)
+            comp_sync = metrics.get("tokens", {}).get("completion", 0)
+            tps_sync = (
+                round(comp_sync / (llm_lat_sync / 1000), 1)
+                if llm_lat_sync > 0
+                else 0
+            )
+
             # Fire conversation finished event with enhanced metrics
             if self.config.get(CONF_EMIT_EVENTS, True):
                 try:
-                    event_data = {
+                    event_data: dict[str, Any] = {
                         "conversation_id": conversation_id,
                         "user_id": user_id,
                         "user_message": text,
-                        "response_text": response[:500] if response else "",
+                        "response_text": _resp_text_sync,
                         "model": self.config.get(CONF_LLM_MODEL, "unknown"),
                         "duration_ms": duration_ms,
                         "tokens": metrics["tokens"],
@@ -877,7 +994,12 @@ class ProxLabAgent(
                         "tool_calls": metrics["tool_calls"],
                         "tool_breakdown": tool_breakdown,
                         "used_external_llm": used_external_llm,
+                        "tokens_per_sec": tps_sync,
+                        "steps": steps,
                     }
+                    if agent_context:
+                        event_data["routed_agent"] = agent_context.agent_id
+                        event_data["routing_reason"] = agent_context.routing_reason
                     self.hass.bus.async_fire(EVENT_CONVERSATION_FINISHED, event_data)
                 except Exception as event_err:
                     _LOGGER.warning("Failed to fire conversation finished event: %s", event_err)
@@ -1353,10 +1475,24 @@ class ProxLabAgent(
             and tool_breakdown[TOOL_QUERY_EXTERNAL_LLM] > 0
         )
 
+        # Build trace steps
+        _resp_text = final_response[:500] if final_response else ""
+        steps = self._build_trace_steps(
+            agent_context, metrics, duration_ms,
+            tool_breakdown, _resp_text,
+        )
+        # Aggregate tokens_per_sec from target step
+        llm_lat_stream = metrics.get("performance", {}).get("llm_latency_ms", 0)
+        comp_stream = metrics.get("tokens", {}).get("completion", 0)
+        tps_stream = (
+            round(comp_stream / (llm_lat_stream / 1000), 1)
+            if llm_lat_stream > 0
+            else 0
+        )
+
         # Fire conversation finished event with enhanced metrics
         if self.config.get(CONF_EMIT_EVENTS, True):
             try:
-                _resp_text = final_response[:500] if final_response else ""
                 event_data: dict[str, Any] = {
                     "conversation_id": conversation_id,
                     "user_id": user_id,
@@ -1370,6 +1506,8 @@ class ProxLabAgent(
                     "tool_calls": metrics["tool_calls"],
                     "tool_breakdown": tool_breakdown,
                     "used_external_llm": used_external_llm,
+                    "tokens_per_sec": tps_stream,
+                    "steps": steps,
                 }
                 if agent_context:
                     event_data["routed_agent"] = agent_context.agent_id
