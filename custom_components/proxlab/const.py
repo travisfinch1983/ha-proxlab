@@ -669,6 +669,19 @@ CLAUDE_MODELS: Final = [
 
 CLAUDE_API_BASE_URL: Final = "https://api.anthropic.com"
 
+# Claude API pricing (USD per million tokens)
+CLAUDE_PRICING: Final = {
+    "claude-haiku-4-5-20251001": {"input": 1.00, "output": 5.00},
+    "claude-sonnet-4-6": {"input": 3.00, "output": 15.00},
+    "claude-opus-4-6": {"input": 5.00, "output": 25.00},
+    # Fallback for unknown Claude models
+    "default": {"input": 3.00, "output": 15.00},
+}
+
+CONF_ADMIN_API_KEY: Final = "admin_api_key"
+API_USAGE_STORAGE_KEY: Final = "proxlab_api_usage"
+API_USAGE_STORAGE_VERSION: Final = 1
+
 # Custom tool handler types
 CUSTOM_TOOL_HANDLER_REST: Final = "rest"
 CUSTOM_TOOL_HANDLER_SERVICE: Final = "service"

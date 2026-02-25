@@ -821,3 +821,30 @@ async def check_ollama_health(base_url: str, timeout: int = 5) -> tuple[bool, st
 
     except Exception as err:
         return False, f"Ollama health check error: {err}"
+
+
+def estimate_claude_cost(
+    model: str, prompt_tokens: int, completion_tokens: int
+) -> float | None:
+    """Estimate cost in USD for a Claude API call.
+
+    Returns None if the model is not a recognised Claude model.
+    """
+    from .const import CLAUDE_PRICING
+
+    # Exact match first, then prefix match, then default
+    pricing = CLAUDE_PRICING.get(model)
+    if pricing is None:
+        if any(model.startswith(k) for k in CLAUDE_PRICING if k != "default"):
+            for k, v in CLAUDE_PRICING.items():
+                if k != "default" and model.startswith(k):
+                    pricing = v
+                    break
+        elif "claude" in model.lower():
+            pricing = CLAUDE_PRICING["default"]
+        else:
+            return None
+
+    return (
+        prompt_tokens * pricing["input"] + completion_tokens * pricing["output"]
+    ) / 1_000_000

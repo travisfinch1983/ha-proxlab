@@ -567,18 +567,126 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception as err:
             _LOGGER.error("ProxLab: PANEL REGISTRATION FAILED: %s", err, exc_info=True)
 
-    # --- Debug trace collector (once per hass) ---
+    # --- Persistent debug trace collector (once per hass) ---
     if not hass.data[DOMAIN].get("_trace_listener"):
-        from collections import deque
-        from .const import EVENT_CONVERSATION_FINISHED
+        from homeassistant.helpers.storage import Store
+        from .const import (
+            API_USAGE_STORAGE_KEY,
+            API_USAGE_STORAGE_VERSION,
+            EVENT_CONVERSATION_FINISHED,
+        )
+        from .helpers import estimate_claude_cost
 
-        traces: deque = deque(maxlen=50)
-        hass.data[DOMAIN]["_debug_traces"] = traces
+        # -- Persistent trace storage --
+        trace_store = Store(hass, 1, f"{DOMAIN}.debug_traces")
+        trace_data = await trace_store.async_load() or {
+            "traces": [],
+            "max_entries": 200,
+        }
+        hass.data[DOMAIN]["_debug_traces"] = trace_data["traces"]
+        hass.data[DOMAIN]["_debug_trace_store"] = trace_store
+        hass.data[DOMAIN]["_debug_trace_max"] = trace_data.get("max_entries", 200)
+        _trace_save_pending = False
+
+        async def _save_traces():
+            nonlocal _trace_save_pending
+            if _trace_save_pending:
+                return
+            _trace_save_pending = True
+            await trace_store.async_save({
+                "traces": hass.data[DOMAIN]["_debug_traces"],
+                "max_entries": hass.data[DOMAIN].get("_debug_trace_max", 200),
+            })
+            _trace_save_pending = False
+
+        hass.data[DOMAIN]["_debug_trace_save"] = _save_traces
+
+        # -- Persistent API usage storage --
+        usage_store = Store(hass, API_USAGE_STORAGE_VERSION, API_USAGE_STORAGE_KEY)
+        usage_data = await usage_store.async_load() or {
+            "models": {},
+            "agents": {},
+            "total": {"input_tokens": 0, "output_tokens": 0, "messages": 0, "cost_usd": 0.0},
+            "last_updated": 0.0,
+        }
+        hass.data[DOMAIN]["_api_usage"] = usage_data
+        hass.data[DOMAIN]["_api_usage_store"] = usage_store
 
         @callback
         def _on_conversation_finished(event):
-            """Capture conversation trace for debug panel."""
-            traces.append(dict(event.data))
+            """Capture conversation trace and accumulate API usage."""
+            import time as _time
+
+            trace_entry = dict(event.data)
+            trace_entry["timestamp"] = _time.time()
+
+            # Calculate total cost across all steps for this trace
+            total_cost = 0.0
+            steps = trace_entry.get("steps", [])
+            for step in steps:
+                cost = step.get("cost_estimate")
+                if cost is not None:
+                    total_cost += cost
+            if total_cost > 0:
+                trace_entry["total_cost"] = round(total_cost, 6)
+
+            traces_list = hass.data[DOMAIN]["_debug_traces"]
+            traces_list.append(trace_entry)
+
+            # Enforce max entries (-1 = unlimited)
+            max_entries = hass.data[DOMAIN].get("_debug_trace_max", 200)
+            if max_entries >= 0 and len(traces_list) > max_entries:
+                del traces_list[: len(traces_list) - max_entries]
+
+            # Schedule debounced save
+            hass.async_create_task(_save_traces())
+
+            # --- Accumulate API usage ---
+            for step in steps:
+                conn_type = step.get("connection_type", "local")
+                if conn_type != "claude_api":
+                    continue
+                model = step.get("model", "unknown")
+                agent_id = step.get("agent_id", "unknown")
+                tokens = step.get("tokens", {})
+                in_tok = tokens.get("prompt", 0)
+                out_tok = tokens.get("completion", 0)
+                cost = step.get("cost_estimate", 0.0) or 0.0
+
+                # Per-model
+                if model not in usage_data["models"]:
+                    usage_data["models"][model] = {
+                        "input_tokens": 0, "output_tokens": 0,
+                        "messages": 0, "cost_usd": 0.0,
+                    }
+                m = usage_data["models"][model]
+                m["input_tokens"] += in_tok
+                m["output_tokens"] += out_tok
+                m["messages"] += 1
+                m["cost_usd"] = round(m["cost_usd"] + cost, 6)
+
+                # Per-agent
+                if agent_id not in usage_data["agents"]:
+                    usage_data["agents"][agent_id] = {
+                        "model": model, "input_tokens": 0,
+                        "output_tokens": 0, "messages": 0, "cost_usd": 0.0,
+                    }
+                a = usage_data["agents"][agent_id]
+                a["model"] = model
+                a["input_tokens"] += in_tok
+                a["output_tokens"] += out_tok
+                a["messages"] += 1
+                a["cost_usd"] = round(a["cost_usd"] + cost, 6)
+
+                # Total
+                t = usage_data["total"]
+                t["input_tokens"] += in_tok
+                t["output_tokens"] += out_tok
+                t["messages"] += 1
+                t["cost_usd"] = round(t["cost_usd"] + cost, 6)
+
+            usage_data["last_updated"] = _time.time()
+            hass.async_create_task(usage_store.async_save(usage_data))
 
         unsub = hass.bus.async_listen(EVENT_CONVERSATION_FINISHED, _on_conversation_finished)
         hass.data[DOMAIN]["_trace_listener"] = unsub

@@ -666,6 +666,7 @@ class ProxLabAgent(
         duration_ms: int,
         tool_breakdown: dict[str, int],
         response_text: str,
+        user_input: str = "",
     ) -> list[dict[str, Any]]:
         """Build a multi-step trace array for the debug panel.
 
@@ -673,18 +674,26 @@ class ProxLabAgent(
         the orchestrator classification and step 2 is the target agent. If no
         orchestrator, returns a single step for the conversation agent.
         """
+        from ..helpers import estimate_claude_cost
+
         steps: list[dict[str, Any]] = []
 
         if agent_context and agent_context.orchestrator_model:
             # Step 1: Orchestrator classification
             orch_dur = agent_context.orchestrator_duration_ms
             orch_comp = agent_context.orchestrator_tokens.get("completion", 0)
+            orch_prompt = agent_context.orchestrator_tokens.get("prompt", 0)
             orch_tps = (
                 round(orch_comp / (orch_dur / 1000), 1)
                 if orch_dur > 0
                 else 0
             )
-            steps.append({
+            orch_conn_type = agent_context.orchestrator_connection_type
+            orch_cost = estimate_claude_cost(
+                agent_context.orchestrator_model, orch_prompt, orch_comp
+            ) if orch_conn_type == "claude_api" else None
+
+            orch_step: dict[str, Any] = {
                 "agent_id": "orchestrator",
                 "agent_name": "Orchestrator",
                 "model": agent_context.orchestrator_model,
@@ -703,7 +712,12 @@ class ProxLabAgent(
                 },
                 "tool_calls": 0,
                 "tool_breakdown": {},
-            })
+                "user_input": user_input,
+                "connection_type": orch_conn_type,
+            }
+            if orch_cost is not None:
+                orch_step["cost_estimate"] = round(orch_cost, 6)
+            steps.append(orch_step)
 
             # Step 2: Target agent
             defn = AGENT_DEFINITIONS.get(agent_context.agent_id)
@@ -717,13 +731,22 @@ class ProxLabAgent(
 
             llm_lat = metrics.get("performance", {}).get("llm_latency_ms", 0)
             comp_tokens = metrics.get("tokens", {}).get("completion", 0)
+            prompt_tokens = metrics.get("tokens", {}).get("prompt", 0)
             agent_tps = (
                 round(comp_tokens / (llm_lat / 1000), 1)
                 if llm_lat > 0
                 else 0
             )
+            agent_conn_type = (
+                agent_context.flat_config.get("connection_type", "local")
+                if agent_context.flat_config
+                else "local"
+            )
+            agent_cost = estimate_claude_cost(
+                agent_model, prompt_tokens, comp_tokens
+            ) if agent_conn_type == "claude_api" else None
 
-            steps.append({
+            agent_step: dict[str, Any] = {
                 "agent_id": agent_context.agent_id,
                 "agent_name": agent_name,
                 "model": agent_model,
@@ -731,32 +754,48 @@ class ProxLabAgent(
                 "tokens": dict(metrics.get("tokens", {})),
                 "tokens_per_sec": agent_tps,
                 "performance": dict(metrics.get("performance", {})),
-                "response_text": response_text[:500] if response_text else "",
+                "response_text": response_text,
                 "tool_calls": metrics.get("tool_calls", 0),
                 "tool_breakdown": dict(tool_breakdown),
-            })
+                "user_input": user_input,
+                "connection_type": agent_conn_type,
+            }
+            if agent_cost is not None:
+                agent_step["cost_estimate"] = round(agent_cost, 6)
+            steps.append(agent_step)
         else:
             # Single step: no orchestrator
             llm_lat = metrics.get("performance", {}).get("llm_latency_ms", 0)
             comp_tokens = metrics.get("tokens", {}).get("completion", 0)
+            prompt_tokens = metrics.get("tokens", {}).get("prompt", 0)
             tps = (
                 round(comp_tokens / (llm_lat / 1000), 1)
                 if llm_lat > 0
                 else 0
             )
+            single_model = self.config.get(CONF_LLM_MODEL, "unknown")
+            single_conn_type = self.config.get("connection_type", "local")
+            single_cost = estimate_claude_cost(
+                single_model, prompt_tokens, comp_tokens
+            ) if single_conn_type == "claude_api" else None
 
-            steps.append({
+            single_step: dict[str, Any] = {
                 "agent_id": "conversation_agent",
                 "agent_name": "Conversation",
-                "model": self.config.get(CONF_LLM_MODEL, "unknown"),
+                "model": single_model,
                 "duration_ms": duration_ms,
                 "tokens": dict(metrics.get("tokens", {})),
                 "tokens_per_sec": tps,
                 "performance": dict(metrics.get("performance", {})),
-                "response_text": response_text[:500] if response_text else "",
+                "response_text": response_text,
                 "tool_calls": metrics.get("tool_calls", 0),
                 "tool_breakdown": dict(tool_breakdown),
-            })
+                "user_input": user_input,
+                "connection_type": single_conn_type,
+            }
+            if single_cost is not None:
+                single_step["cost_estimate"] = round(single_cost, 6)
+            steps.append(single_step)
 
         return steps
 
@@ -964,10 +1003,10 @@ class ProxLabAgent(
             )
 
             # Build trace steps
-            _resp_text_sync = response[:500] if response else ""
             steps = self._build_trace_steps(
                 agent_context, metrics, duration_ms,
-                tool_breakdown, _resp_text_sync,
+                tool_breakdown, response or "",
+                user_input=text,
             )
             # Aggregate tokens_per_sec from target step
             llm_lat_sync = metrics.get("performance", {}).get("llm_latency_ms", 0)
@@ -985,7 +1024,7 @@ class ProxLabAgent(
                         "conversation_id": conversation_id,
                         "user_id": user_id,
                         "user_message": text,
-                        "response_text": _resp_text_sync,
+                        "response_text": response or "",
                         "model": self.config.get(CONF_LLM_MODEL, "unknown"),
                         "duration_ms": duration_ms,
                         "tokens": metrics["tokens"],
@@ -1476,10 +1515,10 @@ class ProxLabAgent(
         )
 
         # Build trace steps
-        _resp_text = final_response[:500] if final_response else ""
         steps = self._build_trace_steps(
             agent_context, metrics, duration_ms,
-            tool_breakdown, _resp_text,
+            tool_breakdown, final_response or "",
+            user_input=user_message,
         )
         # Aggregate tokens_per_sec from target step
         llm_lat_stream = metrics.get("performance", {}).get("llm_latency_ms", 0)
@@ -1497,7 +1536,7 @@ class ProxLabAgent(
                     "conversation_id": conversation_id,
                     "user_id": user_id,
                     "user_message": user_message,
-                    "response_text": _resp_text,
+                    "response_text": final_response or "",
                     "model": self.config.get(CONF_LLM_MODEL, "unknown"),
                     "duration_ms": duration_ms,
                     "tokens": metrics["tokens"],

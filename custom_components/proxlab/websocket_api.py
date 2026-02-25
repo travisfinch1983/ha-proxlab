@@ -195,6 +195,12 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_discovery_services)
     websocket_api.async_register_command(hass, ws_debug_traces)
     websocket_api.async_register_command(hass, ws_debug_clear)
+    websocket_api.async_register_command(hass, ws_debug_config)
+    websocket_api.async_register_command(hass, ws_debug_delete_older)
+    websocket_api.async_register_command(hass, ws_api_usage)
+    websocket_api.async_register_command(hass, ws_api_usage_reset)
+    websocket_api.async_register_command(hass, ws_api_admin_report)
+    websocket_api.async_register_command(hass, ws_api_config)
 
 
 # ---------------------------------------------------------------------------
@@ -1122,12 +1128,175 @@ def ws_debug_traces(
 @websocket_api.websocket_command(
     {vol.Required("type"): "proxlab/debug/clear", vol.Optional("entry_id"): str}
 )
-@callback
-def ws_debug_clear(
+@websocket_api.async_response
+async def ws_debug_clear(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
     """Clear the debug trace buffer."""
     traces = hass.data.get(DOMAIN, {}).get("_debug_traces")
     if traces is not None:
         traces.clear()
+    save_fn = hass.data.get(DOMAIN, {}).get("_debug_trace_save")
+    if save_fn:
+        await save_fn()
     connection.send_result(msg["id"], {"cleared": True})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/debug/config",
+        vol.Optional("entry_id"): str,
+        vol.Optional("max_entries"): vol.Coerce(int),
+    }
+)
+@websocket_api.async_response
+async def ws_debug_config(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Get or set debug trace configuration."""
+    domain_data = hass.data.get(DOMAIN, {})
+
+    if "max_entries" in msg:
+        domain_data["_debug_trace_max"] = msg["max_entries"]
+        save_fn = domain_data.get("_debug_trace_save")
+        if save_fn:
+            await save_fn()
+
+    connection.send_result(msg["id"], {
+        "max_entries": domain_data.get("_debug_trace_max", 200),
+    })
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/debug/delete_older",
+        vol.Optional("entry_id"): str,
+        vol.Required("days"): vol.Coerce(int),
+    }
+)
+@websocket_api.async_response
+async def ws_debug_delete_older(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Delete traces older than N days."""
+    import time
+
+    domain_data = hass.data.get(DOMAIN, {})
+    traces = domain_data.get("_debug_traces")
+    if traces is None:
+        connection.send_result(msg["id"], {"deleted": 0})
+        return
+
+    cutoff = time.time() - (msg["days"] * 86400)
+    original_len = len(traces)
+
+    # Filter in place: keep only traces newer than cutoff
+    kept = [t for t in traces if t.get("timestamp", 0) >= cutoff]
+    traces.clear()
+    traces.extend(kept)
+
+    deleted = original_len - len(traces)
+    save_fn = domain_data.get("_debug_trace_save")
+    if save_fn:
+        await save_fn()
+
+    connection.send_result(msg["id"], {"deleted": deleted})
+
+
+# ---------------------------------------------------------------------------
+# API Usage & Admin
+# ---------------------------------------------------------------------------
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "proxlab/api/usage", vol.Optional("entry_id"): str}
+)
+@callback
+def ws_api_usage(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Return accumulated API usage stats."""
+    usage = hass.data.get(DOMAIN, {}).get("_api_usage", {})
+    connection.send_result(msg["id"], usage)
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "proxlab/api/usage/reset", vol.Optional("entry_id"): str}
+)
+@websocket_api.async_response
+async def ws_api_usage_reset(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Reset accumulated API usage stats."""
+    domain_data = hass.data.get(DOMAIN, {})
+    usage = domain_data.get("_api_usage")
+    if usage:
+        usage["models"] = {}
+        usage["agents"] = {}
+        usage["total"] = {"input_tokens": 0, "output_tokens": 0, "messages": 0, "cost_usd": 0.0}
+        usage["last_updated"] = 0.0
+        store = domain_data.get("_api_usage_store")
+        if store:
+            await store.async_save(usage)
+    connection.send_result(msg["id"], {"reset": True})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/api/admin_report",
+        vol.Optional("entry_id"): str,
+        vol.Optional("admin_key"): str,
+        vol.Optional("days", default=30): vol.Coerce(int),
+    }
+)
+@websocket_api.async_response
+async def ws_api_admin_report(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Fetch usage and cost reports from Anthropic Admin API."""
+    from .admin_api import fetch_cost_report, fetch_usage_report
+
+    admin_key = msg.get("admin_key", "")
+
+    # Try stored key if none provided
+    if not admin_key:
+        entry = _get_entry(hass, msg)
+        if entry:
+            admin_key = dict(entry.options).get("admin_api_key", "")
+
+    if not admin_key:
+        connection.send_error(msg["id"], "no_key", "Admin API key not configured")
+        return
+
+    days = msg.get("days", 30)
+    usage = await fetch_usage_report(admin_key, days)
+    cost = await fetch_cost_report(admin_key, days)
+
+    connection.send_result(msg["id"], {"usage": usage, "cost": cost})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/api/config",
+        vol.Optional("entry_id"): str,
+        vol.Optional("admin_key"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_api_config(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Save or load admin API config."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+
+    if "admin_key" in msg:
+        new_options = dict(entry.options)
+        new_options["admin_api_key"] = msg["admin_key"]
+        hass.config_entries.async_update_entry(entry, options=new_options)
+        connection.send_result(msg["id"], {"saved": True})
+    else:
+        admin_key = dict(entry.options).get("admin_api_key", "")
+        connection.send_result(msg["id"], {"admin_key": admin_key})

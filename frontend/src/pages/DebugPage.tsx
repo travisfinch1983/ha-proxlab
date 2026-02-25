@@ -12,11 +12,17 @@ import {
   faCoins,
   faRoute,
   faBolt,
+  faGear,
+  faCalendarXmark,
+  faDollarSign,
 } from "@fortawesome/free-solid-svg-icons";
 import NavBar from "../layout/NavBar";
 import {
   fetchDebugTraces,
   clearDebugTraces,
+  getDebugConfig,
+  setDebugConfig,
+  deleteOlderTraces,
   type ConversationTrace,
   type TraceStep,
 } from "../api";
@@ -42,6 +48,7 @@ function StepCard({
   const isOrchestrator = step.agent_id === "orchestrator";
   const toolNames = Object.entries(step.tool_breakdown || {});
   const hasTools = toolNames.length > 0;
+  const isClaude = step.connection_type === "claude_api";
 
   return (
     <div className="flex gap-3">
@@ -62,7 +69,7 @@ function StepCard({
       {/* Step content */}
       <div className="flex-1 min-w-0 pb-3">
         {/* Step header */}
-        <div className="flex items-center gap-2 mb-2">
+        <div className="flex items-center gap-2 mb-2 flex-wrap">
           <FontAwesomeIcon
             icon={isOrchestrator ? faRoute : faRobot}
             className={`text-xs ${
@@ -80,6 +87,11 @@ function StepCard({
             <span className="flex items-center gap-0.5 text-xs text-base-content/50">
               <FontAwesomeIcon icon={faBolt} className="text-warning text-[10px]" />
               {step.tokens_per_sec} t/s
+            </span>
+          )}
+          {isClaude && (
+            <span className="badge badge-xs bg-[#D97757]/20 text-[#D97757] border-[#D97757]/30">
+              Claude API{step.cost_estimate != null ? ` $${step.cost_estimate.toFixed(4)}` : ""}
             </span>
           )}
         </div>
@@ -150,10 +162,23 @@ function StepCard({
           </div>
         )}
 
+        {/* User input text box */}
+        {step.user_input && (
+          <div className="mb-2">
+            <div className="text-[9px] text-base-content/40 mb-0.5">Input</div>
+            <div className="bg-base-300/50 rounded-lg p-2 text-xs whitespace-pre-wrap max-h-48 overflow-y-auto">
+              {step.user_input}
+            </div>
+          </div>
+        )}
+
         {/* Response text (target agent only) */}
         {!isOrchestrator && step.response_text && (
-          <div className="bg-base-200 rounded-lg p-2 text-xs whitespace-pre-wrap max-h-32 overflow-y-auto text-base-content/70">
-            {step.response_text}
+          <div>
+            <div className="text-[9px] text-base-content/40 mb-0.5">Response</div>
+            <div className="bg-base-200 rounded-lg p-2 text-xs whitespace-pre-wrap max-h-96 overflow-y-auto text-base-content/70">
+              {step.response_text}
+            </div>
           </div>
         )}
       </div>
@@ -229,6 +254,12 @@ function TraceCard({
               <FontAwesomeIcon icon={faClock} />
               {msToReadable(trace.duration_ms)}
             </div>
+            {(trace.total_cost ?? 0) > 0 && (
+              <span className="badge badge-xs bg-[#D97757]/20 text-[#D97757] border-[#D97757]/30">
+                <FontAwesomeIcon icon={faDollarSign} className="mr-0.5" />
+                ${trace.total_cost!.toFixed(4)}
+              </span>
+            )}
             <FontAwesomeIcon
               icon={expanded ? faChevronDown : faChevronRight}
               className="text-base-content/30 text-xs"
@@ -370,7 +401,7 @@ function TraceCard({
                     <h4 className="text-xs font-semibold text-base-content/60 mb-1">
                       Full Response
                     </h4>
-                    <div className="bg-base-200 rounded-lg p-3 text-sm whitespace-pre-wrap max-h-48 overflow-y-auto">
+                    <div className="bg-base-200 rounded-lg p-3 text-sm whitespace-pre-wrap max-h-96 overflow-y-auto">
                       {trace.response_text}
                     </div>
                   </div>
@@ -386,6 +417,9 @@ function TraceCard({
               <div className="text-xs font-mono text-base-content/40 space-y-0.5">
                 <div>conversation: {trace.conversation_id}</div>
                 <div>user: {trace.user_id || "unknown"}</div>
+                {trace.timestamp && (
+                  <div>time: {new Date(trace.timestamp * 1000).toLocaleString()}</div>
+                )}
               </div>
             </div>
           </div>
@@ -408,13 +442,22 @@ export default function DebugPage() {
   const [traces, setTraces] = useState<ConversationTrace[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [maxEntries, setMaxEntries] = useState(200);
+  const [showConfig, setShowConfig] = useState(false);
+  const [maxInput, setMaxInput] = useState("200");
+  const [deleteDays, setDeleteDays] = useState("7");
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const t = await fetchDebugTraces();
+      const [t, cfg] = await Promise.all([
+        fetchDebugTraces(),
+        getDebugConfig(),
+      ]);
       setTraces(t.reverse()); // newest first
+      setMaxEntries(cfg.max_entries);
+      setMaxInput(String(cfg.max_entries));
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -431,6 +474,22 @@ export default function DebugPage() {
     setTraces([]);
   };
 
+  const handleSaveConfig = async () => {
+    const val = parseInt(maxInput, 10);
+    if (isNaN(val)) return;
+    await setDebugConfig(val);
+    setMaxEntries(val);
+  };
+
+  const handleDeleteOlder = async () => {
+    const days = parseInt(deleteDays, 10);
+    if (isNaN(days) || days <= 0) return;
+    const res = await deleteOlderTraces(days);
+    if (res.deleted > 0) {
+      await load();
+    }
+  };
+
   return (
     <>
       <NavBar title="Debug" />
@@ -440,10 +499,17 @@ export default function DebugPage() {
           <div>
             <h2 className="text-lg font-semibold">Conversation Traces</h2>
             <p className="text-sm text-base-content/50">
-              Recent conversations processed by ProxLab (last 50)
+              {traces.length} traces stored (max: {maxEntries === -1 ? "unlimited" : maxEntries})
             </p>
           </div>
           <div className="flex gap-2">
+            <button
+              className="btn btn-sm btn-outline btn-square"
+              onClick={() => setShowConfig(!showConfig)}
+              title="Trace settings"
+            >
+              <FontAwesomeIcon icon={faGear} />
+            </button>
             <button
               className="btn btn-sm btn-outline"
               onClick={load}
@@ -462,6 +528,44 @@ export default function DebugPage() {
             </button>
           </div>
         </div>
+
+        {/* Config panel */}
+        {showConfig && (
+          <div className="card bg-base-100 shadow-sm">
+            <div className="card-body p-4 space-y-3">
+              <h3 className="text-sm font-semibold">Trace Settings</h3>
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-base-content/70 w-36">Max entries</label>
+                <input
+                  type="number"
+                  className="input input-sm input-bordered w-24"
+                  value={maxInput}
+                  onChange={(e) => setMaxInput(e.target.value)}
+                  min={-1}
+                />
+                <span className="text-xs text-base-content/50">(-1 = unlimited)</span>
+                <button className="btn btn-sm btn-primary" onClick={handleSaveConfig}>
+                  Save
+                </button>
+              </div>
+              <div className="flex items-center gap-3">
+                <label className="text-sm text-base-content/70 w-36">Delete older than</label>
+                <input
+                  type="number"
+                  className="input input-sm input-bordered w-24"
+                  value={deleteDays}
+                  onChange={(e) => setDeleteDays(e.target.value)}
+                  min={1}
+                />
+                <span className="text-xs text-base-content/50">days</span>
+                <button className="btn btn-sm btn-warning" onClick={handleDeleteOlder}>
+                  <FontAwesomeIcon icon={faCalendarXmark} />
+                  Delete
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Error */}
         {error && (

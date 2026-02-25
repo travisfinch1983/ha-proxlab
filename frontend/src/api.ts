@@ -203,6 +203,9 @@ export interface TraceStep {
   response_text?: string;
   tool_calls: number;
   tool_breakdown: Record<string, number>;
+  user_input?: string;
+  connection_type?: string;
+  cost_estimate?: number;
 }
 
 export interface ConversationTrace {
@@ -227,6 +230,8 @@ export interface ConversationTrace {
   routed_agent?: string;
   routing_reason?: string;
   steps?: TraceStep[];
+  timestamp?: number;
+  total_cost?: number;
 }
 
 export async function fetchDebugTraces(): Promise<ConversationTrace[]> {
@@ -238,4 +243,60 @@ export async function fetchDebugTraces(): Promise<ConversationTrace[]> {
 
 export async function clearDebugTraces(): Promise<void> {
   await callWS("proxlab/debug/clear");
+}
+
+export async function getDebugConfig(): Promise<{ max_entries: number }> {
+  return callWS("proxlab/debug/config");
+}
+
+export async function setDebugConfig(maxEntries: number): Promise<void> {
+  await callWS("proxlab/debug/config", { max_entries: maxEntries });
+}
+
+export async function deleteOlderTraces(
+  days: number
+): Promise<{ deleted: number }> {
+  return callWS("proxlab/debug/delete_older", { days });
+}
+
+// --- API Usage ---
+
+export interface ApiModelUsage {
+  input_tokens: number;
+  output_tokens: number;
+  messages: number;
+  cost_usd: number;
+}
+
+export interface ApiUsageData {
+  models: Record<string, ApiModelUsage>;
+  agents: Record<string, ApiModelUsage & { model: string }>;
+  total: ApiModelUsage;
+  last_updated: number;
+}
+
+export async function fetchApiUsage(): Promise<ApiUsageData> {
+  return callWS("proxlab/api/usage");
+}
+
+export async function resetApiUsage(): Promise<void> {
+  await callWS("proxlab/api/usage/reset");
+}
+
+export async function fetchAdminReport(
+  adminKey: string,
+  days?: number
+): Promise<{ usage: Record<string, unknown>; cost: Record<string, unknown> }> {
+  return callWS("proxlab/api/admin_report", {
+    admin_key: adminKey,
+    ...(days ? { days } : {}),
+  });
+}
+
+export async function getApiConfig(): Promise<{ admin_key: string }> {
+  return callWS("proxlab/api/config");
+}
+
+export async function saveApiConfig(adminKey: string): Promise<void> {
+  await callWS("proxlab/api/config", { admin_key: adminKey });
 }

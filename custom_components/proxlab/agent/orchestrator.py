@@ -45,6 +45,7 @@ class AgentContext:
     routing_reason: str = ""
     orchestrator_model: str = ""
     orchestrator_duration_ms: int = 0
+    orchestrator_connection_type: str = "local"
     orchestrator_tokens: dict[str, int] = field(
         default_factory=lambda: {"prompt": 0, "completion": 0, "total": 0}
     )
@@ -287,6 +288,7 @@ class OrchestratorMixin:
 
             ctx = self._build_agent_context(target_id, reason)
             ctx.orchestrator_model = orch_config.get(CONF_LLM_MODEL, "unknown")
+            ctx.orchestrator_connection_type = orch_config.get("connection_type", "local")
             ctx.orchestrator_duration_ms = orch_duration_ms
             ctx.orchestrator_tokens = orch_tokens
             return ctx
