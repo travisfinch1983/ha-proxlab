@@ -278,6 +278,71 @@ add_memory:
       selector:
         text:
 
+invoke_agent:
+  name: Invoke agent
+  description: >
+    Directly invoke a specific ProxLab agent, bypassing the orchestrator.
+    Returns structured JSON with the response, tool results, and metrics.
+    Ideal for Node-RED flows and automation triggers.
+  fields:
+    agent_id:
+      name: Agent ID
+      description: The agent to invoke (e.g., worker, cybersecurity, medical_advisor)
+      required: true
+      example: "worker"
+      selector:
+        select:
+          options:
+            - conversation_agent
+            - worker
+            - memory
+            - repairman
+            - reporting
+            - security_guard
+            - cybersecurity
+            - medical_advisor
+    message:
+      name: Message
+      description: The message or instruction for the agent
+      required: true
+      example: "Scan the network for open ports on subnet 10.0.0.0/24"
+      selector:
+        text:
+          multiline: true
+    context:
+      name: Context
+      description: Optional JSON context data (sensor readings, scan results, etc.)
+      required: false
+      example: '{"subnet": "10.0.0.0/24", "previous_scan": "2024-01-01"}'
+      selector:
+        object:
+    user_id:
+      name: User ID
+      description: Optional user ID
+      required: false
+      selector:
+        text:
+    conversation_id:
+      name: Conversation ID
+      description: Optional conversation ID for history tracking
+      required: false
+      selector:
+        text:
+    include_history:
+      name: Include History
+      description: Whether to include conversation history (default false for stateless)
+      required: false
+      default: false
+      selector:
+        boolean:
+    entry_id:
+      name: Entry ID
+      description: Config entry ID (defaults to first entry)
+      required: false
+      advanced: true
+      selector:
+        text:
+
 clear_conversation:
   name: Clear conversation
   description: Clear conversation session and start fresh with no previous context. Allows resetting voice conversations for a specific user or device, or all conversations at once.

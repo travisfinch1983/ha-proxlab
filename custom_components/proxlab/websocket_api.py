@@ -20,6 +20,7 @@ from .agent_prompts import get_default_prompt
 from .connection_health import ConnectionCheckResult, ConnectionHealthCoordinator
 from .const import (
     AGENT_DEFINITIONS,
+    AGENT_TOOL_MAP,
     ALL_AGENTS,
     CONF_AGENTS,
     CONF_CONNECTIONS,
@@ -85,6 +86,7 @@ from .const import (
     DOMAIN,
     OPTIONAL_AGENTS,
     PRIMARY_AGENTS,
+    ROUTABLE_AGENTS,
     SYSTEM_AGENTS,
 )
 from .proxlab_api import discover_services
@@ -205,6 +207,8 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_issues_create)
     websocket_api.async_register_command(hass, ws_issues_update)
     websocket_api.async_register_command(hass, ws_issues_delete)
+    websocket_api.async_register_command(hass, ws_agent_invoke)
+    websocket_api.async_register_command(hass, ws_agent_available)
 
 
 # ---------------------------------------------------------------------------
@@ -1441,3 +1445,106 @@ async def ws_issues_delete(
 
     await store.async_save(issues_data)
     connection.send_result(msg["id"], {})
+
+
+# ---------------------------------------------------------------------------
+# Agent Invoke API
+# ---------------------------------------------------------------------------
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/agent/invoke",
+        vol.Optional("entry_id"): str,
+        vol.Required("agent_id"): str,
+        vol.Required("message"): str,
+        vol.Optional("context"): dict,
+        vol.Optional("user_id"): str,
+        vol.Optional("conversation_id"): str,
+        vol.Optional("include_history", default=False): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_agent_invoke(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Directly invoke a specific agent, bypassing the orchestrator."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    agent = entry_data.get("agent")
+
+    if agent is None:
+        connection.send_error(
+            msg["id"], "not_configured", "LLM not configured — agent unavailable"
+        )
+        return
+
+    try:
+        result = await agent.invoke_agent(
+            agent_id=msg["agent_id"],
+            message=msg["message"],
+            context=msg.get("context"),
+            user_id=msg.get("user_id"),
+            conversation_id=msg.get("conversation_id"),
+            include_history=msg.get("include_history", False),
+        )
+        connection.send_result(msg["id"], result)
+    except ValueError as err:
+        connection.send_error(msg["id"], "invalid_agent", str(err))
+    except Exception as err:
+        _LOGGER.error("Agent invoke failed: %s", err, exc_info=True)
+        connection.send_error(msg["id"], "invoke_failed", str(err))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/agent/available",
+        vol.Optional("entry_id"): str,
+    }
+)
+@callback
+def ws_agent_available(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Return list of agents available for direct invocation."""
+    from .connection_manager import resolve_agent_to_flat_config
+
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_result(msg["id"], [])
+        return
+
+    config = dict(entry.data) | dict(entry.options)
+    agents_cfg = config.get(CONF_AGENTS, {})
+
+    result: list[dict[str, Any]] = []
+    for agent_id in ROUTABLE_AGENTS:
+        defn = AGENT_DEFINITIONS.get(agent_id)
+        if defn is None:
+            continue
+
+        # Check if agent is mandatory or enabled
+        if not defn.mandatory:
+            acfg = agents_cfg.get(agent_id, {})
+            if not acfg.get("enabled", False):
+                continue
+
+        # Check if agent has a connection (or can fall back to default)
+        has_connection = resolve_agent_to_flat_config(config, agent_id) is not None
+
+        tool_names = AGENT_TOOL_MAP.get(agent_id)
+
+        result.append({
+            "id": defn.id,
+            "name": defn.name,
+            "description": defn.description,
+            "group": _agent_group(agent_id),
+            "has_connection": has_connection,
+            "tools": tool_names if tool_names is not None else [],
+        })
+
+    connection.send_result(msg["id"], result)

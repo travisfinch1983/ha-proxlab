@@ -110,7 +110,10 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers import intent, template
 
 from ..const import (
+    AGENT_CONVERSATION,
     AGENT_DEFINITIONS,
+    AGENT_TOOL_MAP,
+    CONF_AGENTS,
     CONF_CONTEXT_ENTITIES,
     CONF_CONTEXT_MODE,
     CONF_DEBUG_LOGGING,
@@ -139,6 +142,7 @@ from ..const import (
     DEFAULT_THINKING_ENABLED,
     DEFAULT_TOOLS_MAX_CALLS_PER_TURN,
     DOMAIN,
+    EVENT_AGENT_INVOKED,
     EVENT_CONVERSATION_FINISHED,
     EVENT_CONVERSATION_STARTED,
     EVENT_ERROR,
@@ -1088,6 +1092,183 @@ class ProxLabAgent(
                     _LOGGER.warning("Failed to fire error event: %s", event_err)
 
             raise
+
+    async def invoke_agent(
+        self,
+        agent_id: str,
+        message: str,
+        context: dict[str, Any] | None = None,
+        user_id: str | None = None,
+        conversation_id: str | None = None,
+        include_history: bool = False,
+    ) -> dict[str, Any]:
+        """Directly invoke a specific agent, bypassing orchestrator routing.
+
+        Args:
+            agent_id: The agent to invoke (must be in AGENT_DEFINITIONS).
+            message: The user message / instruction.
+            context: Optional extra context dict (sensor readings, scan results, etc.).
+            user_id: Optional user ID.
+            conversation_id: Optional conversation ID for history tracking.
+            include_history: Whether to include conversation history (default stateless).
+
+        Returns:
+            Structured result dict with response_text, tool_results, tokens, etc.
+
+        Raises:
+            ValueError: If agent_id is not a valid agent.
+        """
+        from ..agent_prompts import get_default_prompt
+        from ..connection_manager import resolve_agent_to_flat_config
+        from ..helpers import normalize_usage, strip_thinking_blocks
+
+        self._ensure_tools_registered()
+
+        # Validate agent_id
+        if agent_id not in AGENT_DEFINITIONS:
+            raise ValueError(f"Unknown agent_id: {agent_id}")
+
+        start_time = time.time()
+
+        # Resolve agent's LLM config
+        flat_config = resolve_agent_to_flat_config(self.config, agent_id)
+        if flat_config is None:
+            flat_config = resolve_agent_to_flat_config(self.config, AGENT_CONVERSATION)
+        if flat_config is None:
+            flat_config = {}
+
+        resolved_model = flat_config.get(CONF_LLM_MODEL) or self.config.get(CONF_LLM_MODEL, "unknown")
+
+        # Build system prompt
+        agents_cfg = self.config.get(CONF_AGENTS, {})
+        custom_prompt = agents_cfg.get(agent_id, {}).get("system_prompt")
+        system_prompt = custom_prompt if custom_prompt else get_default_prompt(agent_id)
+
+        # Append context section if provided
+        if context:
+            system_prompt += "\n\n## Context\n\n```json\n" + json.dumps(context, indent=2) + "\n```"
+
+        # Build messages
+        messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+
+        if include_history and conversation_id and self.config.get(CONF_HISTORY_ENABLED, True):
+            history = self.conversation_manager.get_history(
+                conversation_id,
+                max_messages=self.config.get(CONF_HISTORY_MAX_MESSAGES, DEFAULT_HISTORY_MAX_MESSAGES),
+            )
+            messages.extend(history)
+
+        messages.append({"role": "user", "content": message})
+
+        # Get tool definitions for this agent
+        tool_names = AGENT_TOOL_MAP.get(agent_id)
+        tool_definitions = self.tool_handler.get_tool_definitions_for_agent(tool_names)
+
+        # Token tracking
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+        tool_results_list: list[dict[str, Any]] = []
+
+        # Tool calling loop
+        max_iterations = self.config.get(CONF_TOOLS_MAX_CALLS_PER_TURN, DEFAULT_TOOLS_MAX_CALLS_PER_TURN)
+        final_text = ""
+
+        for iteration in range(max_iterations):
+            llm_response = await self._call_llm(
+                messages, tools=tool_definitions, config_override=flat_config or None
+            )
+
+            # Track tokens
+            usage = llm_response.get("usage", {})
+            if usage:
+                norm = normalize_usage(usage)
+                total_prompt_tokens += norm["prompt"]
+                total_completion_tokens += norm["completion"]
+
+            response_message = llm_response.get("choices", [{}])[0].get("message", {})
+            if response_message.get("content") is None:
+                response_message["content"] = ""
+
+            tool_calls = response_message.get("tool_calls", [])
+
+            if not tool_calls:
+                raw_content = response_message.get("content") or ""
+                final_text = strip_thinking_blocks(raw_content) or ""
+                break
+
+            # Execute tool calls
+            messages.append(response_message)
+
+            for tool_call in tool_calls:
+                tool_name = tool_call.get("function", {}).get("name", "")
+                tool_args_raw = tool_call.get("function", {}).get("arguments", "{}")
+                tool_call_id = tool_call.get("id", "")
+                tool_args: dict[str, Any] = {}
+
+                try:
+                    if isinstance(tool_args_raw, str):
+                        tool_args = json.loads(tool_args_raw)
+                    elif isinstance(tool_args_raw, dict):
+                        tool_args = tool_args_raw
+
+                    result = await self.tool_handler.execute_tool(
+                        tool_name, tool_args, conversation_id or "invoke"
+                    )
+
+                    tool_results_list.append({
+                        "tool_name": tool_name,
+                        "arguments": tool_args,
+                        "result": result,
+                    })
+
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "name": tool_name,
+                        "content": json.dumps(result),
+                    })
+
+                except Exception as err:
+                    _LOGGER.error("invoke_agent tool '%s' failed: %s", tool_name, err)
+                    error_result = {"success": False, "error": str(err)}
+                    tool_results_list.append({
+                        "tool_name": tool_name,
+                        "arguments": tool_args,
+                        "result": error_result,
+                    })
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "name": tool_name,
+                        "content": json.dumps(error_result),
+                    })
+        else:
+            # Max iterations reached without a final text response
+            if not final_text:
+                final_text = "Agent reached maximum tool call iterations without a final response."
+
+        duration_ms = int((time.time() - start_time) * 1000)
+
+        defn = AGENT_DEFINITIONS[agent_id]
+        result = {
+            "agent_id": agent_id,
+            "agent_name": defn.name,
+            "response_text": final_text,
+            "tool_results": tool_results_list,
+            "tokens": {
+                "prompt": total_prompt_tokens,
+                "completion": total_completion_tokens,
+                "total": total_prompt_tokens + total_completion_tokens,
+            },
+            "duration_ms": duration_ms,
+            "model": resolved_model,
+            "success": True,
+        }
+
+        # Fire HA event
+        self.hass.bus.async_fire(EVENT_AGENT_INVOKED, result)
+
+        return result
 
     async def _async_process_streaming(
         self,

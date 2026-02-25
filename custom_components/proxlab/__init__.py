@@ -1203,6 +1203,37 @@ async def async_setup_services(
             count = await session_manager.clear_all_sessions()
             _LOGGER.info("Cleared all %d conversation session(s)", count)
 
+    async def handle_invoke_agent(call: ServiceCall) -> dict[str, Any]:
+        """Handle the invoke_agent service call.
+
+        Directly invokes a specific agent, bypassing orchestrator routing.
+        Returns structured JSON with response, tool results, and metrics.
+        """
+        agent_id = call.data["agent_id"]
+        message = call.data["message"]
+        context = call.data.get("context")
+        user_id = call.data.get("user_id")
+        conversation_id = call.data.get("conversation_id")
+        include_history = call.data.get("include_history", False)
+        target_entry_id = call.data.get("entry_id", entry_id)
+
+        entry_data = _get_entry_data(target_entry_id)
+        target_agent = entry_data.get("agent")
+
+        if target_agent is None:
+            raise ValueError("Agent not found for entry — LLM not configured")
+
+        target_agent = cast(ProxLabAgent, target_agent)
+
+        return await target_agent.invoke_agent(
+            agent_id=agent_id,
+            message=message,
+            context=context,
+            user_id=user_id,
+            conversation_id=conversation_id,
+            include_history=include_history,
+        )
+
     # Register services (only once for all instances)
     if not hass.services.has_service(DOMAIN, "process"):
         hass.services.async_register(DOMAIN, "process", handle_process)
@@ -1273,6 +1304,15 @@ async def async_setup_services(
         hass.services.async_register(DOMAIN, "clear_conversation", handle_clear_conversation)
         _LOGGER.debug("Registered service: clear_conversation")
 
+    if not hass.services.has_service(DOMAIN, "invoke_agent"):
+        hass.services.async_register(
+            DOMAIN,
+            "invoke_agent",
+            handle_invoke_agent,
+            supports_response=SupportsResponse.ONLY,
+        )
+        _LOGGER.debug("Registered service: invoke_agent")
+
 
 async def async_remove_services(hass: HomeAssistant) -> None:
     """Remove ProxLab services.
@@ -1293,6 +1333,7 @@ async def async_remove_services(hass: HomeAssistant) -> None:
         "search_memories",
         "add_memory",
         "clear_conversation",
+        "invoke_agent",
     ]
 
     for service in services:
