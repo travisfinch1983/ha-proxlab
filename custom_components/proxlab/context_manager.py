@@ -20,15 +20,18 @@ from .const import (
     CONF_CONTEXT_MODE,
     CONF_DIRECT_ENTITIES,
     CONF_PROMPT_INCLUDE_LABELS,
+    CONF_VECTOR_DB_BACKEND,
     CONTEXT_MODE_DIRECT,
     CONTEXT_MODE_VECTOR_DB,
     DEFAULT_CONTEXT_FORMAT,
     DEFAULT_CONTEXT_MODE,
     DEFAULT_PROMPT_INCLUDE_LABELS,
+    DEFAULT_VECTOR_DB_BACKEND,
     EVENT_CONTEXT_INJECTED,
     EVENT_CONTEXT_OPTIMIZED,
     MAX_CONTEXT_TOKENS,
     TOKEN_WARNING_THRESHOLD,
+    VECTOR_DB_BACKEND_MILVUS,
 )
 from .context_providers import ContextProvider, DirectContextProvider
 from .exceptions import ContextInjectionError, TokenLimitExceeded
@@ -150,12 +153,23 @@ class ContextManager:
     def _create_vector_db_provider(self) -> ContextProvider:
         """Create and configure a vector DB context provider.
 
+        Selects the appropriate provider based on CONF_VECTOR_DB_BACKEND:
+        - "milvus": Uses MilvusContextProvider (wraps existing MilvusVectorDB)
+        - "chromadb" (default): Uses VectorDBContextProvider (ChromaDB)
+
         Returns:
-            Configured VectorDBContextProvider instance
+            Configured context provider instance
         """
+        backend = self.config.get(CONF_VECTOR_DB_BACKEND, DEFAULT_VECTOR_DB_BACKEND)
+
+        if backend == VECTOR_DB_BACKEND_MILVUS:
+            from .context_providers.milvus import MilvusContextProvider
+
+            return MilvusContextProvider(self.hass, self.config)
+
         from .context_providers.vector_db import VectorDBContextProvider
 
-        # Pass all config to the vector DB provider
+        # Pass all config to the ChromaDB vector DB provider
         return VectorDBContextProvider(self.hass, self.config)
 
     def set_provider(self, provider: ContextProvider) -> None:
