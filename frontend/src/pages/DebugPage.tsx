@@ -53,7 +53,7 @@ function ContextModal({
   );
 
   return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={(e) => e.stopPropagation()}>
       <div className="bg-base-100 rounded-xl shadow-2xl max-w-4xl w-full max-h-[85vh] flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-base-300">
@@ -247,7 +247,7 @@ function StepCard({
           <div className="mb-2">
             <button
               className="btn btn-xs btn-outline gap-1"
-              onClick={() => setShowContext(true)}
+              onClick={(e) => { e.stopPropagation(); setShowContext(true); }}
             >
               <FontAwesomeIcon icon={faFileLines} className="text-[10px]" />
               View Context
