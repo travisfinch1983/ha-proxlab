@@ -152,6 +152,12 @@ function IssueSection({
 export default function IssuesPage() {
   const [items, setItems] = useState<IssueItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [toast, setToast] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToast(msg);
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -214,6 +220,8 @@ export default function IssuesPage() {
       ]);
     } catch (err) {
       console.error("Failed to create issue:", err);
+      showToast(`Failed to save: ${(err as Error).message}`);
+      load(); // Revert to server state
     }
   };
 
@@ -259,6 +267,14 @@ export default function IssuesPage() {
           onAdd={handleAdd}
         />
       </div>
+
+      {toast && (
+        <div className="toast toast-end toast-bottom">
+          <div className="alert alert-error">
+            <span>{toast}</span>
+          </div>
+        </div>
+      )}
     </>
   );
 }

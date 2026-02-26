@@ -68,7 +68,6 @@ class _ConnectionSensorBase(CoordinatorEntity[ConnectionHealthCoordinator], Sens
             name=self._conn.get("name", self._conn_id),
             manufacturer="ProxLab",
             model=caps,
-            via_device=(DOMAIN, self._entry.entry_id),
         )
 
     def _get_result(self) -> ConnectionCheckResult | None:

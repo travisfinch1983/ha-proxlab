@@ -69,7 +69,6 @@ class ConnectionReachableSensor(
             name=self._conn.get("name", self._conn_id),
             manufacturer="ProxLab",
             model=caps,
-            via_device=(DOMAIN, self._entry.entry_id),
         )
 
     @property

@@ -755,8 +755,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.async_create_task(_setup_vector_and_memory())
 
-    # Register update listener to reload on config changes
-    entry.async_on_unload(entry.add_update_listener(async_reload_entry))
+    # NOTE: We intentionally do NOT register an update listener here.
+    # Config entry data is modified in-place by async_update_entry(), so the
+    # health coordinator and entities already see the latest data without a
+    # full integration reload.  A full reload (unload + setup of 40+ entities,
+    # services, coordinator, vector DB, etc.) is extremely expensive and causes
+    # HA to become sluggish after every connection save.  New connections will
+    # be picked up by the health coordinator on its next cycle; entity creation
+    # for new connections happens on next HA restart or manual integration reload.
 
     _LOGGER.info("ProxLab setup complete")
     return True

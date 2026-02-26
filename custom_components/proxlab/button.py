@@ -65,7 +65,6 @@ class ConnectionTestButton(CoordinatorEntity[ConnectionHealthCoordinator], Butto
             name=self._conn.get("name", self._conn_id),
             manufacturer="ProxLab",
             model=caps,
-            via_device=(DOMAIN, self._entry.entry_id),
         )
 
     async def async_press(self) -> None:
