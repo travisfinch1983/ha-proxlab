@@ -562,6 +562,9 @@ EVENT_HISTORY_SAVED: Final = f"{DOMAIN}.history.saved"
 EVENT_VECTOR_DB_QUERIED: Final = f"{DOMAIN}.vector_db.queried"
 EVENT_MEMORY_EXTRACTED: Final = f"{DOMAIN}.memory.extracted"
 EVENT_AGENT_INVOKED: Final = f"{DOMAIN}.agent.invoked"
+EVENT_SUBSCRIPTION_TRIGGERED: Final = f"{DOMAIN}.agent.subscription.triggered"
+EVENT_SCHEDULE_TRIGGERED: Final = f"{DOMAIN}.agent.schedule.triggered"
+EVENT_CHAIN_STEP: Final = f"{DOMAIN}.agent.chain.step"
 EVENT_ERROR: Final = f"{DOMAIN}.error"
 EVENT_STREAMING_ERROR: Final = f"{DOMAIN}.streaming.error"
 EVENT_TOOL_PROGRESS: Final = f"{DOMAIN}.tool.progress"
@@ -620,6 +623,11 @@ SERVICE_CLEAR_HISTORY: Final = "clear_history"
 SERVICE_RELOAD_CONTEXT: Final = "reload_context"
 SERVICE_EXECUTE_TOOL: Final = "execute_tool"
 SERVICE_INVOKE_AGENT: Final = "invoke_agent"
+SERVICE_CREATE_AGENT_SUBSCRIPTION: Final = "create_agent_subscription"
+SERVICE_REMOVE_AGENT_SUBSCRIPTION: Final = "remove_agent_subscription"
+SERVICE_CREATE_AGENT_SCHEDULE: Final = "create_agent_schedule"
+SERVICE_REMOVE_AGENT_SCHEDULE: Final = "remove_agent_schedule"
+SERVICE_RUN_AGENT_CHAIN: Final = "run_agent_chain"
 
 # Service parameter names
 ATTR_TEXT: Final = "text"
@@ -632,6 +640,20 @@ ATTR_PARAMETERS: Final = "parameters"
 STORAGE_KEY: Final = f"{DOMAIN}.storage"
 STORAGE_VERSION: Final = 1
 
+# Agent Registry storage
+AGENT_REGISTRY_STORAGE_KEY: Final = f"{DOMAIN}.agent_registry"
+AGENT_REGISTRY_STORAGE_VERSION: Final = 1
+
+# Schedule types
+SCHEDULE_TYPE_INTERVAL: Final = "interval"
+SCHEDULE_TYPE_TIME_OF_DAY: Final = "time_of_day"
+
+# Agent Registry rate limiting
+DEFAULT_SUBSCRIPTION_COOLDOWN: Final = 60
+DEFAULT_SCHEDULE_COOLDOWN: Final = 60
+DEFAULT_MAX_CONCURRENT_INVOCATIONS: Final = 3
+DEFAULT_CHAIN_STEP_TIMEOUT: Final = 120
+
 # Conversation history storage
 HISTORY_STORAGE_KEY: Final = f"{DOMAIN}.history"
 
@@ -642,6 +664,10 @@ MEMORY_STORAGE_VERSION: Final = 1
 # Issues tracker storage
 ISSUES_STORAGE_KEY: Final = f"{DOMAIN}.issues"
 ISSUES_STORAGE_VERSION: Final = 1
+
+# Roadmap storage
+ROADMAP_STORAGE_KEY: Final = f"{DOMAIN}.roadmap"
+ROADMAP_STORAGE_VERSION: Final = 1
 
 # HTTP timeouts (seconds)
 HTTP_TIMEOUT_DEFAULT: Final = 60

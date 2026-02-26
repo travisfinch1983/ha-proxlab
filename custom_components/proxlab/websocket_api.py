@@ -209,6 +209,23 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_issues_delete)
     websocket_api.async_register_command(hass, ws_agent_invoke)
     websocket_api.async_register_command(hass, ws_agent_available)
+    # Roadmap
+    websocket_api.async_register_command(hass, ws_roadmap_list)
+    websocket_api.async_register_command(hass, ws_roadmap_update)
+    # Agent Registry (Phase 2)
+    websocket_api.async_register_command(hass, ws_subscriptions_list)
+    websocket_api.async_register_command(hass, ws_subscriptions_create)
+    websocket_api.async_register_command(hass, ws_subscriptions_update)
+    websocket_api.async_register_command(hass, ws_subscriptions_delete)
+    websocket_api.async_register_command(hass, ws_schedules_list)
+    websocket_api.async_register_command(hass, ws_schedules_create)
+    websocket_api.async_register_command(hass, ws_schedules_update)
+    websocket_api.async_register_command(hass, ws_schedules_delete)
+    websocket_api.async_register_command(hass, ws_chains_list)
+    websocket_api.async_register_command(hass, ws_chains_create)
+    websocket_api.async_register_command(hass, ws_chains_update)
+    websocket_api.async_register_command(hass, ws_chains_delete)
+    websocket_api.async_register_command(hass, ws_chains_run)
 
 
 # ---------------------------------------------------------------------------
@@ -1548,3 +1565,578 @@ def ws_agent_available(
         })
 
     connection.send_result(msg["id"], result)
+
+
+# ---------------------------------------------------------------------------
+# Agent Registry — Subscriptions
+# ---------------------------------------------------------------------------
+
+
+def _get_registry(hass: HomeAssistant, entry: ConfigEntry):
+    """Get the AgentRegistry for an entry."""
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    return entry_data.get("agent_registry")
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/agent/subscriptions/list",
+        vol.Optional("entry_id"): str,
+    }
+)
+@callback
+def ws_subscriptions_list(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """List all event subscriptions."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_result(msg["id"], [])
+        return
+    registry = _get_registry(hass, entry)
+    if not registry:
+        connection.send_result(msg["id"], [])
+        return
+    connection.send_result(msg["id"], registry.list_subscriptions())
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/agent/subscriptions/create",
+        vol.Optional("entry_id"): str,
+        vol.Required("event_type"): str,
+        vol.Required("agent_id"): str,
+        vol.Optional("event_filter", default={}): dict,
+        vol.Optional("message_template", default=""): str,
+        vol.Optional("context_template"): vol.Any(str, None),
+        vol.Optional("cooldown_seconds"): vol.Coerce(int),
+        vol.Optional("enabled", default=True): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_subscriptions_create(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Create a new event subscription."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+    registry = _get_registry(hass, entry)
+    if not registry:
+        connection.send_error(msg["id"], "not_ready", "Agent registry not initialized")
+        return
+
+    skip_keys = {"id", "type", "entry_id"}
+    data = {k: v for k, v in msg.items() if k not in skip_keys}
+    sub = await registry.create_subscription(data)
+    connection.send_result(msg["id"], sub)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/agent/subscriptions/update",
+        vol.Optional("entry_id"): str,
+        vol.Required("subscription_id"): str,
+        vol.Optional("event_type"): str,
+        vol.Optional("agent_id"): str,
+        vol.Optional("event_filter"): dict,
+        vol.Optional("message_template"): str,
+        vol.Optional("context_template"): vol.Any(str, None),
+        vol.Optional("cooldown_seconds"): vol.Coerce(int),
+        vol.Optional("enabled"): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_subscriptions_update(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Update an existing subscription."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+    registry = _get_registry(hass, entry)
+    if not registry:
+        connection.send_error(msg["id"], "not_ready", "Agent registry not initialized")
+        return
+
+    sub_id = msg["subscription_id"]
+    skip_keys = {"id", "type", "entry_id", "subscription_id"}
+    updates = {k: v for k, v in msg.items() if k not in skip_keys}
+
+    try:
+        sub = await registry.update_subscription(sub_id, updates)
+        connection.send_result(msg["id"], sub)
+    except ValueError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/agent/subscriptions/delete",
+        vol.Optional("entry_id"): str,
+        vol.Required("subscription_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_subscriptions_delete(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Delete a subscription."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+    registry = _get_registry(hass, entry)
+    if not registry:
+        connection.send_error(msg["id"], "not_ready", "Agent registry not initialized")
+        return
+
+    try:
+        await registry.delete_subscription(msg["subscription_id"])
+        connection.send_result(msg["id"], {})
+    except ValueError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
+
+
+# ---------------------------------------------------------------------------
+# Agent Registry — Schedules
+# ---------------------------------------------------------------------------
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/agent/schedules/list",
+        vol.Optional("entry_id"): str,
+    }
+)
+@callback
+def ws_schedules_list(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """List all schedules."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_result(msg["id"], [])
+        return
+    registry = _get_registry(hass, entry)
+    if not registry:
+        connection.send_result(msg["id"], [])
+        return
+    connection.send_result(msg["id"], registry.list_schedules())
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/agent/schedules/create",
+        vol.Optional("entry_id"): str,
+        vol.Required("agent_id"): str,
+        vol.Optional("schedule_type", default="interval"): str,
+        vol.Optional("schedule_config", default={}): dict,
+        vol.Optional("message_template", default=""): str,
+        vol.Optional("context_template"): vol.Any(str, None),
+        vol.Optional("cooldown_seconds"): vol.Coerce(int),
+        vol.Optional("enabled", default=True): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_schedules_create(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Create a new schedule."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+    registry = _get_registry(hass, entry)
+    if not registry:
+        connection.send_error(msg["id"], "not_ready", "Agent registry not initialized")
+        return
+
+    skip_keys = {"id", "type", "entry_id"}
+    data = {k: v for k, v in msg.items() if k not in skip_keys}
+    sched = await registry.create_schedule(data)
+    connection.send_result(msg["id"], sched)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/agent/schedules/update",
+        vol.Optional("entry_id"): str,
+        vol.Required("schedule_id"): str,
+        vol.Optional("agent_id"): str,
+        vol.Optional("schedule_type"): str,
+        vol.Optional("schedule_config"): dict,
+        vol.Optional("message_template"): str,
+        vol.Optional("context_template"): vol.Any(str, None),
+        vol.Optional("cooldown_seconds"): vol.Coerce(int),
+        vol.Optional("enabled"): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_schedules_update(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Update an existing schedule."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+    registry = _get_registry(hass, entry)
+    if not registry:
+        connection.send_error(msg["id"], "not_ready", "Agent registry not initialized")
+        return
+
+    sched_id = msg["schedule_id"]
+    skip_keys = {"id", "type", "entry_id", "schedule_id"}
+    updates = {k: v for k, v in msg.items() if k not in skip_keys}
+
+    try:
+        sched = await registry.update_schedule(sched_id, updates)
+        connection.send_result(msg["id"], sched)
+    except ValueError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/agent/schedules/delete",
+        vol.Optional("entry_id"): str,
+        vol.Required("schedule_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_schedules_delete(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Delete a schedule."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+    registry = _get_registry(hass, entry)
+    if not registry:
+        connection.send_error(msg["id"], "not_ready", "Agent registry not initialized")
+        return
+
+    try:
+        await registry.delete_schedule(msg["schedule_id"])
+        connection.send_result(msg["id"], {})
+    except ValueError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
+
+
+# ---------------------------------------------------------------------------
+# Agent Registry — Chains
+# ---------------------------------------------------------------------------
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/agent/chains/list",
+        vol.Optional("entry_id"): str,
+    }
+)
+@callback
+def ws_chains_list(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """List all chains."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_result(msg["id"], [])
+        return
+    registry = _get_registry(hass, entry)
+    if not registry:
+        connection.send_result(msg["id"], [])
+        return
+    connection.send_result(msg["id"], registry.list_chains())
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/agent/chains/create",
+        vol.Optional("entry_id"): str,
+        vol.Optional("name"): str,
+        vol.Required("steps"): list,
+        vol.Optional("enabled", default=True): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_chains_create(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Create a new chain."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+    registry = _get_registry(hass, entry)
+    if not registry:
+        connection.send_error(msg["id"], "not_ready", "Agent registry not initialized")
+        return
+
+    skip_keys = {"id", "type", "entry_id"}
+    data = {k: v for k, v in msg.items() if k not in skip_keys}
+    chain = await registry.create_chain(data)
+    connection.send_result(msg["id"], chain)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/agent/chains/update",
+        vol.Optional("entry_id"): str,
+        vol.Required("chain_id"): str,
+        vol.Optional("name"): str,
+        vol.Optional("steps"): list,
+        vol.Optional("enabled"): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_chains_update(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Update an existing chain."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+    registry = _get_registry(hass, entry)
+    if not registry:
+        connection.send_error(msg["id"], "not_ready", "Agent registry not initialized")
+        return
+
+    chain_id = msg["chain_id"]
+    skip_keys = {"id", "type", "entry_id", "chain_id"}
+    updates = {k: v for k, v in msg.items() if k not in skip_keys}
+
+    try:
+        chain = await registry.update_chain(chain_id, updates)
+        connection.send_result(msg["id"], chain)
+    except ValueError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/agent/chains/delete",
+        vol.Optional("entry_id"): str,
+        vol.Required("chain_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_chains_delete(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Delete a chain."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+    registry = _get_registry(hass, entry)
+    if not registry:
+        connection.send_error(msg["id"], "not_ready", "Agent registry not initialized")
+        return
+
+    try:
+        await registry.delete_chain(msg["chain_id"])
+        connection.send_result(msg["id"], {})
+    except ValueError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/agent/chains/run",
+        vol.Optional("entry_id"): str,
+        vol.Required("chain_id"): str,
+        vol.Optional("initial_message", default=""): str,
+        vol.Optional("initial_context"): dict,
+    }
+)
+@websocket_api.async_response
+async def ws_chains_run(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Execute a chain and return the result."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+    registry = _get_registry(hass, entry)
+    if not registry:
+        connection.send_error(msg["id"], "not_ready", "Agent registry not initialized")
+        return
+
+    try:
+        chain_result = await registry.run_chain(
+            chain_id=msg["chain_id"],
+            initial_message=msg.get("initial_message", ""),
+            initial_context=msg.get("initial_context"),
+        )
+        connection.send_result(msg["id"], chain_result)
+    except ValueError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
+    except Exception as err:
+        _LOGGER.error("Chain run failed: %s", err, exc_info=True)
+        connection.send_error(msg["id"], "chain_failed", str(err))
+
+
+# ---------------------------------------------------------------------------
+# Roadmap
+# ---------------------------------------------------------------------------
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "proxlab/roadmap/list", vol.Optional("entry_id"): str}
+)
+@callback
+def ws_roadmap_list(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Return all roadmap headers with items."""
+    roadmap_data = hass.data.get(DOMAIN, {}).get("_roadmap", {"headers": []})
+    connection.send_result(msg["id"], {"headers": roadmap_data.get("headers", [])})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/roadmap/update",
+        vol.Optional("entry_id"): str,
+        vol.Required("action"): str,
+        vol.Optional("title"): str,
+        vol.Optional("header_id"): str,
+        vol.Optional("collapsed"): bool,
+        vol.Optional("header_ids"): [str],
+        vol.Optional("text"): str,
+        vol.Optional("item_id"): str,
+        vol.Optional("completed"): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_roadmap_update(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Dispatch roadmap mutations by action field."""
+    import time
+
+    domain_data = hass.data.get(DOMAIN, {})
+    roadmap_data = domain_data.get("_roadmap")
+    store = domain_data.get("_roadmap_store")
+
+    if roadmap_data is None or store is None:
+        connection.send_error(msg["id"], "not_ready", "Roadmap store not initialized")
+        return
+
+    headers: list[dict] = roadmap_data.setdefault("headers", [])
+    action = msg["action"]
+
+    if action == "create_header":
+        header_id = uuid4().hex[:8]
+        headers.append({
+            "id": header_id,
+            "title": msg.get("title", "New Phase"),
+            "position": len(headers),
+            "collapsed": False,
+            "created_at": time.time(),
+            "items": [],
+        })
+        await store.async_save(roadmap_data)
+        connection.send_result(msg["id"], {"header_id": header_id})
+
+    elif action == "update_header":
+        header_id = msg.get("header_id")
+        for h in headers:
+            if h["id"] == header_id:
+                if "title" in msg:
+                    h["title"] = msg["title"]
+                if "collapsed" in msg:
+                    h["collapsed"] = msg["collapsed"]
+                await store.async_save(roadmap_data)
+                connection.send_result(msg["id"], {})
+                return
+        connection.send_error(msg["id"], "not_found", f"Header {header_id} not found")
+
+    elif action == "delete_header":
+        header_id = msg.get("header_id")
+        original_len = len(headers)
+        roadmap_data["headers"] = [h for h in headers if h["id"] != header_id]
+        if len(roadmap_data["headers"]) == original_len:
+            connection.send_error(msg["id"], "not_found", f"Header {header_id} not found")
+            return
+        await store.async_save(roadmap_data)
+        connection.send_result(msg["id"], {})
+
+    elif action == "reorder_headers":
+        ordered_ids = msg.get("header_ids", [])
+        by_id = {h["id"]: h for h in headers}
+        reordered = []
+        for i, hid in enumerate(ordered_ids):
+            if hid in by_id:
+                h = by_id[hid]
+                h["position"] = i
+                reordered.append(h)
+        # Append any headers not in the list (safety net)
+        seen = set(ordered_ids)
+        for h in headers:
+            if h["id"] not in seen:
+                h["position"] = len(reordered)
+                reordered.append(h)
+        roadmap_data["headers"] = reordered
+        await store.async_save(roadmap_data)
+        connection.send_result(msg["id"], {})
+
+    elif action == "create_item":
+        header_id = msg.get("header_id")
+        for h in headers:
+            if h["id"] == header_id:
+                item_id = uuid4().hex[:8]
+                h["items"].append({
+                    "id": item_id,
+                    "text": msg.get("text", ""),
+                    "completed": False,
+                    "created_at": time.time(),
+                    "completed_at": None,
+                })
+                await store.async_save(roadmap_data)
+                connection.send_result(msg["id"], {"item_id": item_id})
+                return
+        connection.send_error(msg["id"], "not_found", f"Header {header_id} not found")
+
+    elif action == "update_item":
+        header_id = msg.get("header_id")
+        item_id = msg.get("item_id")
+        for h in headers:
+            if h["id"] == header_id:
+                for item in h["items"]:
+                    if item["id"] == item_id:
+                        if "completed" in msg:
+                            item["completed"] = msg["completed"]
+                            item["completed_at"] = time.time() if msg["completed"] else None
+                        if "text" in msg:
+                            item["text"] = msg["text"]
+                        await store.async_save(roadmap_data)
+                        connection.send_result(msg["id"], {})
+                        return
+                connection.send_error(msg["id"], "not_found", f"Item {item_id} not found")
+                return
+        connection.send_error(msg["id"], "not_found", f"Header {header_id} not found")
+
+    elif action == "delete_item":
+        header_id = msg.get("header_id")
+        item_id = msg.get("item_id")
+        for h in headers:
+            if h["id"] == header_id:
+                original_len = len(h["items"])
+                h["items"] = [it for it in h["items"] if it["id"] != item_id]
+                if len(h["items"]) == original_len:
+                    connection.send_error(msg["id"], "not_found", f"Item {item_id} not found")
+                    return
+                await store.async_save(roadmap_data)
+                connection.send_result(msg["id"], {})
+                return
+        connection.send_error(msg["id"], "not_found", f"Header {header_id} not found")
+
+    else:
+        connection.send_error(msg["id"], "invalid_action", f"Unknown action: {action}")

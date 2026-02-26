@@ -429,6 +429,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "session_manager": session_manager,
     }
 
+    # Set up agent registry (event-driven reactive layer)
+    from .agent_registry import AgentRegistry
+
+    registry = AgentRegistry(hass, entry.entry_id)
+    await registry.async_load()
+    hass.data[DOMAIN][entry.entry_id]["agent_registry"] = registry
+
     # Set up connection health coordinator if connections exist
     if entry.data.get(CONF_CONNECTIONS):
         coordinator = ConnectionHealthCoordinator(hass, entry)
@@ -576,6 +583,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         issues_data = await issues_store.async_load() or {"items": []}
         hass.data[DOMAIN]["_issues"] = issues_data
         hass.data[DOMAIN]["_issues_store"] = issues_store
+
+        # -- Persistent roadmap storage --
+        from .const import ROADMAP_STORAGE_KEY, ROADMAP_STORAGE_VERSION
+        roadmap_store = Store(hass, ROADMAP_STORAGE_VERSION, ROADMAP_STORAGE_KEY)
+        roadmap_data = await roadmap_store.async_load() or {"headers": []}
+        hass.data[DOMAIN]["_roadmap"] = roadmap_data
+        hass.data[DOMAIN]["_roadmap_store"] = roadmap_store
 
         @callback
         def _on_conversation_finished(event):
@@ -774,6 +788,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Clean up agent, memory manager, and vector DB manager
     if entry.entry_id in hass.data[DOMAIN]:
         entry_data = hass.data[DOMAIN][entry.entry_id]
+
+        # Shut down agent registry if it exists
+        if "agent_registry" in entry_data:
+            await entry_data["agent_registry"].async_shutdown()
 
         # Shut down health coordinator if it exists
         if "coordinator" in entry_data:
@@ -1345,6 +1363,102 @@ async def async_setup_services(
         )
         _LOGGER.debug("Registered service: invoke_agent")
 
+    # --- Agent Registry services (Phase 2) ---
+
+    async def handle_create_agent_subscription(call: ServiceCall) -> dict[str, Any]:
+        """Create an event subscription that triggers an agent."""
+        target_entry_id = call.data.get("entry_id", entry_id)
+        entry_data = _get_entry_data(target_entry_id)
+        registry = entry_data.get("agent_registry")
+        if not registry:
+            raise ValueError("Agent registry not available")
+        sub = await registry.create_subscription(dict(call.data))
+        return {"subscription_id": sub["id"]}
+
+    async def handle_remove_agent_subscription(call: ServiceCall) -> None:
+        """Remove an event subscription."""
+        target_entry_id = call.data.get("entry_id", entry_id)
+        entry_data = _get_entry_data(target_entry_id)
+        registry = entry_data.get("agent_registry")
+        if not registry:
+            raise ValueError("Agent registry not available")
+        await registry.delete_subscription(call.data["subscription_id"])
+
+    async def handle_create_agent_schedule(call: ServiceCall) -> dict[str, Any]:
+        """Create a scheduled agent invocation."""
+        target_entry_id = call.data.get("entry_id", entry_id)
+        entry_data = _get_entry_data(target_entry_id)
+        registry = entry_data.get("agent_registry")
+        if not registry:
+            raise ValueError("Agent registry not available")
+        sched = await registry.create_schedule(dict(call.data))
+        return {"schedule_id": sched["id"]}
+
+    async def handle_remove_agent_schedule(call: ServiceCall) -> None:
+        """Remove a scheduled agent invocation."""
+        target_entry_id = call.data.get("entry_id", entry_id)
+        entry_data = _get_entry_data(target_entry_id)
+        registry = entry_data.get("agent_registry")
+        if not registry:
+            raise ValueError("Agent registry not available")
+        await registry.delete_schedule(call.data["schedule_id"])
+
+    async def handle_run_agent_chain(call: ServiceCall) -> dict[str, Any]:
+        """Execute an agent chain."""
+        target_entry_id = call.data.get("entry_id", entry_id)
+        entry_data = _get_entry_data(target_entry_id)
+        registry = entry_data.get("agent_registry")
+        if not registry:
+            raise ValueError("Agent registry not available")
+        return await registry.run_chain(
+            chain_id=call.data["chain_id"],
+            initial_message=call.data.get("initial_message", ""),
+            initial_context=call.data.get("initial_context"),
+        )
+
+    if not hass.services.has_service(DOMAIN, "create_agent_subscription"):
+        hass.services.async_register(
+            DOMAIN,
+            "create_agent_subscription",
+            handle_create_agent_subscription,
+            supports_response=SupportsResponse.ONLY,
+        )
+        _LOGGER.debug("Registered service: create_agent_subscription")
+
+    if not hass.services.has_service(DOMAIN, "remove_agent_subscription"):
+        hass.services.async_register(
+            DOMAIN,
+            "remove_agent_subscription",
+            handle_remove_agent_subscription,
+        )
+        _LOGGER.debug("Registered service: remove_agent_subscription")
+
+    if not hass.services.has_service(DOMAIN, "create_agent_schedule"):
+        hass.services.async_register(
+            DOMAIN,
+            "create_agent_schedule",
+            handle_create_agent_schedule,
+            supports_response=SupportsResponse.ONLY,
+        )
+        _LOGGER.debug("Registered service: create_agent_schedule")
+
+    if not hass.services.has_service(DOMAIN, "remove_agent_schedule"):
+        hass.services.async_register(
+            DOMAIN,
+            "remove_agent_schedule",
+            handle_remove_agent_schedule,
+        )
+        _LOGGER.debug("Registered service: remove_agent_schedule")
+
+    if not hass.services.has_service(DOMAIN, "run_agent_chain"):
+        hass.services.async_register(
+            DOMAIN,
+            "run_agent_chain",
+            handle_run_agent_chain,
+            supports_response=SupportsResponse.ONLY,
+        )
+        _LOGGER.debug("Registered service: run_agent_chain")
+
 
 async def async_remove_services(hass: HomeAssistant) -> None:
     """Remove ProxLab services.
@@ -1366,6 +1480,11 @@ async def async_remove_services(hass: HomeAssistant) -> None:
         "add_memory",
         "clear_conversation",
         "invoke_agent",
+        "create_agent_subscription",
+        "remove_agent_subscription",
+        "create_agent_schedule",
+        "remove_agent_schedule",
+        "run_agent_chain",
     ]
 
     for service in services:

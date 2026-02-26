@@ -368,3 +368,218 @@ clear_conversation:
       advanced: true
       selector:
         text:
+
+create_agent_subscription:
+  name: Create agent subscription
+  description: >
+    Subscribe an agent to a Home Assistant event. When the event fires
+    (and matches the optional filter), the agent is automatically invoked.
+  fields:
+    event_type:
+      name: Event Type
+      description: The HA event type to listen for (e.g., state_changed, call_service)
+      required: true
+      example: "state_changed"
+      selector:
+        text:
+    agent_id:
+      name: Agent ID
+      description: The agent to invoke when the event fires
+      required: true
+      example: "security_guard"
+      selector:
+        select:
+          options:
+            - conversation_agent
+            - worker
+            - memory
+            - repairman
+            - reporting
+            - security_guard
+            - cybersecurity
+            - medical_advisor
+    event_filter:
+      name: Event Filter
+      description: Optional filter criteria (e.g., entity_id, to_state)
+      required: false
+      example: '{"entity_id": "binary_sensor.front_door", "to_state": "on"}'
+      selector:
+        object:
+    message_template:
+      name: Message Template
+      description: Jinja2 template for the message sent to the agent
+      required: false
+      example: "Front door changed to {{ trigger.to_state.state }}"
+      selector:
+        text:
+          multiline: true
+    context_template:
+      name: Context Template
+      description: Jinja2 template that renders to JSON context
+      required: false
+      selector:
+        text:
+          multiline: true
+    cooldown_seconds:
+      name: Cooldown
+      description: Minimum seconds between triggers (prevents runaway loops)
+      required: false
+      example: 60
+      selector:
+        number:
+          min: 0
+          max: 86400
+          mode: box
+    entry_id:
+      name: Entry ID
+      description: Config entry ID (defaults to first entry)
+      required: false
+      advanced: true
+      selector:
+        text:
+
+remove_agent_subscription:
+  name: Remove agent subscription
+  description: Remove an event subscription by its ID
+  fields:
+    subscription_id:
+      name: Subscription ID
+      description: The ID of the subscription to remove
+      required: true
+      example: "01ab23cd45ef..."
+      selector:
+        text:
+    entry_id:
+      name: Entry ID
+      description: Config entry ID (defaults to first entry)
+      required: false
+      advanced: true
+      selector:
+        text:
+
+create_agent_schedule:
+  name: Create agent schedule
+  description: >
+    Schedule an agent to run at a specific time of day or at regular intervals.
+  fields:
+    agent_id:
+      name: Agent ID
+      description: The agent to invoke on schedule
+      required: true
+      example: "reporting"
+      selector:
+        select:
+          options:
+            - conversation_agent
+            - worker
+            - memory
+            - repairman
+            - reporting
+            - security_guard
+            - cybersecurity
+            - medical_advisor
+    schedule_type:
+      name: Schedule Type
+      description: Type of schedule — interval (every N seconds) or time_of_day (specific time)
+      required: false
+      example: "time_of_day"
+      selector:
+        select:
+          options:
+            - "interval"
+            - "time_of_day"
+    schedule_config:
+      name: Schedule Config
+      description: >
+        Configuration for the schedule. For interval: {"seconds": 1800}.
+        For time_of_day: {"hour": 21, "minute": 0}.
+      required: false
+      example: '{"hour": 21, "minute": 0}'
+      selector:
+        object:
+    message_template:
+      name: Message Template
+      description: Jinja2 template for the message sent to the agent
+      required: false
+      example: "Generate daily summary for {{ now() }}"
+      selector:
+        text:
+          multiline: true
+    context_template:
+      name: Context Template
+      description: Jinja2 template that renders to JSON context
+      required: false
+      selector:
+        text:
+          multiline: true
+    cooldown_seconds:
+      name: Cooldown
+      description: Minimum seconds between invocations
+      required: false
+      example: 60
+      selector:
+        number:
+          min: 0
+          max: 86400
+          mode: box
+    entry_id:
+      name: Entry ID
+      description: Config entry ID (defaults to first entry)
+      required: false
+      advanced: true
+      selector:
+        text:
+
+remove_agent_schedule:
+  name: Remove agent schedule
+  description: Remove a scheduled agent invocation by its ID
+  fields:
+    schedule_id:
+      name: Schedule ID
+      description: The ID of the schedule to remove
+      required: true
+      example: "01ab23cd45ef..."
+      selector:
+        text:
+    entry_id:
+      name: Entry ID
+      description: Config entry ID (defaults to first entry)
+      required: false
+      advanced: true
+      selector:
+        text:
+
+run_agent_chain:
+  name: Run agent chain
+  description: >
+    Execute a chain of agents sequentially. Each agent's output feeds
+    into the next agent's input, enabling multi-step workflows.
+  fields:
+    chain_id:
+      name: Chain ID
+      description: The ID of the chain to execute
+      required: true
+      example: "01ab23cd45ef..."
+      selector:
+        text:
+    initial_message:
+      name: Initial Message
+      description: The message to send to the first agent in the chain
+      required: false
+      example: "Check disk usage on all servers"
+      selector:
+        text:
+          multiline: true
+    initial_context:
+      name: Initial Context
+      description: Optional JSON context data for the chain
+      required: false
+      selector:
+        object:
+    entry_id:
+      name: Entry ID
+      description: Config entry ID (defaults to first entry)
+      required: false
+      advanced: true
+      selector:
+        text:

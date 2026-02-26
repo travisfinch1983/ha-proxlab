@@ -1,0 +1,176 @@
+Phase 2 — Event-Driven Agent Framework — Test Instructions
+==========================================================
+
+All WS commands can be tested from HA Developer Tools > WebSocket tab
+or from any WS client connected to ws://10.0.0.2:8123/api/websocket
+
+HA services can be tested from Developer Tools > Actions
+
+
+1. SUBSCRIPTIONS
+----------------
+
+1a. Create a subscription (WS):
+
+{
+  "type": "proxlab/agent/subscriptions/create",
+  "event_type": "state_changed",
+  "agent_id": "security_guard",
+  "event_filter": {
+    "entity_id": "binary_sensor.front_door",
+    "to_state": "on"
+  },
+  "message_template": "Front door changed to {{ trigger.to_state.state }}. Check cameras.",
+  "cooldown_seconds": 60
+}
+
+1b. List subscriptions (WS):
+
+{
+  "type": "proxlab/agent/subscriptions/list"
+}
+
+1c. Update a subscription (WS):
+
+{
+  "type": "proxlab/agent/subscriptions/update",
+  "subscription_id": "<id from create>",
+  "enabled": false
+}
+
+1d. Delete a subscription (WS):
+
+{
+  "type": "proxlab/agent/subscriptions/delete",
+  "subscription_id": "<id from create>"
+}
+
+1e. Create via HA service (Developer Tools > Actions):
+
+Service: proxlab.create_agent_subscription
+Data:
+  event_type: state_changed
+  agent_id: security_guard
+  event_filter:
+    entity_id: binary_sensor.front_door
+    to_state: "on"
+  message_template: "Front door opened"
+  cooldown_seconds: 60
+
+1f. Remove via HA service:
+
+Service: proxlab.remove_agent_subscription
+Data:
+  subscription_id: "<id>"
+
+
+2. SCHEDULES
+------------
+
+2a. Create an interval schedule (WS) — every 2 minutes for testing:
+
+{
+  "type": "proxlab/agent/schedules/create",
+  "agent_id": "reporting",
+  "schedule_type": "interval",
+  "schedule_config": {"seconds": 120},
+  "message_template": "Generate a brief status update for {{ now() }}",
+  "cooldown_seconds": 60
+}
+
+2b. Create a time-of-day schedule (WS) — 9pm daily:
+
+{
+  "type": "proxlab/agent/schedules/create",
+  "agent_id": "reporting",
+  "schedule_type": "time_of_day",
+  "schedule_config": {"hour": 21, "minute": 0},
+  "message_template": "Generate daily summary report"
+}
+
+2c. List schedules:
+
+{
+  "type": "proxlab/agent/schedules/list"
+}
+
+2d. Delete schedule:
+
+{
+  "type": "proxlab/agent/schedules/delete",
+  "schedule_id": "<id>"
+}
+
+
+3. CHAINS
+---------
+
+3a. Create a 2-step chain (WS):
+
+{
+  "type": "proxlab/agent/chains/create",
+  "name": "Execute and Report",
+  "steps": [
+    {
+      "agent_id": "worker",
+      "message_template": "{{ initial_message }}",
+      "context_includes": []
+    },
+    {
+      "agent_id": "reporting",
+      "message_template": "Summarize what happened: {{ previous_response }}",
+      "context_includes": ["response_text", "tool_results"]
+    }
+  ]
+}
+
+3b. Run the chain (WS):
+
+{
+  "type": "proxlab/agent/chains/run",
+  "chain_id": "<id from create>",
+  "initial_message": "What is the current state of all lights?"
+}
+
+3c. Run chain via HA service:
+
+Service: proxlab.run_agent_chain
+Data:
+  chain_id: "<id>"
+  initial_message: "Check all sensor temperatures"
+
+3d. List chains:
+
+{
+  "type": "proxlab/agent/chains/list"
+}
+
+
+4. VERIFICATION CHECKS
+-----------------------
+
+- Cooldown: Trigger the same event twice within 60s, second should be skipped
+  (check HA logs for "cooldown active" debug message)
+
+- Concurrency: Fire 5+ events simultaneously, only 3 agents run at once
+  (semaphore limit)
+
+- Persistence: After creating subscriptions/schedules, reload the integration
+  (Developer Tools > YAML > Reload ProxLab). Verify items are still listed.
+
+- Cleanup: Remove the integration entirely, confirm no orphaned listeners
+  (no errors in logs after removal)
+
+- Chain error handling: Create a chain with a nonexistent agent_id,
+  run it, confirm it returns an error without crashing
+
+
+5. EVENTS FIRED
+----------------
+
+These events are fired on the HA bus and can be observed in
+Developer Tools > Events > Listen to events:
+
+- proxlab.agent.subscription.triggered
+- proxlab.agent.schedule.triggered
+- proxlab.agent.chain.step

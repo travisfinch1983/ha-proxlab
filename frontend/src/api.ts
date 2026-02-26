@@ -340,3 +340,36 @@ export async function updateIssue(
 export async function deleteIssue(issueId: string): Promise<void> {
   return callWS("proxlab/issues/delete", { issue_id: issueId });
 }
+
+// --- Roadmap ---
+
+export interface RoadmapItem {
+  id: string;
+  text: string;
+  completed: boolean;
+  created_at: number;
+  completed_at: number | null;
+}
+
+export interface RoadmapHeader {
+  id: string;
+  title: string;
+  position: number;
+  collapsed: boolean;
+  created_at: number;
+  items: RoadmapItem[];
+}
+
+export async function listRoadmap(): Promise<RoadmapHeader[]> {
+  const res = await callWS<{ headers: RoadmapHeader[] }>(
+    "proxlab/roadmap/list"
+  );
+  return res.headers;
+}
+
+export async function updateRoadmap(
+  action: string,
+  params: Record<string, unknown> = {}
+): Promise<Record<string, unknown>> {
+  return callWS("proxlab/roadmap/update", { action, ...params });
+}

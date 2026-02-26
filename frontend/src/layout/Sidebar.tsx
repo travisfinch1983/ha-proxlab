@@ -11,6 +11,7 @@ import {
   faBug,
   faChartColumn,
   faListCheck,
+  faMap,
   faAnglesLeft,
   faAnglesRight,
 } from "@fortawesome/free-solid-svg-icons";
@@ -34,6 +35,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/debug", icon: faBug, label: "Debug" },
   { to: "/api-info", icon: faChartColumn, label: "API Info" },
   { to: "/issues", icon: faListCheck, label: "Issues" },
+  { to: "/roadmap", icon: faMap, label: "Roadmap" },
 ];
 
 export default function Sidebar() {
