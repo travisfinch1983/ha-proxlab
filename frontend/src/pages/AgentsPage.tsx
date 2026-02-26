@@ -1,10 +1,16 @@
 import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faRotateLeft } from "@fortawesome/free-solid-svg-icons";
+import { faRotateLeft, faPlay } from "@fortawesome/free-solid-svg-icons";
 import NavBar from "../layout/NavBar";
 import { useStore } from "../store";
 import SaveButton from "../components/SaveButton";
-import { updateAgent, getDefaultPrompt, fetchConfig } from "../api";
+import {
+  updateAgent,
+  getDefaultPrompt,
+  fetchConfig,
+  invokeAgent,
+  type AgentInvokeResult,
+} from "../api";
 import type { AgentInfo } from "../types";
 
 function AgentCard({ agent }: { agent: AgentInfo }) {
@@ -24,6 +30,14 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
   const [showPrompt, setShowPrompt] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+
+  // Invoke test state
+  const [invokeOpen, setInvokeOpen] = useState(false);
+  const [invokeMsg, setInvokeMsg] = useState("");
+  const [invoking, setInvoking] = useState(false);
+  const [invokeResult, setInvokeResult] = useState<AgentInvokeResult | null>(
+    null
+  );
 
   // Filter eligible connections based on agent's required capabilities
   const eligibleConnections = Object.entries(connections).filter(
@@ -64,6 +78,29 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
       setPrompt(defaultPrompt);
     } catch {
       // ignore
+    }
+  };
+
+  const handleInvoke = async () => {
+    if (!invokeMsg.trim()) return;
+    setInvoking(true);
+    setInvokeResult(null);
+    try {
+      const result = await invokeAgent(agent.id, invokeMsg.trim());
+      setInvokeResult(result);
+    } catch (err) {
+      setInvokeResult({
+        agent_id: agent.id,
+        agent_name: agent.name,
+        response_text: `Error: ${(err as Error).message}`,
+        tool_results: [],
+        tokens: { prompt: 0, completion: 0, total: 0 },
+        duration_ms: 0,
+        model: "",
+        success: false,
+      });
+    } finally {
+      setInvoking(false);
     }
   };
 
@@ -170,14 +207,144 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
           </div>
         )}
 
-        {/* Save */}
+        {/* Save + Test */}
         <div className="flex justify-end gap-2">
           {toast && (
             <span className="text-xs text-success self-center">{toast}</span>
           )}
+          {enabled && (
+            <button
+              className="btn btn-ghost btn-sm"
+              onClick={() => {
+                setInvokeOpen(true);
+                setInvokeResult(null);
+                setInvokeMsg("");
+              }}
+            >
+              <FontAwesomeIcon icon={faPlay} /> Test
+            </button>
+          )}
           <SaveButton saving={saving} onClick={handleSave} />
         </div>
       </div>
+
+      {/* Invoke Test Modal */}
+      {invokeOpen && (
+        <dialog className="modal modal-open">
+          <div className="modal-box max-w-lg">
+            <h3 className="font-bold text-lg">Test: {agent.name}</h3>
+            <div className="space-y-3 mt-4">
+              <label className="form-control">
+                <div className="label">
+                  <span className="label-text">Message</span>
+                </div>
+                <textarea
+                  className="textarea textarea-bordered textarea-sm"
+                  rows={3}
+                  placeholder="Type a message to send to this agent..."
+                  value={invokeMsg}
+                  onChange={(e) => setInvokeMsg(e.target.value)}
+                  disabled={invoking}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && e.ctrlKey) handleInvoke();
+                  }}
+                />
+                <div className="label">
+                  <span className="label-text-alt text-base-content/40">
+                    Ctrl+Enter to send
+                  </span>
+                </div>
+              </label>
+
+              {invoking && (
+                <div className="flex items-center gap-2 py-2">
+                  <span className="loading loading-spinner loading-sm text-primary" />
+                  <span className="text-sm text-base-content/60">
+                    Invoking agent...
+                  </span>
+                </div>
+              )}
+
+              {invokeResult && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`badge badge-sm ${invokeResult.success ? "badge-success" : "badge-error"}`}
+                    >
+                      {invokeResult.success ? "Success" : "Failed"}
+                    </span>
+                    {invokeResult.model && (
+                      <span className="text-xs text-base-content/50">
+                        {invokeResult.model}
+                      </span>
+                    )}
+                    {invokeResult.duration_ms > 0 && (
+                      <span className="text-xs text-base-content/50">
+                        {(invokeResult.duration_ms / 1000).toFixed(1)}s
+                      </span>
+                    )}
+                    {invokeResult.tokens.total > 0 && (
+                      <span className="text-xs text-base-content/50">
+                        {invokeResult.tokens.total} tokens
+                      </span>
+                    )}
+                  </div>
+                  <div className="bg-base-200 rounded-lg p-3 max-h-64 overflow-y-auto">
+                    <p className="text-sm whitespace-pre-wrap">
+                      {invokeResult.response_text}
+                    </p>
+                  </div>
+                  {invokeResult.tool_results &&
+                    invokeResult.tool_results.length > 0 && (
+                      <details className="collapse collapse-arrow bg-base-200 rounded-lg">
+                        <summary className="collapse-title text-xs font-medium py-2 min-h-0">
+                          Tool Results ({invokeResult.tool_results.length})
+                        </summary>
+                        <div className="collapse-content">
+                          <pre className="text-xs overflow-x-auto">
+                            {JSON.stringify(
+                              invokeResult.tool_results,
+                              null,
+                              2
+                            )}
+                          </pre>
+                        </div>
+                      </details>
+                    )}
+                </div>
+              )}
+            </div>
+
+            <div className="modal-action">
+              <button
+                className="btn btn-ghost"
+                onClick={() => setInvokeOpen(false)}
+              >
+                Close
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={handleInvoke}
+                disabled={invoking || !invokeMsg.trim()}
+              >
+                {invoking ? (
+                  <span className="loading loading-spinner loading-xs" />
+                ) : (
+                  <FontAwesomeIcon icon={faPlay} />
+                )}
+                Send
+              </button>
+            </div>
+          </div>
+          <form
+            method="dialog"
+            className="modal-backdrop"
+            onClick={() => !invoking && setInvokeOpen(false)}
+          >
+            <button>close</button>
+          </form>
+        </dialog>
+      )}
     </div>
   );
 }

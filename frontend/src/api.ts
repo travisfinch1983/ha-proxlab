@@ -378,6 +378,31 @@ export async function updateRoadmap(
   return callWS("proxlab/roadmap/update", { action, ...params });
 }
 
+// --- Agent Invoke ---
+
+export interface AgentInvokeResult {
+  agent_id: string;
+  agent_name: string;
+  response_text: string;
+  tool_results: unknown[];
+  tokens: { prompt: number; completion: number; total: number };
+  duration_ms: number;
+  model: string;
+  success: boolean;
+}
+
+export async function invokeAgent(
+  agentId: string,
+  message: string,
+  context?: Record<string, unknown>
+): Promise<AgentInvokeResult> {
+  return callWS("proxlab/agent/invoke", {
+    agent_id: agentId,
+    message,
+    ...(context ? { context } : {}),
+  });
+}
+
 // --- Subscriptions ---
 
 export async function listSubscriptions(): Promise<Subscription[]> {
