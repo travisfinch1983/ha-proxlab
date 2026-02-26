@@ -87,6 +87,11 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
         }
         results = await asyncio.gather(*tasks.values(), return_exceptions=True)
 
+        # Close session after each cycle to prevent connection pool accumulation
+        if self._session and not self._session.closed:
+            await self._session.close()
+            self._session = None
+
         data: dict[str, ConnectionCheckResult] = {}
         for conn_id, result in zip(tasks.keys(), results):
             if isinstance(result, Exception):

@@ -66,7 +66,7 @@ class ToolHandler:
             CONF_TOOLS_MAX_CALLS_PER_TURN, DEFAULT_TOOLS_MAX_CALLS_PER_TURN
         )
         self.timeout = config.get(CONF_TOOLS_TIMEOUT, DEFAULT_TOOLS_TIMEOUT)
-        self.emit_events = config.get(CONF_EMIT_EVENTS, True)
+        self.emit_events = config.get(CONF_EMIT_EVENTS, False)
 
         # Track metrics for monitoring
         self._execution_count = 0

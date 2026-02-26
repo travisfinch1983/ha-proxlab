@@ -437,11 +437,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id]["agent_registry"] = registry
 
     # Set up MCP Manager (MCP server marketplace)
-    from .mcp_manager import McpManager
+    try:
+        from .mcp_manager import McpManager
 
-    mcp_manager = McpManager(hass, entry.entry_id)
-    await mcp_manager.async_load()
-    hass.data[DOMAIN][entry.entry_id]["mcp_manager"] = mcp_manager
+        mcp_manager = McpManager(hass, entry.entry_id)
+        await mcp_manager.async_load()
+        hass.data[DOMAIN][entry.entry_id]["mcp_manager"] = mcp_manager
+    except ImportError:
+        _LOGGER.debug("MCP Manager not available (mcp_manager.py not found)")
+    except Exception as err:
+        _LOGGER.warning("Failed to set up MCP Manager: %s", err)
 
     # Set up connection health coordinator if connections exist
     if entry.data.get(CONF_CONNECTIONS):
@@ -594,6 +599,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         }
         hass.data[DOMAIN]["_api_usage"] = usage_data
         hass.data[DOMAIN]["_api_usage_store"] = usage_store
+        _usage_save_pending = False
+
+        async def _save_usage():
+            nonlocal _usage_save_pending
+            if _usage_save_pending:
+                return
+            _usage_save_pending = True
+            await usage_store.async_save(usage_data)
+            _usage_save_pending = False
 
         # -- Persistent issues tracker storage --
         issues_store = Store(hass, ISSUES_STORAGE_VERSION, ISSUES_STORAGE_KEY)
@@ -682,7 +696,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 t["cost_usd"] = round(t["cost_usd"] + cost, 6)
 
             usage_data["last_updated"] = _time.time()
-            hass.async_create_task(usage_store.async_save(usage_data))
+            hass.async_create_task(_save_usage())
 
         unsub = hass.bus.async_listen(EVENT_CONVERSATION_FINISHED, _on_conversation_finished)
         hass.data[DOMAIN]["_trace_listener"] = unsub
@@ -814,7 +828,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         # Shut down MCP manager if it exists
         if "mcp_manager" in entry_data:
-            await entry_data["mcp_manager"].async_shutdown()
+            try:
+                await entry_data["mcp_manager"].async_shutdown()
+            except Exception as err:
+                _LOGGER.warning("Error shutting down MCP manager: %s", err)
 
         # Shut down agent registry if it exists
         if "agent_registry" in entry_data:

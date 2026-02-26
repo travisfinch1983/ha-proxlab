@@ -17,7 +17,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.storage import Store
 
-from .const import EVENT_HISTORY_SAVED, HISTORY_STORAGE_KEY
+from .const import HISTORY_STORAGE_KEY
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -239,24 +239,6 @@ class ConversationHistoryManager:
                 )
 
             await self._store.async_save(data)
-
-            # Count total messages
-            total_messages = sum(len(msgs) for msgs in self._histories.values())
-
-            # Fire history saved event
-            if self._hass:
-                try:
-                    self._hass.bus.async_fire(
-                        EVENT_HISTORY_SAVED,
-                        {
-                            "conversation_count": len(self._histories),
-                            "message_count": total_messages,
-                            "size_bytes": estimated_size,
-                            "timestamp": int(time.time()),
-                        },
-                    )
-                except Exception as event_err:
-                    _LOGGER.warning("Failed to fire history saved event: %s", event_err)
 
             _LOGGER.debug(
                 "Saved %d conversations to storage (~%d bytes)",

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -94,11 +94,6 @@ class ConnectionStatusSensor(_ConnectionSensorBase):
         self._attr_unique_id = f"{entry.entry_id}_{conn_id}_status"
         self._attr_name = "Status"
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        self.async_write_ha_state()
-
     @property
     def native_value(self) -> str:
         """Return the current status."""
@@ -137,11 +132,6 @@ class ConnectionApiCheckSensor(_ConnectionSensorBase):
         self._attr_unique_id = f"{entry.entry_id}_{conn_id}_api_check"
         self._attr_name = "API Check"
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        self.async_write_ha_state()
-
     @property
     def native_value(self) -> str:
         """Return the API check result."""
@@ -169,11 +159,6 @@ class ConnectionModelSensor(_ConnectionSensorBase):
         super().__init__(coordinator, entry, conn_id, conn)
         self._attr_unique_id = f"{entry.entry_id}_{conn_id}_model"
         self._attr_name = "Model"
-
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        self.async_write_ha_state()
 
     @property
     def native_value(self) -> str | None:

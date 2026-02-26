@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from homeassistant.components.text import TextEntity, TextMode
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant, callback
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -96,7 +96,3 @@ class ConnectionUrlText(CoordinatorEntity[ConnectionHealthCoordinator], TextEnti
         # Trigger immediate health re-check
         await self.coordinator.async_request_refresh()
 
-    @callback
-    def _handle_coordinator_update(self) -> None:
-        """Handle updated data from the coordinator."""
-        self.async_write_ha_state()
