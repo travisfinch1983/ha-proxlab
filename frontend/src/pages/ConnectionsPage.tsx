@@ -12,6 +12,7 @@ import {
   deleteConnection,
   testConnection,
   fetchConfig,
+  refreshHealth,
 } from "../api";
 import type { Connection, ConnectionHealth } from "../types";
 import { CAPABILITY_LABELS } from "../types";
@@ -35,6 +36,7 @@ const EMPTY_CONN: Omit<Connection, "id"> = {
   api_key: "",
   model: "",
   capabilities: [],
+  connection_type: "openai",
   temperature: 0.7,
   max_tokens: 500,
   top_p: 1.0,
@@ -44,7 +46,6 @@ const EMPTY_CONN: Omit<Connection, "id"> = {
   speed: 1.0,
   format: "mp3",
   language: "en",
-  embedding_provider: "ollama",
 };
 
 export default function ConnectionsPage() {
@@ -90,12 +91,17 @@ export default function ConnectionsPage() {
     try {
       if (isNew) {
         const { connection_id } = await createConnection(form);
+        // Refresh health so the new connection gets checked immediately
+        await refreshHealth();
         await reload();
         setSelectedId(connection_id);
         setIsNew(false);
         showToast("Connection created");
       } else if (selectedId) {
-        await updateConnection(selectedId, form);
+        // Strip `id` to avoid polluting WS message payload
+        const { id: _dropped, ...cleanForm } = form as Connection;
+        void _dropped;
+        await updateConnection(selectedId, cleanForm);
         await reload();
         showToast("Connection updated");
       }
@@ -222,6 +228,29 @@ export default function ConnectionsPage() {
                       }
                       placeholder="My LLM Server"
                     />
+                  </label>
+                  <label className="form-control">
+                    <div className="label">
+                      <span className="label-text">Connection Type</span>
+                    </div>
+                    <select
+                      className="select select-bordered select-sm"
+                      value={form.connection_type ?? "openai"}
+                      onChange={(e) => {
+                        const ct = e.target.value;
+                        setForm((f) => ({
+                          ...f,
+                          connection_type: ct,
+                          ...(ct === "claude_api"
+                            ? { base_url: "https://api.anthropic.com" }
+                            : {}),
+                        }));
+                      }}
+                    >
+                      <option value="openai">OpenAI Compatible</option>
+                      <option value="ollama">Ollama</option>
+                      <option value="claude_api">Claude API</option>
+                    </select>
                   </label>
                   <label className="form-control">
                     <div className="label">
@@ -471,7 +500,12 @@ export default function ConnectionsPage() {
                       </div>
                       <select
                         className="select select-bordered select-xs"
-                        value={form.embedding_provider ?? "ollama"}
+                        value={
+                          form.embedding_provider ??
+                          (form.connection_type === "ollama"
+                            ? "ollama"
+                            : "openai")
+                        }
                         onChange={(e) =>
                           setForm((f) => ({
                             ...f,

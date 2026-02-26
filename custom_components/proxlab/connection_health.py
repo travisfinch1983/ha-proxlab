@@ -21,6 +21,8 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from .const import (
     CONF_CONNECTIONS,
     CONNECTION_TYPE_CLAUDE,
+    CONNECTION_TYPE_OLLAMA,
+    CONNECTION_TYPE_OPENAI,
     DOMAIN,
     EMBEDDING_PROVIDER_OLLAMA,
     HEALTH_CHECK_INTERVAL,
@@ -126,8 +128,17 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
                 session, conn, base_url, model_name
             )
 
-        # Check if this is an Ollama connection (by embedding_provider OR URL heuristic)
-        if conn.get("embedding_provider") == EMBEDDING_PROVIDER_OLLAMA or is_ollama_backend(base_url):
+        connection_type = conn.get("connection_type")
+
+        # Explicit connection_type takes priority over heuristics
+        if connection_type == CONNECTION_TYPE_OPENAI:
+            pass  # Fall through to OpenAI-compatible check below
+        elif connection_type == CONNECTION_TYPE_OLLAMA:
+            return await self._check_ollama_connection(
+                session, conn, base_url, model_name, capabilities
+            )
+        elif is_ollama_backend(base_url):
+            # No explicit type — use URL heuristic as fallback
             return await self._check_ollama_connection(
                 session, conn, base_url, model_name, capabilities
             )

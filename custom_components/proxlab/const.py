@@ -691,6 +691,8 @@ HEALTH_CHECK_TIMEOUT: Final = 5  # Seconds per connection check
 
 # Connection type constants
 CONNECTION_TYPE_LOCAL: Final = "local"
+CONNECTION_TYPE_OPENAI: Final = "openai"
+CONNECTION_TYPE_OLLAMA: Final = "ollama"
 CONNECTION_TYPE_CLAUDE: Final = "claude_api"
 
 # Claude API models available for selection
