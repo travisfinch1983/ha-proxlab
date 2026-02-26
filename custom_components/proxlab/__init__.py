@@ -517,13 +517,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
             _LOGGER.warning("ProxLab: Static paths registered at %s", panel_url)
 
+            # Cache-bust: hash the JS bundle filename so the iframe URL
+            # changes whenever the frontend is rebuilt.
+            asset_dir = panel_dir / "assets"
+            cache_bust = ""
+            if asset_dir.is_dir():
+                js_files = sorted(asset_dir.glob("index-*.js"))
+                if js_files:
+                    # Use the hash portion of the filename (e.g. "AlUjtQCM")
+                    cache_bust = js_files[0].stem.split("-", 1)[-1]
+
             async_register_built_in_panel(
                 hass,
                 component_name="iframe",
                 sidebar_title="ProxLab",
                 sidebar_icon="mdi:robot-happy",
                 frontend_url_path="proxlab",
-                config={"url": f"{panel_url}/index.html?entry_id={entry.entry_id}"},
+                config={"url": f"{panel_url}/index.html?entry_id={entry.entry_id}&v={cache_bust}"},
                 require_admin=False,
             )
             hass.data[DOMAIN]["_panel_registered"] = True
