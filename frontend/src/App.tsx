@@ -19,6 +19,7 @@ import SchedulesPage from "./pages/SchedulesPage";
 import ChainsPage from "./pages/ChainsPage";
 import ChatPage from "./pages/ChatPage";
 import ReportsPage from "./pages/ReportsPage";
+import AgentBuilderPage from "./pages/AgentBuilderPage";
 
 export default function App() {
   const hass = useStore((s) => s.hass);
@@ -110,6 +111,7 @@ export default function App() {
           <Route path="schedules" element={<SchedulesPage />} />
           <Route path="chains" element={<ChainsPage />} />
           <Route path="chat" element={<ChatPage />} />
+          <Route path="builder" element={<AgentBuilderPage />} />
           <Route path="reports" element={<ReportsPage />} />
           <Route path="issues" element={<IssuesPage />} />
           <Route path="roadmap" element={<RoadmapPage />} />

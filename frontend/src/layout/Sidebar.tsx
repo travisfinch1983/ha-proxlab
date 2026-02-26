@@ -19,6 +19,7 @@ import {
   faAnglesRight,
   faComments,
   faChartPie,
+  faDiagramProject,
 } from "@fortawesome/free-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { useStore } from "../store";
@@ -41,6 +42,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/schedules", icon: faClock, label: "Schedules" },
   { to: "/chains", icon: faLink, label: "Chains" },
   { to: "/chat", icon: faComments, label: "Chat" },
+  { to: "/builder", icon: faDiagramProject, label: "Builder" },
   { to: "/debug", icon: faBug, label: "Debug" },
   { to: "/api-info", icon: faChartColumn, label: "API Info" },
   { to: "/reports", icon: faChartPie, label: "Reports" },
