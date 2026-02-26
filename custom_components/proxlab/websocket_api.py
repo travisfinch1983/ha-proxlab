@@ -243,6 +243,15 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_mcp_servers_delete)
     websocket_api.async_register_command(hass, ws_mcp_servers_reconnect)
 
+    # Chat card commands
+    websocket_api.async_register_command(hass, ws_card_config_get)
+    websocket_api.async_register_command(hass, ws_card_config_list)
+    websocket_api.async_register_command(hass, ws_card_config_save)
+    websocket_api.async_register_command(hass, ws_card_config_delete)
+    websocket_api.async_register_command(hass, ws_card_voices)
+    websocket_api.async_register_command(hass, ws_card_avatar_upload)
+    websocket_api.async_register_command(hass, ws_card_invoke)
+
 
 # ---------------------------------------------------------------------------
 # Config snapshot
@@ -2523,3 +2532,288 @@ async def ws_mcp_servers_reconnect(
         connection.send_result(msg["id"], server)
     except ValueError as err:
         connection.send_error(msg["id"], "not_found", str(err))
+
+
+# ---------------------------------------------------------------------------
+# Chat Card API
+# ---------------------------------------------------------------------------
+
+
+def _get_chat_cards(hass: HomeAssistant) -> tuple[dict, Any]:
+    """Return (cards_data dict, store) from hass.data."""
+    data = hass.data.get(DOMAIN, {})
+    cards_data = data.get("_chat_cards", {"cards": {}})
+    store = data.get("_chat_cards_store")
+    return cards_data, store
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/card/config/get",
+        vol.Optional("entry_id"): str,
+        vol.Required("card_id"): str,
+    }
+)
+@callback
+def ws_card_config_get(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Get a card config by card_id."""
+    cards_data, _ = _get_chat_cards(hass)
+    card = cards_data.get("cards", {}).get(msg["card_id"])
+    if card is None:
+        connection.send_result(msg["id"], None)
+        return
+    connection.send_result(msg["id"], card)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/card/config/list",
+        vol.Optional("entry_id"): str,
+    }
+)
+@callback
+def ws_card_config_list(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """List all card configs."""
+    cards_data, _ = _get_chat_cards(hass)
+    cards = list(cards_data.get("cards", {}).values())
+    connection.send_result(msg["id"], cards)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/card/config/save",
+        vol.Optional("entry_id"): str,
+        vol.Required("card_id"): str,
+        vol.Required("config"): dict,
+    }
+)
+@websocket_api.async_response
+async def ws_card_config_save(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Save or update a card config."""
+    cards_data, store = _get_chat_cards(hass)
+    if store is None:
+        connection.send_error(msg["id"], "not_ready", "Chat cards store not initialized")
+        return
+
+    card_config = msg["config"]
+    card_config["card_id"] = msg["card_id"]
+    cards_data.setdefault("cards", {})[msg["card_id"]] = card_config
+    await store.async_save(cards_data)
+    connection.send_result(msg["id"], card_config)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/card/config/delete",
+        vol.Optional("entry_id"): str,
+        vol.Required("card_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_card_config_delete(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Delete a card config."""
+    cards_data, store = _get_chat_cards(hass)
+    if store is None:
+        connection.send_error(msg["id"], "not_ready", "Chat cards store not initialized")
+        return
+
+    cards = cards_data.get("cards", {})
+    removed = cards.pop(msg["card_id"], None)
+    if removed is not None:
+        await store.async_save(cards_data)
+    connection.send_result(msg["id"], {"deleted": removed is not None})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/card/voices",
+        vol.Optional("entry_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_card_voices(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """List available TTS voices from configured TTS connections."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_result(msg["id"], [])
+        return
+
+    from .connection_manager import resolve_agent_to_flat_config
+
+    config = dict(entry.data) | dict(entry.options)
+    tts_config = resolve_agent_to_flat_config(config, "tts_agent")
+
+    voices: list[dict[str, str]] = []
+    if tts_config:
+        base_url = tts_config.get("base_url", "")
+        api_key = tts_config.get("api_key", "")
+        # Try to list voices from the TTS endpoint
+        try:
+            import aiohttp
+
+            headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+            async with aiohttp.ClientSession() as session:
+                # OpenAI-compatible voices endpoint
+                async with session.get(
+                    f"{base_url}/audio/voices",
+                    headers=headers,
+                    timeout=aiohttp.ClientTimeout(total=5),
+                ) as resp:
+                    if resp.status == 200:
+                        data = await resp.json()
+                        for v in data.get("voices", data.get("data", [])):
+                            if isinstance(v, dict):
+                                voices.append({
+                                    "id": v.get("voice_id", v.get("id", "")),
+                                    "name": v.get("name", v.get("voice_id", "")),
+                                })
+                            elif isinstance(v, str):
+                                voices.append({"id": v, "name": v})
+        except Exception:
+            pass
+
+    # If no endpoint voices found, provide common defaults
+    if not voices:
+        for name in ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]:
+            voices.append({"id": name, "name": name.capitalize()})
+
+    connection.send_result(msg["id"], voices)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/card/avatar/upload",
+        vol.Optional("entry_id"): str,
+        vol.Required("card_id"): str,
+        vol.Required("data"): str,  # base64 image data
+        vol.Optional("filename", default="avatar.png"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_card_avatar_upload(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Save base64 avatar image and return URL path."""
+    import base64
+    import pathlib
+
+    avatar_dir = pathlib.Path(hass.config.path("www/proxlab/avatars"))
+    avatar_dir.mkdir(parents=True, exist_ok=True)
+
+    ext = pathlib.Path(msg["filename"]).suffix or ".png"
+    filename = f"{msg['card_id']}{ext}"
+    filepath = avatar_dir / filename
+
+    try:
+        image_data = base64.b64decode(msg["data"])
+        await hass.async_add_executor_job(filepath.write_bytes, image_data)
+        url = f"/local/proxlab/avatars/{filename}"
+        connection.send_result(msg["id"], {"url": url})
+    except Exception as err:
+        connection.send_error(msg["id"], "upload_failed", str(err))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/card/invoke",
+        vol.Optional("entry_id"): str,
+        vol.Required("card_id"): str,
+        vol.Required("message"): str,
+        vol.Optional("conversation_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_card_invoke(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Invoke agent with card-specific prompt composition.
+
+    Prompt priority:
+    1. personality_enabled + CCv3 fields → build system prompt from character card
+    2. prompt_override → append as "Additional Instructions"
+    3. Neither → fall back to agent default prompt
+    """
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    agent = entry_data.get("agent")
+    if agent is None:
+        connection.send_error(
+            msg["id"], "not_configured", "LLM not configured — agent unavailable"
+        )
+        return
+
+    # Load card config
+    cards_data, _ = _get_chat_cards(hass)
+    card_config = cards_data.get("cards", {}).get(msg["card_id"], {})
+
+    agent_id = card_config.get("agent_id", "conversation")
+    prompt_override = card_config.get("prompt_override", "")
+    personality_enabled = card_config.get("personality_enabled", False)
+    personality = card_config.get("personality", {})
+
+    # Build system prompt from card config
+    system_parts: list[str] = []
+
+    if personality_enabled and personality:
+        char_name = personality.get("name", "")
+        sys_prompt = personality.get("system_prompt", "")
+        desc = personality.get("description", "")
+        persona = personality.get("personality", "")
+        scenario = personality.get("scenario", "")
+        examples = personality.get("mes_example", "")
+        post_hist = personality.get("post_history_instructions", "")
+
+        if sys_prompt:
+            system_parts.append(sys_prompt.replace("{{char}}", char_name).replace("{{user}}", "User"))
+        if desc:
+            system_parts.append(f"Character: {desc}")
+        if persona:
+            system_parts.append(f"Personality: {persona}")
+        if scenario:
+            system_parts.append(f"Scenario: {scenario}")
+        if examples:
+            system_parts.append(f"Example dialogue:\n{examples}")
+        if post_hist:
+            system_parts.append(post_hist.replace("{{char}}", char_name).replace("{{user}}", "User"))
+
+    if prompt_override:
+        system_parts.append(f"Additional Instructions: {prompt_override}")
+
+    context = {}
+    if system_parts:
+        context["card_system_prompt"] = "\n\n".join(system_parts)
+
+    # Handle first_mes for new conversations
+    first_mes = personality.get("first_mes", "") if personality_enabled else ""
+
+    try:
+        result = await agent.invoke_agent(
+            agent_id=agent_id,
+            message=msg["message"],
+            context=context if context else None,
+            conversation_id=msg.get("conversation_id", f"card_{msg['card_id']}"),
+            include_history=True,
+        )
+        # Attach first_mes if this was a new conversation
+        result["first_mes"] = first_mes
+        result["card_id"] = msg["card_id"]
+        connection.send_result(msg["id"], result)
+    except ValueError as err:
+        connection.send_error(msg["id"], "invalid_agent", str(err))
+    except Exception as err:
+        _LOGGER.error("Card invoke failed: %s", err, exc_info=True)
+        connection.send_error(msg["id"], "invoke_failed", str(err))

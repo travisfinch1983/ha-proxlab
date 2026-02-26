@@ -738,6 +738,10 @@ CONF_ADMIN_API_KEY: Final = "admin_api_key"
 API_USAGE_STORAGE_KEY: Final = "proxlab_api_usage"
 API_USAGE_STORAGE_VERSION: Final = 1
 
+# Chat cards storage
+CHAT_CARDS_STORAGE_KEY: Final = f"{DOMAIN}.chat_cards"
+CHAT_CARDS_STORAGE_VERSION: Final = 1
+
 # Custom tool handler types
 CUSTOM_TOOL_HANDLER_REST: Final = "rest"
 CUSTOM_TOOL_HANDLER_SERVICE: Final = "service"

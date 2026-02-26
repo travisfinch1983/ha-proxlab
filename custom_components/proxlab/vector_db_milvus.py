@@ -426,3 +426,110 @@ class MilvusVectorDB:
                 timeout=aiohttp.ClientTimeout(total=30)
             )
         return self._aiohttp_session
+
+    # --- Per-card collection methods ---
+
+    async def create_card_collection(self, card_id: str) -> str:
+        """Create a dedicated Milvus collection for a chat card.
+
+        Returns the collection name.
+        """
+        collection_name = f"proxlab_card_{card_id.replace('-', '_')}"
+        await self.hass.async_add_executor_job(
+            self._init_card_collection, collection_name
+        )
+        return collection_name
+
+    def _init_card_collection(self, collection_name: str) -> None:
+        """Create card collection (sync, runs in executor)."""
+        alias = f"proxlab_{self.host}_{self.port}"
+
+        if not utility.has_collection(collection_name, using=alias):
+            _LOGGER.info("Creating card Milvus collection: %s", collection_name)
+            fields = [
+                FieldSchema(
+                    name="id",
+                    dtype=DataType.VARCHAR,
+                    is_primary=True,
+                    max_length=256,
+                ),
+                FieldSchema(
+                    name="text",
+                    dtype=DataType.VARCHAR,
+                    max_length=8192,
+                ),
+                FieldSchema(
+                    name="embedding",
+                    dtype=DataType.FLOAT_VECTOR,
+                    dim=EMBEDDING_DIM,
+                ),
+                FieldSchema(
+                    name="metadata",
+                    dtype=DataType.JSON,
+                ),
+            ]
+            schema = CollectionSchema(
+                fields=fields,
+                description=f"ProxLab chat card embeddings ({collection_name})",
+            )
+            col = Collection(
+                name=collection_name,
+                schema=schema,
+                using=alias,
+            )
+            index_params = {
+                "metric_type": "L2",
+                "index_type": "IVF_FLAT",
+                "params": {"nlist": 128},
+            }
+            col.create_index("embedding", index_params)
+            col.load()
+
+    async def store_card_embedding(
+        self, collection_name: str, text: str, metadata: dict[str, Any]
+    ) -> None:
+        """Store a text embedding in a card's dedicated collection."""
+        embedding = await self._embed_text(text)
+        doc_id = hashlib.md5(text.encode()).hexdigest()
+
+        def _insert() -> None:
+            alias = f"proxlab_{self.host}_{self.port}"
+            col = Collection(name=collection_name, using=alias)
+            col.upsert([
+                [doc_id],
+                [text[:8192]],
+                [embedding],
+                [metadata],
+            ])
+
+        await self.hass.async_add_executor_job(_insert)
+
+    async def search_card_collection(
+        self, collection_name: str, query: str, top_k: int = 5
+    ) -> list[dict[str, Any]]:
+        """Search a card's dedicated collection for similar text."""
+        query_embedding = await self._embed_text(query)
+
+        def _search() -> list[dict[str, Any]]:
+            alias = f"proxlab_{self.host}_{self.port}"
+            if not utility.has_collection(collection_name, using=alias):
+                return []
+            col = Collection(name=collection_name, using=alias)
+            col.load()
+            results = col.search(
+                data=[query_embedding],
+                anns_field="embedding",
+                param={"metric_type": "L2", "params": {"nprobe": 16}},
+                limit=top_k,
+                output_fields=["text", "metadata"],
+            )
+            hits: list[dict[str, Any]] = []
+            for hit in results[0]:
+                hits.append({
+                    "text": hit.entity.get("text", ""),
+                    "metadata": hit.entity.get("metadata", {}),
+                    "distance": hit.distance,
+                })
+            return hits
+
+        return await self.hass.async_add_executor_job(_search)

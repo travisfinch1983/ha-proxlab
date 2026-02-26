@@ -550,6 +550,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             )
             hass.data[DOMAIN]["_panel_registered"] = True
             _LOGGER.warning("ProxLab: Sidebar panel registered successfully")
+
+            # Register chat card JS as extra module (auto-loaded on all dashboards)
+            card_dir = pathlib.Path(__file__).parent / "card"
+            card_url = "/proxlab_panel/card"
+            if card_dir.is_dir():
+                await hass.http.async_register_static_paths(
+                    [StaticPathConfig(card_url, str(card_dir), cache_headers=False)]
+                )
+                from homeassistant.components.frontend import add_extra_js_url
+                add_extra_js_url(hass, f"{card_url}/proxlab-chat-card.js")
+                _LOGGER.warning("ProxLab: Chat card JS registered at %s", card_url)
         except Exception as err:
             _LOGGER.error("ProxLab: PANEL REGISTRATION FAILED: %s", err, exc_info=True)
 
@@ -621,6 +632,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         roadmap_data = await roadmap_store.async_load() or {"headers": []}
         hass.data[DOMAIN]["_roadmap"] = roadmap_data
         hass.data[DOMAIN]["_roadmap_store"] = roadmap_store
+
+        # -- Persistent chat cards storage --
+        from .const import CHAT_CARDS_STORAGE_KEY, CHAT_CARDS_STORAGE_VERSION
+        chat_cards_store = Store(hass, CHAT_CARDS_STORAGE_VERSION, CHAT_CARDS_STORAGE_KEY)
+        chat_cards_data = await chat_cards_store.async_load() or {"cards": {}}
+        hass.data[DOMAIN]["_chat_cards"] = chat_cards_data
+        hass.data[DOMAIN]["_chat_cards_store"] = chat_cards_store
 
         @callback
         def _on_conversation_finished(event):
