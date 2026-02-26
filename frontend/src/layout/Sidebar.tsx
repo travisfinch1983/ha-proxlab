@@ -2,24 +2,15 @@ import { NavLink } from "react-router";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faHouseChimneyUser,
+  faComments,
   faPlug,
   faRobot,
-  faDatabase,
-  faBrain,
-  faMagnifyingGlass,
+  faBoltLightning,
+  faBookOpen,
   faCogs,
-  faBell,
-  faClock,
-  faLink,
-  faBug,
-  faChartColumn,
-  faListCheck,
-  faMap,
+  faCode,
   faAnglesLeft,
   faAnglesRight,
-  faComments,
-  faChartPie,
-  faDiagramProject,
 } from "@fortawesome/free-solid-svg-icons";
 import type { IconDefinition } from "@fortawesome/fontawesome-svg-core";
 import { useStore } from "../store";
@@ -32,22 +23,13 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: "/", icon: faHouseChimneyUser, label: "Dashboard" },
+  { to: "/chat", icon: faComments, label: "Chat" },
   { to: "/connections", icon: faPlug, label: "Connections" },
   { to: "/agents", icon: faRobot, label: "Agents" },
-  { to: "/context", icon: faDatabase, label: "Context" },
-  { to: "/memory", icon: faBrain, label: "Memory" },
-  { to: "/vector-db", icon: faMagnifyingGlass, label: "Vector DB" },
+  { to: "/automations", icon: faBoltLightning, label: "Automations" },
+  { to: "/knowledge", icon: faBookOpen, label: "Knowledge" },
   { to: "/settings", icon: faCogs, label: "Settings" },
-  { to: "/subscriptions", icon: faBell, label: "Subscriptions" },
-  { to: "/schedules", icon: faClock, label: "Schedules" },
-  { to: "/chains", icon: faLink, label: "Chains" },
-  { to: "/chat", icon: faComments, label: "Chat" },
-  { to: "/builder", icon: faDiagramProject, label: "Builder" },
-  { to: "/debug", icon: faBug, label: "Debug" },
-  { to: "/api-info", icon: faChartColumn, label: "API Info" },
-  { to: "/reports", icon: faChartPie, label: "Reports" },
-  { to: "/issues", icon: faListCheck, label: "Issues" },
-  { to: "/roadmap", icon: faMap, label: "Roadmap" },
+  { to: "/developer", icon: faCode, label: "Developer" },
 ];
 
 export default function Sidebar() {

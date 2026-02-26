@@ -3,6 +3,9 @@ import { HashRouter, Routes, Route } from "react-router";
 import { useStore } from "./store";
 import { fetchConfig } from "./api";
 import AppLayout from "./layout/AppLayout";
+import AutomationsLayout from "./layout/AutomationsLayout";
+import KnowledgeLayout from "./layout/KnowledgeLayout";
+import DeveloperLayout from "./layout/DeveloperLayout";
 import DashboardPage from "./pages/DashboardPage";
 import ConnectionsPage from "./pages/ConnectionsPage";
 import AgentsPage from "./pages/AgentsPage";
@@ -99,22 +102,34 @@ export default function App() {
       <Routes>
         <Route element={<AppLayout />}>
           <Route index element={<DashboardPage />} />
+          <Route path="chat" element={<ChatPage />} />
           <Route path="connections" element={<ConnectionsPage />} />
           <Route path="agents" element={<AgentsPage />} />
-          <Route path="context" element={<ContextPage />} />
-          <Route path="memory" element={<MemoryPage />} />
-          <Route path="vector-db" element={<VectorDbPage />} />
           <Route path="settings" element={<SettingsPage />} />
-          <Route path="debug" element={<DebugPage />} />
-          <Route path="api-info" element={<ApiInfoPage />} />
-          <Route path="subscriptions" element={<SubscriptionsPage />} />
-          <Route path="schedules" element={<SchedulesPage />} />
-          <Route path="chains" element={<ChainsPage />} />
-          <Route path="chat" element={<ChatPage />} />
-          <Route path="builder" element={<AgentBuilderPage />} />
-          <Route path="reports" element={<ReportsPage />} />
-          <Route path="issues" element={<IssuesPage />} />
-          <Route path="roadmap" element={<RoadmapPage />} />
+
+          {/* Automations group */}
+          <Route path="automations" element={<AutomationsLayout />}>
+            <Route index element={<SubscriptionsPage />} />
+            <Route path="schedules" element={<SchedulesPage />} />
+            <Route path="chains" element={<ChainsPage />} />
+            <Route path="builder" element={<AgentBuilderPage />} />
+          </Route>
+
+          {/* Knowledge group */}
+          <Route path="knowledge" element={<KnowledgeLayout />}>
+            <Route index element={<ContextPage />} />
+            <Route path="memory" element={<MemoryPage />} />
+            <Route path="vector-db" element={<VectorDbPage />} />
+          </Route>
+
+          {/* Developer group */}
+          <Route path="developer" element={<DeveloperLayout />}>
+            <Route index element={<DebugPage />} />
+            <Route path="api-info" element={<ApiInfoPage />} />
+            <Route path="reports" element={<ReportsPage />} />
+            <Route path="issues" element={<IssuesPage />} />
+            <Route path="roadmap" element={<RoadmapPage />} />
+          </Route>
         </Route>
       </Routes>
     </HashRouter>
