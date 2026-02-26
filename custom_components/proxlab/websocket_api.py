@@ -7,7 +7,6 @@ config, health data, connections, agents, and settings.
 from __future__ import annotations
 
 import logging
-import time as _time
 from typing import Any
 from uuid import uuid4
 
@@ -258,7 +257,6 @@ async def ws_config_get(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
     """Return full config snapshot for the panel."""
-    _t0 = _time.monotonic()
     entry = _get_entry(hass, msg)
     if not entry:
         connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
@@ -348,7 +346,6 @@ async def ws_config_get(
             "settings": settings,
         }
     connection.send_result(msg["id"], result)
-    _LOGGER.warning("WS_TIMING config/get: %.1fms", (_time.monotonic() - _t0) * 1000)
 
 
 # ---------------------------------------------------------------------------
@@ -1196,7 +1193,6 @@ async def ws_debug_traces(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
     """Return recent conversation traces for the debug panel."""
-    _t0 = _time.monotonic()
     all_traces = hass.data.get(DOMAIN, {}).get("_debug_traces", [])
     total = len(all_traces)
     limit = msg.get("limit", 50)
@@ -1226,7 +1222,6 @@ async def ws_debug_traces(
 
     lite = await hass.async_add_executor_job(_trim, page)
     connection.send_result(msg["id"], {"traces": lite, "total": total})
-    _LOGGER.warning("WS_TIMING debug/traces: %.1fms (limit=%s, returned=%d, total=%d)", (_time.monotonic() - _t0) * 1000, limit, len(lite), total)
 
 
 @websocket_api.websocket_command(
@@ -1430,10 +1425,8 @@ def ws_issues_list(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
     """Return all issues."""
-    _t0 = _time.monotonic()
     issues_data = hass.data.get(DOMAIN, {}).get("_issues", {"items": []})
     connection.send_result(msg["id"], {"items": issues_data.get("items", [])})
-    _LOGGER.warning("WS_TIMING issues/list: %.1fms (%d items)", (_time.monotonic() - _t0) * 1000, len(issues_data.get("items", [])))
 
 
 @websocket_api.websocket_command(
@@ -1670,19 +1663,15 @@ def ws_subscriptions_list(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
     """List all event subscriptions."""
-    _t0 = _time.monotonic()
     entry = _get_entry(hass, msg)
     if not entry:
         connection.send_result(msg["id"], [])
-        _LOGGER.warning("WS_TIMING subscriptions/list: %.1fms (no entry)", (_time.monotonic() - _t0) * 1000)
         return
     registry = _get_registry(hass, entry)
     if not registry:
         connection.send_result(msg["id"], [])
-        _LOGGER.warning("WS_TIMING subscriptions/list: %.1fms (no registry)", (_time.monotonic() - _t0) * 1000)
         return
     connection.send_result(msg["id"], registry.list_subscriptions())
-    _LOGGER.warning("WS_TIMING subscriptions/list: %.1fms", (_time.monotonic() - _t0) * 1000)
 
 
 @websocket_api.websocket_command(
