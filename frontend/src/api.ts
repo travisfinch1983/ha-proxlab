@@ -394,13 +394,31 @@ export interface AgentInvokeResult {
 export async function invokeAgent(
   agentId: string,
   message: string,
-  context?: Record<string, unknown>
+  context?: Record<string, unknown>,
+  opts?: { conversation_id?: string; include_history?: boolean }
 ): Promise<AgentInvokeResult> {
   return callWS("proxlab/agent/invoke", {
     agent_id: agentId,
     message,
     ...(context ? { context } : {}),
+    ...(opts?.conversation_id
+      ? { conversation_id: opts.conversation_id }
+      : {}),
+    ...(opts?.include_history ? { include_history: true } : {}),
   });
+}
+
+export interface AvailableAgent {
+  id: string;
+  name: string;
+  description: string;
+  group: string;
+  has_connection: boolean;
+  tools: string[];
+}
+
+export async function listAvailableAgents(): Promise<AvailableAgent[]> {
+  return callWS("proxlab/agent/available");
 }
 
 // --- Subscriptions ---
