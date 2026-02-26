@@ -1,0 +1,191 @@
+[
+  {
+    "id": "proxlab_diagnosis_chain",
+    "type": "tab",
+    "label": "ProxLab: Multi-Step Diagnosis",
+    "disabled": false,
+    "info": "Demonstrates running a multi-step agent chain: first agent gathers system info, second agent analyzes it, third produces actionable recommendations."
+  },
+  {
+    "id": "dc_trigger",
+    "type": "inject",
+    "z": "proxlab_diagnosis_chain",
+    "name": "Trigger Diagnosis",
+    "props": [
+      { "p": "payload", "v": "Run a full system health check", "vt": "str" },
+      { "p": "chain_id", "v": "", "vt": "str" }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 190,
+    "y": 200,
+    "wires": [["dc_run_chain"]]
+  },
+  {
+    "id": "dc_run_chain",
+    "type": "proxlab-chain",
+    "z": "proxlab_diagnosis_chain",
+    "name": "Run Diagnosis Chain",
+    "server": "",
+    "action": "run",
+    "chainId": "",
+    "x": 430,
+    "y": 200,
+    "wires": [["dc_switch"]]
+  },
+  {
+    "id": "dc_switch",
+    "type": "switch",
+    "z": "proxlab_diagnosis_chain",
+    "name": "Chain OK?",
+    "property": "proxlab.success",
+    "propertyType": "msg",
+    "rules": [
+      { "t": "true" },
+      { "t": "else" }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 640,
+    "y": 200,
+    "wires": [["dc_format"], ["dc_error"]]
+  },
+  {
+    "id": "dc_format",
+    "type": "function",
+    "z": "proxlab_diagnosis_chain",
+    "name": "Format Report",
+    "func": "const chain = msg.proxlab || {};\nconst steps = chain.steps || [];\n\nlet report = '=== System Diagnosis Report ===\\n\\n';\nsteps.forEach((step, i) => {\n    report += `--- Step ${i + 1}: ${step.agent_name || step.agent_id} ---\\n`;\n    report += `Model: ${step.model || 'N/A'} | Tokens: ${step.tokens || 0} | Time: ${step.duration_ms || 0}ms\\n`;\n    report += `${step.response_text || '(no response)'}\\n\\n`;\n});\n\nreport += `Total steps: ${steps.length}`;\nmsg.payload = report;\nreturn msg;",
+    "outputs": 1,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 840,
+    "y": 160,
+    "wires": [["dc_output"]]
+  },
+  {
+    "id": "dc_output",
+    "type": "debug",
+    "z": "proxlab_diagnosis_chain",
+    "name": "Diagnosis Report",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1050,
+    "y": 160,
+    "wires": []
+  },
+  {
+    "id": "dc_error",
+    "type": "debug",
+    "z": "proxlab_diagnosis_chain",
+    "name": "Chain Error",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "ERROR",
+    "statusType": "auto",
+    "x": 840,
+    "y": 240,
+    "wires": []
+  },
+  {
+    "id": "dc_setup_chain",
+    "type": "proxlab-chain",
+    "z": "proxlab_diagnosis_chain",
+    "name": "Create Chain (run once)",
+    "server": "",
+    "action": "create",
+    "chainId": "",
+    "x": 440,
+    "y": 360,
+    "wires": [["dc_chain_created"]]
+  },
+  {
+    "id": "dc_create_inject",
+    "type": "inject",
+    "z": "proxlab_diagnosis_chain",
+    "name": "Setup: Create the chain",
+    "props": [
+      {
+        "p": "payload",
+        "v": "{\"name\":\"System Diagnosis\",\"steps\":[{\"agent_id\":\"general\",\"message_template\":\"List all entity states that look abnormal or have error/unavailable status. Include device names and current values.\"},{\"agent_id\":\"general\",\"message_template\":\"Based on this system state report, identify the root causes of any issues and rank them by severity: {{previous_response}}\"},{\"agent_id\":\"general\",\"message_template\":\"Create a concise action plan with specific steps to resolve these issues, ordered by priority: {{previous_response}}\"}]}",
+        "vt": "json"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 210,
+    "y": 360,
+    "wires": [["dc_setup_chain"]]
+  },
+  {
+    "id": "dc_chain_created",
+    "type": "function",
+    "z": "proxlab_diagnosis_chain",
+    "name": "Save Chain ID",
+    "func": "const chainId = msg.payload.chain_id || msg.payload.id;\nflow.set('diagnosis_chain_id', chainId);\nmsg.payload = `Chain created with ID: ${chainId}. Copy this ID into the 'Run Diagnosis Chain' node config.`;\nreturn msg;",
+    "outputs": 1,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 680,
+    "y": 360,
+    "wires": [["dc_setup_output"]]
+  },
+  {
+    "id": "dc_setup_output",
+    "type": "debug",
+    "z": "proxlab_diagnosis_chain",
+    "name": "Chain ID",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 870,
+    "y": 360,
+    "wires": []
+  },
+  {
+    "id": "dc_comment_top",
+    "type": "comment",
+    "z": "proxlab_diagnosis_chain",
+    "name": "Top: Run an existing chain | Bottom: One-time setup to create the chain",
+    "info": "**How to use:**\n1. Configure the ProxLab server on all proxlab nodes\n2. Click 'Setup: Create the chain' inject node once to create the 3-step diagnosis chain\n3. Copy the chain_id from the debug output into the 'Run Diagnosis Chain' node and 'Trigger Diagnosis' inject node\n4. Click 'Trigger Diagnosis' to run the full chain",
+    "x": 400,
+    "y": 60,
+    "wires": []
+  },
+  {
+    "id": "dc_divider",
+    "type": "comment",
+    "z": "proxlab_diagnosis_chain",
+    "name": "--- One-Time Setup (create the chain, then copy chain_id above) ---",
+    "info": "",
+    "x": 340,
+    "y": 300,
+    "wires": []
+  }
+]

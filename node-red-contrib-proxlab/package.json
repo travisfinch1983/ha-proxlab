@@ -21,7 +21,10 @@
     "nodes": {
       "proxlab-server": "nodes/proxlab-server.js",
       "proxlab-invoke": "nodes/proxlab-invoke.js",
-      "proxlab-listen": "nodes/proxlab-listen.js"
+      "proxlab-listen": "nodes/proxlab-listen.js",
+      "proxlab-subscribe": "nodes/proxlab-subscribe.js",
+      "proxlab-schedule": "nodes/proxlab-schedule.js",
+      "proxlab-chain": "nodes/proxlab-chain.js"
     }
   },
   "dependencies": {

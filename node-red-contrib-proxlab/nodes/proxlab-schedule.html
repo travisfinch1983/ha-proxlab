@@ -1,0 +1,87 @@
+<script type="text/javascript">
+  RED.nodes.registerType("proxlab-schedule", {
+    category: "ProxLab",
+    color: "#7c3aed",
+    defaults: {
+      name: { value: "" },
+      server: { value: "", type: "proxlab-server", required: true },
+      action: { value: "list" },
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "font-awesome/fa-clock",
+    label: function () {
+      return this.name || "proxlab schedule";
+    },
+    paletteLabel: "proxlab schedule",
+  });
+</script>
+
+<script type="text/html" data-template-name="proxlab-schedule">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-server"
+      ><i class="fa fa-server"></i> Server</label
+    >
+    <input type="text" id="node-input-server" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-action"
+      ><i class="fa fa-cog"></i> Action</label
+    >
+    <select id="node-input-action">
+      <option value="list">List</option>
+      <option value="create">Create</option>
+      <option value="update">Update</option>
+      <option value="delete">Delete</option>
+    </select>
+  </div>
+</script>
+
+<script type="text/html" data-help-name="proxlab-schedule">
+  <p>
+    Manages ProxLab agent schedules on Home Assistant. Schedules invoke agents
+    on a recurring interval or at specific times.
+  </p>
+
+  <h3>Actions</h3>
+  <dl class="message-properties">
+    <dt>list</dt>
+    <dd>Returns all schedules. No input required.</dd>
+    <dt>create</dt>
+    <dd>
+      Creates a schedule. <code>msg.payload</code> must include
+      <code>agent_id</code>. Optional: <code>schedule_type</code> (interval,
+      daily, cron), <code>schedule_config</code> (e.g.
+      <code>{seconds: 300}</code> or <code>{hour: 8, minute: 0}</code>),
+      <code>message_template</code>, <code>enabled</code>.
+    </dd>
+    <dt>update</dt>
+    <dd>
+      Updates a schedule. <code>msg.payload.schedule_id</code> required.
+      Include any fields to change.
+    </dd>
+    <dt>delete</dt>
+    <dd>
+      Deletes a schedule. Pass <code>schedule_id</code> in
+      <code>msg.payload</code> or as a string.
+    </dd>
+  </dl>
+
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt class="optional">action <span class="property-type">string</span></dt>
+    <dd>Override the configured action.</dd>
+    <dt>payload <span class="property-type">object | string</span></dt>
+    <dd>Schedule data for create/update, or schedule_id for delete.</dd>
+  </dl>
+
+  <h3>Outputs</h3>
+  <dl class="message-properties">
+    <dt>payload <span class="property-type">array | object</span></dt>
+    <dd>Result from Home Assistant (list of schedules, or single result).</dd>
+  </dl>
+</script>

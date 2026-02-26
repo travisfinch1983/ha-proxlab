@@ -1,0 +1,113 @@
+<script type="text/javascript">
+  RED.nodes.registerType("proxlab-chain", {
+    category: "ProxLab",
+    color: "#7c3aed",
+    defaults: {
+      name: { value: "" },
+      server: { value: "", type: "proxlab-server", required: true },
+      action: { value: "run" },
+      chainId: { value: "" },
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "font-awesome/fa-link",
+    label: function () {
+      return this.name || "proxlab chain";
+    },
+    paletteLabel: "proxlab chain",
+  });
+</script>
+
+<script type="text/html" data-template-name="proxlab-chain">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-server"
+      ><i class="fa fa-server"></i> Server</label
+    >
+    <input type="text" id="node-input-server" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-action"
+      ><i class="fa fa-cog"></i> Action</label
+    >
+    <select id="node-input-action">
+      <option value="run">Run</option>
+      <option value="list">List</option>
+      <option value="create">Create</option>
+      <option value="update">Update</option>
+      <option value="delete">Delete</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="node-input-chainId"
+      ><i class="fa fa-link"></i> Chain ID</label
+    >
+    <input
+      type="text"
+      id="node-input-chainId"
+      placeholder="For run action — override with msg.chain_id"
+    />
+  </div>
+</script>
+
+<script type="text/html" data-help-name="proxlab-chain">
+  <p>
+    Manages and runs ProxLab agent chains on Home Assistant. Chains execute
+    a sequence of agents where each step's output feeds into the next.
+  </p>
+
+  <h3>Actions</h3>
+  <dl class="message-properties">
+    <dt>run</dt>
+    <dd>
+      Executes a chain. Requires <code>chain_id</code> (from config or
+      <code>msg.chain_id</code>). Pass <code>msg.payload</code> as a string
+      for the initial message, or as an object with
+      <code>initial_message</code> and <code>initial_context</code>.
+      Output: <code>msg.payload</code> = final step's response,
+      <code>msg.proxlab</code> = full chain result with all steps.
+    </dd>
+    <dt>list</dt>
+    <dd>Returns all chains.</dd>
+    <dt>create</dt>
+    <dd>
+      Creates a chain. <code>msg.payload</code> must include
+      <code>steps</code> (array of step objects). Optional:
+      <code>name</code>, <code>enabled</code>.
+    </dd>
+    <dt>update</dt>
+    <dd>
+      Updates a chain. <code>msg.payload.chain_id</code> required.
+    </dd>
+    <dt>delete</dt>
+    <dd>
+      Deletes a chain. Pass <code>chain_id</code> in payload or as string.
+    </dd>
+  </dl>
+
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt class="optional">action <span class="property-type">string</span></dt>
+    <dd>Override the configured action.</dd>
+    <dt class="optional">chain_id <span class="property-type">string</span></dt>
+    <dd>Override the configured chain ID (for run action).</dd>
+    <dt>payload <span class="property-type">string | object</span></dt>
+    <dd>
+      For <strong>run</strong>: initial message (string) or
+      <code>{initial_message, initial_context}</code>. For CRUD: chain data.
+    </dd>
+  </dl>
+
+  <h3>Outputs</h3>
+  <dl class="message-properties">
+    <dt>payload <span class="property-type">string | array | object</span></dt>
+    <dd>
+      For <strong>run</strong>: final step's response text. For CRUD: result.
+    </dd>
+    <dt class="optional">proxlab <span class="property-type">object</span></dt>
+    <dd>For <strong>run</strong>: full chain result with all step details.</dd>
+  </dl>
+</script>

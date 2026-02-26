@@ -1,0 +1,112 @@
+[
+  {
+    "id": "proxlab_smart_alerting",
+    "type": "tab",
+    "label": "ProxLab: Smart Alerting",
+    "disabled": false,
+    "info": "Listens for ProxLab agent invocation events and routes them based on success/failure. Failed invocations trigger an AI-powered diagnosis."
+  },
+  {
+    "id": "sa_listen",
+    "type": "proxlab-listen",
+    "z": "proxlab_smart_alerting",
+    "name": "Agent Events",
+    "server": "",
+    "eventType": "proxlab_agent_invoked",
+    "filterAgent": "",
+    "x": 170,
+    "y": 200,
+    "wires": [["sa_switch"]]
+  },
+  {
+    "id": "sa_switch",
+    "type": "switch",
+    "z": "proxlab_smart_alerting",
+    "name": "Success?",
+    "property": "payload.success",
+    "propertyType": "msg",
+    "rules": [
+      { "t": "true" },
+      { "t": "false" }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 370,
+    "y": 200,
+    "wires": [["sa_success_log"], ["sa_build_diag"]]
+  },
+  {
+    "id": "sa_success_log",
+    "type": "debug",
+    "z": "proxlab_smart_alerting",
+    "name": "Success Log",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "true",
+    "targetType": "full",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 580,
+    "y": 140,
+    "wires": []
+  },
+  {
+    "id": "sa_build_diag",
+    "type": "function",
+    "z": "proxlab_smart_alerting",
+    "name": "Build Diagnosis Request",
+    "func": "const agentName = msg.payload.agent_name || msg.payload.agent_id || 'unknown';\nconst errorText = msg.payload.response_text || 'No response';\nconst model = msg.payload.model || 'unknown';\nconst duration = msg.payload.duration_ms || 0;\n\nmsg.payload = `Agent '${agentName}' failed after ${duration}ms using model '${model}'. ` +\n  `Error response: ${errorText}. ` +\n  `Diagnose the likely cause and suggest a fix.`;\n\nreturn msg;",
+    "outputs": 1,
+    "timeout": "",
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 610,
+    "y": 260,
+    "wires": [["sa_diagnose"]]
+  },
+  {
+    "id": "sa_diagnose",
+    "type": "proxlab-invoke",
+    "z": "proxlab_smart_alerting",
+    "name": "Diagnose Failure",
+    "server": "",
+    "agentId": "general",
+    "messageTemplate": "",
+    "includeHistory": false,
+    "x": 850,
+    "y": 260,
+    "wires": [["sa_diag_output"]]
+  },
+  {
+    "id": "sa_diag_output",
+    "type": "debug",
+    "z": "proxlab_smart_alerting",
+    "name": "Diagnosis (replace with notify)",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "",
+    "statusType": "auto",
+    "x": 1100,
+    "y": 260,
+    "wires": []
+  },
+  {
+    "id": "sa_comment",
+    "type": "comment",
+    "z": "proxlab_smart_alerting",
+    "name": "Setup: Configure server on both proxlab nodes, replace debug outputs with notifications",
+    "info": "1. Configure the ProxLab server on both the 'Agent Events' listener and 'Diagnose Failure' invoke nodes\n2. Optionally set a filter agent on the listener to only monitor specific agents\n3. Replace debug output nodes with actual notification services",
+    "x": 440,
+    "y": 60,
+    "wires": []
+  }
+]

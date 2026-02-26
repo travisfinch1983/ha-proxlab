@@ -1,0 +1,103 @@
+[
+  {
+    "id": "proxlab_security_patrol",
+    "type": "tab",
+    "label": "ProxLab: Security Patrol",
+    "disabled": false,
+    "info": "Periodic security patrol that asks an AI agent to analyze recent sensor data and report anomalies. Runs every 5 minutes and sends alerts via notification."
+  },
+  {
+    "id": "sp_inject",
+    "type": "inject",
+    "z": "proxlab_security_patrol",
+    "name": "Every 5 min",
+    "props": [{ "p": "payload" }],
+    "repeat": "300",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "10",
+    "topic": "",
+    "payload": "Analyze the latest sensor readings from all security zones. Report any anomalies, unusual motion patterns, or doors left open. Summarize the security status.",
+    "payloadType": "str",
+    "x": 170,
+    "y": 160,
+    "wires": [["sp_invoke"]]
+  },
+  {
+    "id": "sp_invoke",
+    "type": "proxlab-invoke",
+    "z": "proxlab_security_patrol",
+    "name": "Security Agent",
+    "server": "",
+    "agentId": "general",
+    "messageTemplate": "",
+    "includeHistory": false,
+    "x": 380,
+    "y": 160,
+    "wires": [["sp_switch"]]
+  },
+  {
+    "id": "sp_switch",
+    "type": "switch",
+    "z": "proxlab_security_patrol",
+    "name": "Has Alert?",
+    "property": "payload",
+    "propertyType": "msg",
+    "rules": [
+      { "t": "cont", "v": "anomal", "vt": "str" },
+      { "t": "cont", "v": "alert", "vt": "str" },
+      { "t": "cont", "v": "warning", "vt": "str" },
+      { "t": "else" }
+    ],
+    "checkall": "false",
+    "repair": false,
+    "outputs": 2,
+    "x": 580,
+    "y": 160,
+    "wires": [["sp_notify"], ["sp_log"]]
+  },
+  {
+    "id": "sp_notify",
+    "type": "debug",
+    "z": "proxlab_security_patrol",
+    "name": "Send Alert (replace with notify)",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "ALERT",
+    "statusType": "auto",
+    "x": 830,
+    "y": 120,
+    "wires": []
+  },
+  {
+    "id": "sp_log",
+    "type": "debug",
+    "z": "proxlab_security_patrol",
+    "name": "All Clear Log",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "OK",
+    "statusType": "auto",
+    "x": 780,
+    "y": 200,
+    "wires": []
+  },
+  {
+    "id": "sp_comment",
+    "type": "comment",
+    "z": "proxlab_security_patrol",
+    "name": "Setup: Configure the proxlab-invoke node with your server and agent ID",
+    "info": "1. Double-click the 'Security Agent' node and configure your ProxLab server connection\n2. Set the Agent ID to your security-focused agent (e.g., 'general' or a custom 'security' agent)\n3. Replace the 'Send Alert' debug node with an actual notification node (e.g., HA notify service, Telegram, Pushover)",
+    "x": 400,
+    "y": 60,
+    "wires": []
+  }
+]
