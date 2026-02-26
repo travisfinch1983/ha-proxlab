@@ -151,6 +151,62 @@ export function healthLabel(status: HealthStatus): string {
   }
 }
 
+// --- Agent Registry: Subscriptions, Schedules, Chains ---
+
+export interface Subscription {
+  id: string;
+  event_type: string;
+  event_filter: Record<string, unknown>;
+  agent_id: string;
+  message_template: string;
+  context_template: string | null;
+  cooldown_seconds: number;
+  enabled: boolean;
+  created_at: number;
+  last_triggered: number | null;
+  trigger_count: number;
+}
+
+export interface Schedule {
+  id: string;
+  agent_id: string;
+  schedule_type: "interval" | "time_of_day";
+  schedule_config: Record<string, number>;
+  message_template: string;
+  context_template: string | null;
+  cooldown_seconds: number;
+  enabled: boolean;
+  created_at: number;
+  last_triggered: number | null;
+  trigger_count: number;
+}
+
+export interface ChainStep {
+  agent_id: string;
+  message_template?: string;
+  context_template?: string | null;
+  context_includes?: string[];
+}
+
+export interface Chain {
+  id: string;
+  name: string;
+  steps: ChainStep[];
+  enabled: boolean;
+  created_at: number;
+  last_run: number | null;
+  run_count: number;
+}
+
+export interface ChainRunResult {
+  chain_id: string;
+  chain_name: string;
+  steps_completed: number;
+  steps_total: number;
+  results: unknown[];
+  final_response: string;
+}
+
 export const CAPABILITY_LABELS: Record<string, string> = {
   conversation: "Conversational LLM",
   tool_use: "Tool Use (LLM)",

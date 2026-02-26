@@ -14,6 +14,9 @@ import DebugPage from "./pages/DebugPage";
 import ApiInfoPage from "./pages/ApiInfoPage";
 import IssuesPage from "./pages/IssuesPage";
 import RoadmapPage from "./pages/RoadmapPage";
+import SubscriptionsPage from "./pages/SubscriptionsPage";
+import SchedulesPage from "./pages/SchedulesPage";
+import ChainsPage from "./pages/ChainsPage";
 
 export default function App() {
   const hass = useStore((s) => s.hass);
@@ -101,6 +104,9 @@ export default function App() {
           <Route path="settings" element={<SettingsPage />} />
           <Route path="debug" element={<DebugPage />} />
           <Route path="api-info" element={<ApiInfoPage />} />
+          <Route path="subscriptions" element={<SubscriptionsPage />} />
+          <Route path="schedules" element={<SchedulesPage />} />
+          <Route path="chains" element={<ChainsPage />} />
           <Route path="issues" element={<IssuesPage />} />
           <Route path="roadmap" element={<RoadmapPage />} />
         </Route>

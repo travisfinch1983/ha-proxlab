@@ -8,6 +8,10 @@ import type {
   VectorDbSettings,
   MemorySettings,
   GeneralSettings,
+  Subscription,
+  Schedule,
+  Chain,
+  ChainRunResult,
 } from "./types";
 
 function getHass() {
@@ -372,4 +376,98 @@ export async function updateRoadmap(
   params: Record<string, unknown> = {}
 ): Promise<Record<string, unknown>> {
   return callWS("proxlab/roadmap/update", { action, ...params });
+}
+
+// --- Subscriptions ---
+
+export async function listSubscriptions(): Promise<Subscription[]> {
+  return callWS("proxlab/agent/subscriptions/list");
+}
+
+export async function createSubscription(
+  fields: Omit<Subscription, "id" | "created_at" | "last_triggered" | "trigger_count">
+): Promise<Subscription> {
+  return callWS("proxlab/agent/subscriptions/create", fields as Record<string, unknown>);
+}
+
+export async function updateSubscription(
+  subscriptionId: string,
+  fields: Partial<Omit<Subscription, "id" | "created_at" | "last_triggered" | "trigger_count">>
+): Promise<Subscription> {
+  return callWS("proxlab/agent/subscriptions/update", {
+    subscription_id: subscriptionId,
+    ...fields,
+  });
+}
+
+export async function deleteSubscription(subscriptionId: string): Promise<void> {
+  return callWS("proxlab/agent/subscriptions/delete", {
+    subscription_id: subscriptionId,
+  });
+}
+
+// --- Schedules ---
+
+export async function listSchedules(): Promise<Schedule[]> {
+  return callWS("proxlab/agent/schedules/list");
+}
+
+export async function createSchedule(
+  fields: Omit<Schedule, "id" | "created_at" | "last_triggered" | "trigger_count">
+): Promise<Schedule> {
+  return callWS("proxlab/agent/schedules/create", fields as Record<string, unknown>);
+}
+
+export async function updateSchedule(
+  scheduleId: string,
+  fields: Partial<Omit<Schedule, "id" | "created_at" | "last_triggered" | "trigger_count">>
+): Promise<Schedule> {
+  return callWS("proxlab/agent/schedules/update", {
+    schedule_id: scheduleId,
+    ...fields,
+  });
+}
+
+export async function deleteSchedule(scheduleId: string): Promise<void> {
+  return callWS("proxlab/agent/schedules/delete", {
+    schedule_id: scheduleId,
+  });
+}
+
+// --- Chains ---
+
+export async function listChains(): Promise<Chain[]> {
+  return callWS("proxlab/agent/chains/list");
+}
+
+export async function createChain(
+  fields: Omit<Chain, "id" | "created_at" | "last_run" | "run_count">
+): Promise<Chain> {
+  return callWS("proxlab/agent/chains/create", fields as Record<string, unknown>);
+}
+
+export async function updateChain(
+  chainId: string,
+  fields: Partial<Omit<Chain, "id" | "created_at" | "last_run" | "run_count">>
+): Promise<Chain> {
+  return callWS("proxlab/agent/chains/update", {
+    chain_id: chainId,
+    ...fields,
+  });
+}
+
+export async function deleteChain(chainId: string): Promise<void> {
+  return callWS("proxlab/agent/chains/delete", { chain_id: chainId });
+}
+
+export async function runChain(
+  chainId: string,
+  initialMessage?: string,
+  initialContext?: Record<string, unknown>
+): Promise<ChainRunResult> {
+  return callWS("proxlab/agent/chains/run", {
+    chain_id: chainId,
+    ...(initialMessage ? { initial_message: initialMessage } : {}),
+    ...(initialContext ? { initial_context: initialContext } : {}),
+  });
 }
