@@ -23,6 +23,9 @@ import ChainsPage from "./pages/ChainsPage";
 import ChatPage from "./pages/ChatPage";
 import ReportsPage from "./pages/ReportsPage";
 import AgentBuilderPage from "./pages/AgentBuilderPage";
+import ToolsLayout from "./layout/ToolsLayout";
+import McpServersPage from "./pages/McpServersPage";
+import McpMarketplacePage from "./pages/McpMarketplacePage";
 
 export default function App() {
   const hass = useStore((s) => s.hass);
@@ -113,6 +116,12 @@ export default function App() {
             <Route path="schedules" element={<SchedulesPage />} />
             <Route path="chains" element={<ChainsPage />} />
             <Route path="builder" element={<AgentBuilderPage />} />
+          </Route>
+
+          {/* Tools group (MCP) */}
+          <Route path="tools" element={<ToolsLayout />}>
+            <Route index element={<McpServersPage />} />
+            <Route path="marketplace" element={<McpMarketplacePage />} />
           </Route>
 
           {/* Knowledge group */}

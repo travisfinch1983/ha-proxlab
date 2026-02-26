@@ -589,6 +589,14 @@ TOOL_CAMERA_VISION: Final = "camera_vision"
 TOOL_IMAGE_GENERATION: Final = "generate_image"
 TOOL_SSH_COMMAND: Final = "ssh_command"
 
+# MCP (Model Context Protocol) constants
+MCP_STORAGE_KEY: Final = f"{DOMAIN}.mcp_servers"
+MCP_STORAGE_VERSION: Final = 1
+MCP_DEFAULT_REPO_URL: Final = "http://10.0.0.146:3000/claude/proxlab-mcp-servers"
+MCP_TRANSPORT_STDIO: Final = "stdio"
+MCP_TRANSPORT_SSE: Final = "sse"
+MCP_TRANSPORT_HTTP: Final = "streamable_http"
+
 # Orchestrator events
 EVENT_ORCHESTRATOR_ROUTED: Final = f"{DOMAIN}.orchestrator.routed"
 

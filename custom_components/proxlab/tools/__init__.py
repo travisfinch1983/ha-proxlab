@@ -12,6 +12,7 @@ from .ha_query import HomeAssistantQueryTool
 from .ha_system_log import HomeAssistantSystemLogTool
 from .image_generation import ImageGenerationTool
 from .registry import ToolRegistry
+from .mcp_bridge import McpBridgeTool
 from .ssh_command import SSHCommandTool
 
 __all__ = [
@@ -21,5 +22,6 @@ __all__ = [
     "HomeAssistantQueryTool",
     "HomeAssistantSystemLogTool",
     "ImageGenerationTool",
+    "McpBridgeTool",
     "SSHCommandTool",
 ]

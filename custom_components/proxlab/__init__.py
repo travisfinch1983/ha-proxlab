@@ -436,6 +436,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await registry.async_load()
     hass.data[DOMAIN][entry.entry_id]["agent_registry"] = registry
 
+    # Set up MCP Manager (MCP server marketplace)
+    from .mcp_manager import McpManager
+
+    mcp_manager = McpManager(hass, entry.entry_id)
+    await mcp_manager.async_load()
+    hass.data[DOMAIN][entry.entry_id]["mcp_manager"] = mcp_manager
+
     # Set up connection health coordinator if connections exist
     if entry.data.get(CONF_CONNECTIONS):
         coordinator = ConnectionHealthCoordinator(hass, entry)
@@ -804,6 +811,10 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Clean up agent, memory manager, and vector DB manager
     if entry.entry_id in hass.data[DOMAIN]:
         entry_data = hass.data[DOMAIN][entry.entry_id]
+
+        # Shut down MCP manager if it exists
+        if "mcp_manager" in entry_data:
+            await entry_data["mcp_manager"].async_shutdown()
 
         # Shut down agent registry if it exists
         if "agent_registry" in entry_data:

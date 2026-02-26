@@ -12,6 +12,9 @@ import type {
   Schedule,
   Chain,
   ChainRunResult,
+  McpRepo,
+  McpCatalogServer,
+  McpServer,
 } from "./types";
 
 function getHass() {
@@ -513,4 +516,56 @@ export async function runChain(
     ...(initialMessage ? { initial_message: initialMessage } : {}),
     ...(initialContext ? { initial_context: initialContext } : {}),
   });
+}
+
+// --- MCP Marketplace ---
+
+export async function listMcpRepos(): Promise<McpRepo[]> {
+  return callWS("proxlab/mcp/repos/list");
+}
+
+export async function addMcpRepo(url: string): Promise<McpRepo> {
+  return callWS("proxlab/mcp/repos/add", { url });
+}
+
+export async function removeMcpRepo(repoId: string): Promise<void> {
+  return callWS("proxlab/mcp/repos/remove", { repo_id: repoId });
+}
+
+export async function refreshMcpRepo(repoId: string): Promise<McpRepo> {
+  return callWS("proxlab/mcp/repos/refresh", { repo_id: repoId });
+}
+
+export async function getMcpCatalog(): Promise<McpCatalogServer[]> {
+  return callWS("proxlab/mcp/catalog");
+}
+
+export async function listMcpServers(): Promise<McpServer[]> {
+  return callWS("proxlab/mcp/servers/list");
+}
+
+export async function createMcpServer(
+  data: Record<string, unknown>
+): Promise<McpServer> {
+  return callWS("proxlab/mcp/servers/create", data);
+}
+
+export async function updateMcpServer(
+  serverId: string,
+  fields: Record<string, unknown>
+): Promise<McpServer> {
+  return callWS("proxlab/mcp/servers/update", {
+    server_id: serverId,
+    ...fields,
+  });
+}
+
+export async function deleteMcpServer(serverId: string): Promise<void> {
+  return callWS("proxlab/mcp/servers/delete", { server_id: serverId });
+}
+
+export async function reconnectMcpServer(
+  serverId: string
+): Promise<McpServer> {
+  return callWS("proxlab/mcp/servers/reconnect", { server_id: serverId });
 }

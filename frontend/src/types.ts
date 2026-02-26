@@ -211,6 +211,68 @@ export interface ChainRunResult {
   final_response: string;
 }
 
+// --- MCP Marketplace ---
+
+export interface McpRepo {
+  id: string;
+  url: string;
+  name: string;
+  added_at: number;
+  last_fetched: number;
+  servers_available: number;
+}
+
+export interface McpParameter {
+  key: string;
+  description: string;
+  required: boolean;
+  default?: string;
+}
+
+export interface McpCatalogServer {
+  id: string;
+  name: string;
+  description: string;
+  version: string;
+  transport: "stdio" | "sse" | "streamable_http";
+  command?: string;
+  args?: string[];
+  requirements?: string[];
+  parameters?: McpParameter[];
+  tags?: string[];
+  icon?: string;
+  installed?: boolean;
+  repo_id?: string;
+  repo_name?: string;
+}
+
+export interface McpToolDef {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+}
+
+export interface McpServer {
+  id: string;
+  name: string;
+  description: string;
+  repo_id: string;
+  catalog_id: string;
+  transport: "stdio" | "sse" | "streamable_http";
+  enabled: boolean;
+  command: string | null;
+  args: string[];
+  env: Record<string, string>;
+  url: string | null;
+  headers: Record<string, string>;
+  parameters: Record<string, string>;
+  tools: McpToolDef[];
+  created_at: number;
+  last_connected: number | null;
+  status: "connected" | "disconnected" | "error" | "starting";
+  error: string | null;
+}
+
 export const CAPABILITY_LABELS: Record<string, string> = {
   conversation: "Conversational LLM",
   tool_use: "Tool Use (LLM)",

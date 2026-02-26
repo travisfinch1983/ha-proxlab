@@ -532,6 +532,33 @@ class ProxLabAgent(
 
             _LOGGER.info("Memory tools registered")
 
+        # Register MCP bridge tools from connected MCP servers
+        entry_data = self.hass.data.get(DOMAIN, {})
+        for eid, edata in entry_data.items():
+            if isinstance(edata, dict) and "mcp_manager" in edata:
+                mcp_mgr = edata["mcp_manager"]
+                from ..tools.mcp_bridge import McpBridgeTool
+
+                for mcp_tool in mcp_mgr.get_all_tools():
+                    bridge = McpBridgeTool(
+                        hass=self.hass,
+                        mcp_manager=mcp_mgr,
+                        server_id=mcp_tool["server_id"],
+                        server_name=mcp_tool["server_name"],
+                        tool_name=mcp_tool["name"],
+                        tool_description=mcp_tool.get("description", ""),
+                        tool_input_schema=mcp_tool.get("inputSchema", {}),
+                    )
+                    try:
+                        self.tool_handler.register_tool(bridge)
+                    except Exception:
+                        pass  # Skip duplicates on re-register
+                _LOGGER.info(
+                    "Registered %d MCP bridge tools",
+                    len(mcp_mgr.get_all_tools()),
+                )
+                break  # Only need one mcp_manager
+
         _LOGGER.debug("Registered %d tools", len(self.tool_handler.get_registered_tools()))
 
     def _register_custom_tools(self, custom_tools_config: list[dict[str, Any]]) -> None:

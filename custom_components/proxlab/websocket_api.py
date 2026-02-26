@@ -231,6 +231,17 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_chains_update)
     websocket_api.async_register_command(hass, ws_chains_delete)
     websocket_api.async_register_command(hass, ws_chains_run)
+    # MCP Marketplace (Phase 6)
+    websocket_api.async_register_command(hass, ws_mcp_repos_list)
+    websocket_api.async_register_command(hass, ws_mcp_repos_add)
+    websocket_api.async_register_command(hass, ws_mcp_repos_remove)
+    websocket_api.async_register_command(hass, ws_mcp_repos_refresh)
+    websocket_api.async_register_command(hass, ws_mcp_catalog)
+    websocket_api.async_register_command(hass, ws_mcp_servers_list)
+    websocket_api.async_register_command(hass, ws_mcp_servers_create)
+    websocket_api.async_register_command(hass, ws_mcp_servers_update)
+    websocket_api.async_register_command(hass, ws_mcp_servers_delete)
+    websocket_api.async_register_command(hass, ws_mcp_servers_reconnect)
 
 
 # ---------------------------------------------------------------------------
@@ -2173,3 +2184,312 @@ async def ws_roadmap_update(
 
     else:
         connection.send_error(msg["id"], "invalid_action", f"Unknown action: {action}")
+
+
+# ---------------------------------------------------------------------------
+# MCP Marketplace — Repos
+# ---------------------------------------------------------------------------
+
+
+def _get_mcp_manager(hass: HomeAssistant, entry: ConfigEntry):
+    """Get the McpManager for an entry."""
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    return entry_data.get("mcp_manager")
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/mcp/repos/list",
+        vol.Optional("entry_id"): str,
+    }
+)
+@callback
+def ws_mcp_repos_list(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """List configured MCP repos."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_result(msg["id"], [])
+        return
+    mgr = _get_mcp_manager(hass, entry)
+    if not mgr:
+        connection.send_result(msg["id"], [])
+        return
+    connection.send_result(msg["id"], mgr.list_repos())
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/mcp/repos/add",
+        vol.Optional("entry_id"): str,
+        vol.Required("url"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_mcp_repos_add(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Add a repo URL."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+    mgr = _get_mcp_manager(hass, entry)
+    if not mgr:
+        connection.send_error(msg["id"], "not_ready", "MCP manager not initialized")
+        return
+    try:
+        repo = await mgr.add_repo(msg["url"])
+        connection.send_result(msg["id"], repo)
+    except Exception as err:
+        connection.send_error(msg["id"], "add_failed", str(err))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/mcp/repos/remove",
+        vol.Optional("entry_id"): str,
+        vol.Required("repo_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_mcp_repos_remove(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Remove a repo."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+    mgr = _get_mcp_manager(hass, entry)
+    if not mgr:
+        connection.send_error(msg["id"], "not_ready", "MCP manager not initialized")
+        return
+    try:
+        await mgr.remove_repo(msg["repo_id"])
+        connection.send_result(msg["id"], {})
+    except ValueError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/mcp/repos/refresh",
+        vol.Optional("entry_id"): str,
+        vol.Required("repo_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_mcp_repos_refresh(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Re-fetch a repo's manifest."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+    mgr = _get_mcp_manager(hass, entry)
+    if not mgr:
+        connection.send_error(msg["id"], "not_ready", "MCP manager not initialized")
+        return
+    try:
+        repo = await mgr.refresh_repo(msg["repo_id"])
+        connection.send_result(msg["id"], repo)
+    except ValueError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
+
+
+# ---------------------------------------------------------------------------
+# MCP Marketplace — Catalog
+# ---------------------------------------------------------------------------
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/mcp/catalog",
+        vol.Optional("entry_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_mcp_catalog(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Get merged catalog from all repos."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_result(msg["id"], [])
+        return
+    mgr = _get_mcp_manager(hass, entry)
+    if not mgr:
+        connection.send_result(msg["id"], [])
+        return
+    catalog = await mgr.get_catalog()
+    connection.send_result(msg["id"], catalog)
+
+
+# ---------------------------------------------------------------------------
+# MCP Marketplace — Servers
+# ---------------------------------------------------------------------------
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/mcp/servers/list",
+        vol.Optional("entry_id"): str,
+    }
+)
+@callback
+def ws_mcp_servers_list(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """List installed MCP servers with status."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_result(msg["id"], [])
+        return
+    mgr = _get_mcp_manager(hass, entry)
+    if not mgr:
+        connection.send_result(msg["id"], [])
+        return
+    connection.send_result(msg["id"], mgr.list_servers())
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/mcp/servers/create",
+        vol.Optional("entry_id"): str,
+        vol.Required("name"): str,
+        vol.Optional("description", default=""): str,
+        vol.Optional("repo_id", default=""): str,
+        vol.Optional("catalog_id", default=""): str,
+        vol.Optional("transport", default="stdio"): str,
+        vol.Optional("enabled", default=True): bool,
+        vol.Optional("command"): str,
+        vol.Optional("args", default=[]): list,
+        vol.Optional("env", default={}): dict,
+        vol.Optional("url"): str,
+        vol.Optional("headers", default={}): dict,
+        vol.Optional("parameters", default={}): dict,
+    }
+)
+@websocket_api.async_response
+async def ws_mcp_servers_create(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Install a server (from catalog or manual)."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+    mgr = _get_mcp_manager(hass, entry)
+    if not mgr:
+        connection.send_error(msg["id"], "not_ready", "MCP manager not initialized")
+        return
+
+    skip_keys = {"id", "type", "entry_id"}
+    data = {k: v for k, v in msg.items() if k not in skip_keys}
+
+    try:
+        server = await mgr.create_server(data)
+        connection.send_result(msg["id"], server)
+    except Exception as err:
+        _LOGGER.error("MCP server create failed: %s", err, exc_info=True)
+        connection.send_error(msg["id"], "create_failed", str(err))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/mcp/servers/update",
+        vol.Optional("entry_id"): str,
+        vol.Required("server_id"): str,
+        vol.Optional("name"): str,
+        vol.Optional("description"): str,
+        vol.Optional("enabled"): bool,
+        vol.Optional("command"): str,
+        vol.Optional("args"): list,
+        vol.Optional("env"): dict,
+        vol.Optional("url"): str,
+        vol.Optional("headers"): dict,
+        vol.Optional("parameters"): dict,
+    }
+)
+@websocket_api.async_response
+async def ws_mcp_servers_update(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Update server config."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+    mgr = _get_mcp_manager(hass, entry)
+    if not mgr:
+        connection.send_error(msg["id"], "not_ready", "MCP manager not initialized")
+        return
+
+    server_id = msg["server_id"]
+    skip_keys = {"id", "type", "entry_id", "server_id"}
+    updates = {k: v for k, v in msg.items() if k not in skip_keys}
+
+    try:
+        server = await mgr.update_server(server_id, updates)
+        connection.send_result(msg["id"], server)
+    except ValueError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/mcp/servers/delete",
+        vol.Optional("entry_id"): str,
+        vol.Required("server_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_mcp_servers_delete(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Remove a server."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+    mgr = _get_mcp_manager(hass, entry)
+    if not mgr:
+        connection.send_error(msg["id"], "not_ready", "MCP manager not initialized")
+        return
+
+    try:
+        await mgr.delete_server(msg["server_id"])
+        connection.send_result(msg["id"], {})
+    except ValueError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/mcp/servers/reconnect",
+        vol.Optional("entry_id"): str,
+        vol.Required("server_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_mcp_servers_reconnect(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Force reconnect a server."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+    mgr = _get_mcp_manager(hass, entry)
+    if not mgr:
+        connection.send_error(msg["id"], "not_ready", "MCP manager not initialized")
+        return
+
+    try:
+        server = await mgr.reconnect_server(msg["server_id"])
+        connection.send_result(msg["id"], server)
+    except ValueError as err:
+        connection.send_error(msg["id"], "not_found", str(err))
