@@ -571,7 +571,10 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 export default function DebugPage() {
+  const PAGE_SIZE = 30;
   const [traces, setTraces] = useState<ConversationTrace[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [maxEntries, setMaxEntries] = useState(200);
@@ -583,11 +586,13 @@ export default function DebugPage() {
     setLoading(true);
     setError(null);
     try {
-      const [t, cfg] = await Promise.all([
-        fetchDebugTraces(),
+      const [res, cfg] = await Promise.all([
+        fetchDebugTraces(PAGE_SIZE, 0),
         getDebugConfig(),
       ]);
-      setTraces(t.reverse()); // newest first
+      setTotal(res.total);
+      setTraces(res.traces.reverse()); // newest first
+      setPage(0);
       setMaxEntries(cfg.max_entries);
       setMaxInput(String(cfg.max_entries));
     } catch (err) {
@@ -597,13 +602,35 @@ export default function DebugPage() {
     }
   }, []);
 
+  const loadPage = useCallback(async (p: number) => {
+    setLoading(true);
+    try {
+      // Traces are stored oldest-first; to page "backwards" from newest:
+      // offset = max(0, total - (p+1)*PAGE_SIZE)
+      const offset = Math.max(0, total - (p + 1) * PAGE_SIZE);
+      const limit = Math.min(PAGE_SIZE, total - p * PAGE_SIZE);
+      const res = await fetchDebugTraces(limit > 0 ? limit : PAGE_SIZE, offset);
+      setTraces(res.traces.reverse());
+      setTotal(res.total);
+      setPage(p);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }, [total]);
+
   useEffect(() => {
     load();
   }, [load]);
 
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
   const handleClear = async () => {
     await clearDebugTraces();
     setTraces([]);
+    setTotal(0);
+    setPage(0);
   };
 
   const handleSaveConfig = async () => {
@@ -631,7 +658,7 @@ export default function DebugPage() {
           <div>
             <h2 className="text-lg font-semibold">Conversation Traces</h2>
             <p className="text-sm text-base-content/50">
-              {traces.length} traces stored (max: {maxEntries === -1 ? "unlimited" : maxEntries})
+              {total} traces stored (max: {maxEntries === -1 ? "unlimited" : maxEntries})
             </p>
           </div>
           <div className="flex gap-2">
@@ -723,10 +750,33 @@ export default function DebugPage() {
             <TraceCard
               key={trace.conversation_id + "-" + i}
               trace={trace}
-              index={traces.length - i - 1}
+              index={total - page * PAGE_SIZE - i}
             />
           ))}
         </div>
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-center gap-2 pt-2">
+            <button
+              className="btn btn-sm btn-outline"
+              disabled={page === 0 || loading}
+              onClick={() => loadPage(page - 1)}
+            >
+              Newer
+            </button>
+            <span className="text-sm text-base-content/50">
+              Page {page + 1} of {totalPages}
+            </span>
+            <button
+              className="btn btn-sm btn-outline"
+              disabled={page >= totalPages - 1 || loading}
+              onClick={() => loadPage(page + 1)}
+            >
+              Older
+            </button>
+          </div>
+        )}
       </div>
     </>
   );

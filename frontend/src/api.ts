@@ -243,11 +243,14 @@ export interface ConversationTrace {
   total_cost?: number;
 }
 
-export async function fetchDebugTraces(): Promise<ConversationTrace[]> {
-  const res = await callWS<{ traces: ConversationTrace[] }>(
-    "proxlab/debug/traces"
+export async function fetchDebugTraces(
+  limit = 50,
+  offset = 0
+): Promise<{ traces: ConversationTrace[]; total: number }> {
+  return callWS<{ traces: ConversationTrace[]; total: number }>(
+    "proxlab/debug/traces",
+    { limit, offset }
   );
-  return res.traces;
 }
 
 export async function clearDebugTraces(): Promise<void> {

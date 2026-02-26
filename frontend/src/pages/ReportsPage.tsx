@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faArrowsRotate,
@@ -137,8 +137,12 @@ export default function ReportsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [t, u] = await Promise.all([fetchDebugTraces(), fetchApiUsage()]);
-      setTraces(t);
+      // Fetch all traces (limit=0) for aggregate stats, and API usage
+      const [tRes, u] = await Promise.all([
+        fetchDebugTraces(0),
+        fetchApiUsage(),
+      ]);
+      setTraces(tRes.traces);
       setUsage(u);
     } catch (err) {
       console.error("Failed to load reports:", err);
@@ -151,80 +155,117 @@ export default function ReportsPage() {
     load();
   }, [load]);
 
-  // Computed stats
-  const totalConversations = traces.length;
-  const totalTokens = traces.reduce((s, t) => s + (t.tokens?.total ?? 0), 0);
-  const totalCost = traces.reduce((s, t) => s + (t.total_cost ?? 0), 0);
-  const avgDuration =
-    totalConversations > 0
-      ? traces.reduce((s, t) => s + (t.duration_ms ?? 0), 0) /
-        totalConversations
-      : 0;
-  const successCount = traces.filter(
-    (t) => !t.steps || t.steps.every((s) => !s.routing_decision)
-  ).length;
-  const successRate =
-    totalConversations > 0
-      ? ((successCount / totalConversations) * 100).toFixed(0)
-      : "0";
+  // Memoize all computed stats — only recalculate when traces change
+  const {
+    totalConversations,
+    totalTokens,
+    totalCost,
+    avgDuration,
+    successRate,
+    modelBreakdown,
+    maxModelTokens,
+    agentBreakdown,
+    maxAgentCount,
+    toolBreakdown,
+    maxToolCount,
+    avgTps,
+  } = useMemo(() => {
+    const totalConversations = traces.length;
+    const totalTokens = traces.reduce(
+      (s, t) => s + (t.tokens?.total ?? 0),
+      0
+    );
+    const totalCost = traces.reduce((s, t) => s + (t.total_cost ?? 0), 0);
+    const avgDuration =
+      totalConversations > 0
+        ? traces.reduce((s, t) => s + (t.duration_ms ?? 0), 0) /
+          totalConversations
+        : 0;
+    const successCount = traces.filter(
+      (t) => !t.steps || t.steps.every((s) => !s.routing_decision)
+    ).length;
+    const successRate =
+      totalConversations > 0
+        ? ((successCount / totalConversations) * 100).toFixed(0)
+        : "0";
 
-  // Model breakdown
-  const modelMap = new Map<string, { count: number; tokens: number }>();
-  for (const t of traces) {
-    const m = t.model || "unknown";
-    const prev = modelMap.get(m) ?? { count: 0, tokens: 0 };
-    modelMap.set(m, {
-      count: prev.count + 1,
-      tokens: prev.tokens + (t.tokens?.total ?? 0),
-    });
-  }
-  const modelBreakdown = [...modelMap.entries()]
-    .sort((a, b) => b[1].tokens - a[1].tokens)
-    .slice(0, 8);
-  const maxModelTokens = Math.max(
-    1,
-    ...modelBreakdown.map(([, v]) => v.tokens)
-  );
+    // Model breakdown
+    const modelMap = new Map<string, { count: number; tokens: number }>();
+    for (const t of traces) {
+      const m = t.model || "unknown";
+      const prev = modelMap.get(m) ?? { count: 0, tokens: 0 };
+      modelMap.set(m, {
+        count: prev.count + 1,
+        tokens: prev.tokens + (t.tokens?.total ?? 0),
+      });
+    }
+    const modelBreakdown = [...modelMap.entries()]
+      .sort((a, b) => b[1].tokens - a[1].tokens)
+      .slice(0, 8);
+    const maxModelTokens = Math.max(
+      1,
+      ...modelBreakdown.map(([, v]) => v.tokens)
+    );
 
-  // Agent breakdown
-  const agentMap = new Map<
-    string,
-    { count: number; tokens: number; duration: number }
-  >();
-  for (const t of traces) {
-    const a = t.routed_agent || "default";
-    const prev = agentMap.get(a) ?? { count: 0, tokens: 0, duration: 0 };
-    agentMap.set(a, {
-      count: prev.count + 1,
-      tokens: prev.tokens + (t.tokens?.total ?? 0),
-      duration: prev.duration + (t.duration_ms ?? 0),
-    });
-  }
-  const agentBreakdown = [...agentMap.entries()]
-    .sort((a, b) => b[1].count - a[1].count)
-    .slice(0, 10);
-  const maxAgentCount = Math.max(1, ...agentBreakdown.map(([, v]) => v.count));
+    // Agent breakdown
+    const agentMap = new Map<
+      string,
+      { count: number; tokens: number; duration: number }
+    >();
+    for (const t of traces) {
+      const a = t.routed_agent || "default";
+      const prev = agentMap.get(a) ?? { count: 0, tokens: 0, duration: 0 };
+      agentMap.set(a, {
+        count: prev.count + 1,
+        tokens: prev.tokens + (t.tokens?.total ?? 0),
+        duration: prev.duration + (t.duration_ms ?? 0),
+      });
+    }
+    const agentBreakdown = [...agentMap.entries()]
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 10);
+    const maxAgentCount = Math.max(
+      1,
+      ...agentBreakdown.map(([, v]) => v.count)
+    );
 
-  // Tool breakdown
-  const toolMap = new Map<string, number>();
-  for (const t of traces) {
-    if (t.tool_breakdown) {
-      for (const [tool, count] of Object.entries(t.tool_breakdown)) {
-        toolMap.set(tool, (toolMap.get(tool) ?? 0) + count);
+    // Tool breakdown
+    const toolMap = new Map<string, number>();
+    for (const t of traces) {
+      if (t.tool_breakdown) {
+        for (const [tool, count] of Object.entries(t.tool_breakdown)) {
+          toolMap.set(tool, (toolMap.get(tool) ?? 0) + count);
+        }
       }
     }
-  }
-  const toolBreakdown = [...toolMap.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10);
-  const maxToolCount = Math.max(1, ...toolBreakdown.map(([, v]) => v));
+    const toolBreakdown = [...toolMap.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 10);
+    const maxToolCount = Math.max(1, ...toolBreakdown.map(([, v]) => v));
 
-  // Performance stats
-  const avgTps =
-    traces.length > 0
-      ? traces.reduce((s, t) => s + (t.tokens_per_sec ?? 0), 0) /
-        traces.filter((t) => t.tokens_per_sec).length || 0
-      : 0;
+    // Performance stats
+    const tpsTraces = traces.filter((t) => t.tokens_per_sec);
+    const avgTps =
+      tpsTraces.length > 0
+        ? tpsTraces.reduce((s, t) => s + (t.tokens_per_sec ?? 0), 0) /
+          tpsTraces.length
+        : 0;
+
+    return {
+      totalConversations,
+      totalTokens,
+      totalCost,
+      avgDuration,
+      successRate,
+      modelBreakdown,
+      maxModelTokens,
+      agentBreakdown,
+      maxAgentCount,
+      toolBreakdown,
+      maxToolCount,
+      avgTps,
+    };
+  }, [traces]);
 
   const handleCleanup = async () => {
     try {

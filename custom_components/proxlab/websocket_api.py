@@ -1183,15 +1183,53 @@ async def ws_discovery_services(
 
 
 @websocket_api.websocket_command(
-    {vol.Required("type"): "proxlab/debug/traces", vol.Optional("entry_id"): str}
+    {
+        vol.Required("type"): "proxlab/debug/traces",
+        vol.Optional("entry_id"): str,
+        vol.Optional("limit", default=50): int,
+        vol.Optional("offset", default=0): int,
+    }
 )
 @callback
 def ws_debug_traces(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    """Return recent conversation traces for the debug panel."""
-    traces = list(hass.data.get(DOMAIN, {}).get("_debug_traces", []))
-    connection.send_result(msg["id"], {"traces": traces})
+    """Return recent conversation traces for the debug panel.
+
+    Sends lightweight summaries by default (context_messages stripped,
+    response_text truncated to 300 chars).  Accepts limit/offset for paging.
+    """
+    all_traces = hass.data.get(DOMAIN, {}).get("_debug_traces", [])
+    total = len(all_traces)
+    limit = msg.get("limit", 50)
+    offset = msg.get("offset", 0)
+    page = all_traces[offset : offset + limit] if limit > 0 else all_traces
+
+    # Build lightweight copies — strip heavy nested fields
+    lite: list[dict] = []
+    for t in page:
+        entry = dict(t)
+        # Truncate response_text
+        rt = entry.get("response_text", "")
+        if isinstance(rt, str) and len(rt) > 300:
+            entry["response_text"] = rt[:300] + "…"
+        # Strip context (can be full conversation history)
+        entry.pop("context", None)
+        # Trim steps — keep structure but drop context_messages
+        if "steps" in entry:
+            trimmed: list[dict] = []
+            for s in entry["steps"]:
+                sc = dict(s)
+                sc.pop("context_messages", None)
+                # Truncate step response_text too
+                srt = sc.get("response_text", "")
+                if isinstance(srt, str) and len(srt) > 300:
+                    sc["response_text"] = srt[:300] + "…"
+                trimmed.append(sc)
+            entry["steps"] = trimmed
+        lite.append(entry)
+
+    connection.send_result(msg["id"], {"traces": lite, "total": total})
 
 
 @websocket_api.websocket_command(
