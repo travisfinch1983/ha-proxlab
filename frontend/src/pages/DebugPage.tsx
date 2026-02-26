@@ -370,6 +370,15 @@ function TraceCard({
           </div>
           {/* Right side badges */}
           <div className="flex flex-col items-end gap-1 shrink-0">
+            {trace.timestamp && (
+              <span className="text-[10px] text-base-content/40 font-mono">
+                {new Date(trace.timestamp * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                {" "}
+                <span className="text-base-content/25">
+                  {new Date(trace.timestamp * 1000).toLocaleDateString([], { month: "short", day: "numeric" })}
+                </span>
+              </span>
+            )}
             <span className="badge badge-sm badge-outline font-mono">
               {trace.model}
             </span>

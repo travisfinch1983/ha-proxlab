@@ -1348,7 +1348,7 @@ class ProxLabAgent(
                 "user_input": message,
                 "connection_type": conn_type,
                 "context_messages": [],
-                "tools": [d["name"] for d in tool_definitions] if tool_definitions else [],
+                "tools": [d.get("function", d).get("name", "") for d in tool_definitions] if tool_definitions else [],
             }
             if cost is not None:
                 step["cost_estimate"] = round(cost, 6)
