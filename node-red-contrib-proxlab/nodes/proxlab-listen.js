@@ -11,7 +11,7 @@ module.exports = function (RED) {
     const node = this;
     const server = RED.nodes.getNode(config.server);
 
-    node.eventType = config.eventType || "proxlab_agent_invoked";
+    node.eventType = config.eventType || "proxlab.agent.invoked";
     node.filterAgent = config.filterAgent || "";
 
     if (!server) {

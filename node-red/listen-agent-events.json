@@ -3,7 +3,8 @@
     "id": "proxlab_listen_flow",
     "type": "tab",
     "label": "ProxLab: Listen for Agent Events",
-    "info": "Listen for proxlab_agent_invoked events fired whenever an agent completes.\nFilter by agent_id to react to specific agent results."
+    "disabled": true,
+    "info": "Listen for proxlab.agent.invoked events fired whenever an agent completes.\nFilter by agent_id to react to specific agent results.\n\nNOTE: This example flow is disabled by default. Enable it after reviewing."
   },
   {
     "id": "proxlab_listen_events",
@@ -12,7 +13,7 @@
     "name": "Agent Invoked Events",
     "server": "",
     "version": 2,
-    "event_type": "proxlab_agent_invoked",
+    "event_type": "proxlab.agent.invoked",
     "exposeAsEntityConfig": "",
     "waitForRunning": true,
     "outputProperties": [
@@ -131,7 +132,7 @@
     "type": "comment",
     "z": "proxlab_listen_flow",
     "name": "How to use",
-    "info": "This flow listens for proxlab_agent_invoked events.\nEvery time an agent completes (via conversation, invoke API, subscription, schedule, or chain),\nthis event fires with: agent_id, agent_name, response_text, tool_results, tokens, duration_ms, model, success.\n\nEdit the switch node to filter for the agents you care about.\nConnect downstream nodes to send notifications, update dashboards, trigger automations, etc.",
+    "info": "This flow listens for proxlab.agent.invoked events.\nEvery time an agent completes (via conversation, invoke API, subscription, schedule, or chain),\nthis event fires with: agent_id, agent_name, response_text, tool_results, tokens, duration_ms, model, success.\n\nEdit the switch node to filter for the agents you care about.\nConnect downstream nodes to send notifications, update dashboards, trigger automations, etc.",
     "x": 110,
     "y": 40,
     "wires": []

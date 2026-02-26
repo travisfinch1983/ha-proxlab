@@ -12,7 +12,7 @@
     "z": "proxlab_smart_alerting",
     "name": "Agent Events",
     "server": "",
-    "eventType": "proxlab_agent_invoked",
+    "eventType": "proxlab.agent.invoked",
     "filterAgent": "",
     "x": 170,
     "y": 200,

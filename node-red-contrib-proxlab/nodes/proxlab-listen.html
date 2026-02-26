@@ -5,7 +5,7 @@
     defaults: {
       name: { value: "" },
       server: { value: "", type: "proxlab-server", required: true },
-      eventType: { value: "proxlab_agent_invoked" },
+      eventType: { value: "proxlab.agent.invoked" },
       filterAgent: { value: "" },
     },
     inputs: 0,
@@ -34,10 +34,10 @@
       ><i class="fa fa-bell"></i> Event Type</label
     >
     <select id="node-input-eventType">
-      <option value="proxlab_agent_invoked">proxlab_agent_invoked</option>
-      <option value="proxlab_chain_completed">proxlab_chain_completed</option>
-      <option value="proxlab_subscription_triggered">
-        proxlab_subscription_triggered
+      <option value="proxlab.agent.invoked">proxlab.agent.invoked</option>
+      <option value="proxlab.agent.chain.step">proxlab.agent.chain.step</option>
+      <option value="proxlab.agent.subscription.triggered">
+        proxlab.agent.subscription.triggered
       </option>
       <option value="state_changed">state_changed</option>
     </select>
@@ -76,7 +76,7 @@
   <h3>Details</h3>
   <p>
     This node subscribes to Home Assistant events via WebSocket. By default it
-    listens for <code>proxlab_agent_invoked</code> events, which are fired
+    listens for <code>proxlab.agent.invoked</code> events, which are fired
     every time a ProxLab agent completes an invocation.
   </p>
   <p>
@@ -87,9 +87,9 @@
     Other event types available:
   </p>
   <ul>
-    <li><code>proxlab_chain_completed</code> — when a chain finishes</li>
+    <li><code>proxlab.agent.chain.step</code> — when a chain step completes</li>
     <li>
-      <code>proxlab_subscription_triggered</code> — when a subscription fires
+      <code>proxlab.agent.subscription.triggered</code> — when a subscription fires
     </li>
     <li><code>state_changed</code> — any HA state change</li>
   </ul>
