@@ -269,7 +269,7 @@ function StepCard({
               <FontAwesomeIcon icon={faFileLines} className="text-[10px]" />
               View Context
               <span className="badge badge-xs badge-outline font-mono">
-                {step.context_messages!.length} msg
+                {step.context_messages?.length ?? 0} msg
               </span>
             </button>
           </div>

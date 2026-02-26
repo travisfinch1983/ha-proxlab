@@ -1339,6 +1339,7 @@ class ProxLabAgent(
                 "tokens": {
                     "prompt": total_prompt_tokens,
                     "completion": total_completion_tokens,
+                    "total": total_prompt_tokens + total_completion_tokens,
                 },
                 "tokens_per_sec": tps,
                 "performance": {"llm_latency_ms": llm_lat, "tool_latency_ms": 0, "context_latency_ms": 0, "ttft_ms": 0},
@@ -1360,7 +1361,7 @@ class ProxLabAgent(
                 "response_text": final_text,
                 "model": resolved_model,
                 "duration_ms": duration_ms,
-                "tokens": {"prompt": total_prompt_tokens, "completion": total_completion_tokens},
+                "tokens": {"prompt": total_prompt_tokens, "completion": total_completion_tokens, "total": total_prompt_tokens + total_completion_tokens},
                 "performance": step["performance"],
                 "context": {},
                 "tool_calls": len(tool_results_list),

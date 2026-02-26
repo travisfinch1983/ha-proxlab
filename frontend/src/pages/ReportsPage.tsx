@@ -134,15 +134,18 @@ export default function ReportsPage() {
   const [expanded, setExpanded] = useState<string | null>(null);
   const [cleanupDays, setCleanupDays] = useState(30);
 
+  const [traceTotal, setTraceTotal] = useState(0);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch all traces (limit=0) for aggregate stats, and API usage
+      // Only fetch last 50 traces for the table — API usage has the aggregate stats
       const [tRes, u] = await Promise.all([
-        fetchDebugTraces(0),
+        fetchDebugTraces(50),
         fetchApiUsage(),
       ]);
       setTraces(tRes.traces);
+      setTraceTotal(tRes.total);
       setUsage(u);
     } catch (err) {
       console.error("Failed to load reports:", err);
@@ -155,7 +158,7 @@ export default function ReportsPage() {
     load();
   }, [load]);
 
-  // Memoize all computed stats — only recalculate when traces change
+  // Memoize computed stats — use API usage for totals, traces only for recent table
   const {
     totalConversations,
     totalTokens,
@@ -170,66 +173,70 @@ export default function ReportsPage() {
     maxToolCount,
     avgTps,
   } = useMemo(() => {
-    const totalConversations = traces.length;
-    const totalTokens = traces.reduce(
-      (s, t) => s + (t.tokens?.total ?? 0),
-      0
-    );
-    const totalCost = traces.reduce((s, t) => s + (t.total_cost ?? 0), 0);
+    // Use API usage for aggregate stats (covers ALL history, not just last 50)
+    const totalConversations = usage?.total?.messages ?? traceTotal;
+    const totalTokens =
+      (usage?.total?.input_tokens ?? 0) + (usage?.total?.output_tokens ?? 0);
+    const totalCost = usage?.total?.cost_usd ?? 0;
+
+    // These still come from traces (last 50)
     const avgDuration =
-      totalConversations > 0
-        ? traces.reduce((s, t) => s + (t.duration_ms ?? 0), 0) /
-          totalConversations
+      traces.length > 0
+        ? traces.reduce((s, t) => s + (t.duration_ms ?? 0), 0) / traces.length
         : 0;
     const successCount = traces.filter(
       (t) => !t.steps || t.steps.every((s) => !s.routing_decision)
     ).length;
     const successRate =
-      totalConversations > 0
-        ? ((successCount / totalConversations) * 100).toFixed(0)
+      traces.length > 0
+        ? ((successCount / traces.length) * 100).toFixed(0)
         : "0";
 
-    // Model breakdown
-    const modelMap = new Map<string, { count: number; tokens: number }>();
-    for (const t of traces) {
-      const m = t.model || "unknown";
-      const prev = modelMap.get(m) ?? { count: 0, tokens: 0 };
-      modelMap.set(m, {
-        count: prev.count + 1,
-        tokens: prev.tokens + (t.tokens?.total ?? 0),
-      });
-    }
-    const modelBreakdown = [...modelMap.entries()]
-      .sort((a, b) => b[1].tokens - a[1].tokens)
-      .slice(0, 8);
+    // Model breakdown — from API usage if available
+    const modelBreakdown: [string, { count: number; tokens: number }][] =
+      usage?.models
+        ? Object.entries(usage.models)
+            .map(([m, v]) => [
+              m,
+              { count: v.messages, tokens: v.input_tokens + v.output_tokens },
+            ] as [string, { count: number; tokens: number }])
+            .sort((a, b) => b[1].tokens - a[1].tokens)
+            .slice(0, 8)
+        : [];
     const maxModelTokens = Math.max(
       1,
       ...modelBreakdown.map(([, v]) => v.tokens)
     );
 
-    // Agent breakdown
-    const agentMap = new Map<
+    // Agent breakdown — from API usage if available
+    const agentBreakdown: [
       string,
-      { count: number; tokens: number; duration: number }
-    >();
-    for (const t of traces) {
-      const a = t.routed_agent || "default";
-      const prev = agentMap.get(a) ?? { count: 0, tokens: 0, duration: 0 };
-      agentMap.set(a, {
-        count: prev.count + 1,
-        tokens: prev.tokens + (t.tokens?.total ?? 0),
-        duration: prev.duration + (t.duration_ms ?? 0),
-      });
-    }
-    const agentBreakdown = [...agentMap.entries()]
-      .sort((a, b) => b[1].count - a[1].count)
-      .slice(0, 10);
+      { count: number; tokens: number; duration: number },
+    ][] = usage?.agents
+      ? Object.entries(usage.agents)
+          .map(
+            ([a, v]) =>
+              [
+                a,
+                {
+                  count: v.messages,
+                  tokens: v.input_tokens + v.output_tokens,
+                  duration: 0,
+                },
+              ] as [
+                string,
+                { count: number; tokens: number; duration: number },
+              ]
+          )
+          .sort((a, b) => b[1].count - a[1].count)
+          .slice(0, 10)
+      : [];
     const maxAgentCount = Math.max(
       1,
       ...agentBreakdown.map(([, v]) => v.count)
     );
 
-    // Tool breakdown
+    // Tool breakdown — from traces (last 50 is representative enough)
     const toolMap = new Map<string, number>();
     for (const t of traces) {
       if (t.tool_breakdown) {
@@ -265,7 +272,7 @@ export default function ReportsPage() {
       maxToolCount,
       avgTps,
     };
-  }, [traces]);
+  }, [traces, usage, traceTotal]);
 
   const handleCleanup = async () => {
     try {
@@ -461,7 +468,7 @@ export default function ReportsPage() {
           <div className="card-body p-4">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-medium text-sm">
-                Recent Conversations ({traces.length})
+                Recent Conversations (last {traces.length} of {traceTotal})
               </h3>
               <div className="flex items-center gap-2">
                 <span className="text-xs text-base-content/50">

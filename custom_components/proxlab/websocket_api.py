@@ -1190,45 +1190,44 @@ async def ws_discovery_services(
         vol.Optional("offset", default=0): int,
     }
 )
-@callback
-def ws_debug_traces(
+@websocket_api.async_response
+async def ws_debug_traces(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
     """Return recent conversation traces for the debug panel.
 
-    Sends lightweight summaries by default (context_messages stripped,
+    Sends lightweight summaries (context_messages stripped,
     response_text truncated to 300 chars).  Accepts limit/offset for paging.
+    Runs trimming in executor to avoid blocking event loop.
     """
     all_traces = hass.data.get(DOMAIN, {}).get("_debug_traces", [])
     total = len(all_traces)
     limit = msg.get("limit", 50)
     offset = msg.get("offset", 0)
-    page = all_traces[offset : offset + limit] if limit > 0 else all_traces
+    page = list(all_traces[offset : offset + limit] if limit > 0 else all_traces)
 
-    # Build lightweight copies — strip heavy nested fields
-    lite: list[dict] = []
-    for t in page:
-        entry = dict(t)
-        # Truncate response_text
-        rt = entry.get("response_text", "")
-        if isinstance(rt, str) and len(rt) > 300:
-            entry["response_text"] = rt[:300] + "…"
-        # Strip context (can be full conversation history)
-        entry.pop("context", None)
-        # Trim steps — keep structure but drop context_messages
-        if "steps" in entry:
-            trimmed: list[dict] = []
-            for s in entry["steps"]:
-                sc = dict(s)
-                sc.pop("context_messages", None)
-                # Truncate step response_text too
-                srt = sc.get("response_text", "")
-                if isinstance(srt, str) and len(srt) > 300:
-                    sc["response_text"] = srt[:300] + "…"
-                trimmed.append(sc)
-            entry["steps"] = trimmed
-        lite.append(entry)
+    def _trim(traces_page):
+        lite = []
+        for t in traces_page:
+            entry = dict(t)
+            rt = entry.get("response_text", "")
+            if isinstance(rt, str) and len(rt) > 300:
+                entry["response_text"] = rt[:300] + "\u2026"
+            entry.pop("context", None)
+            if "steps" in entry:
+                trimmed = []
+                for s in entry["steps"]:
+                    sc = dict(s)
+                    sc.pop("context_messages", None)
+                    srt = sc.get("response_text", "")
+                    if isinstance(srt, str) and len(srt) > 300:
+                        sc["response_text"] = srt[:300] + "\u2026"
+                    trimmed.append(sc)
+                entry["steps"] = trimmed
+            lite.append(entry)
+        return lite
 
+    lite = await hass.async_add_executor_job(_trim, page)
     connection.send_result(msg["id"], {"traces": lite, "total": total})
 
 
