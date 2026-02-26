@@ -551,16 +551,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             hass.data[DOMAIN]["_panel_registered"] = True
             _LOGGER.warning("ProxLab: Sidebar panel registered successfully")
 
-            # Register chat card JS as extra module (auto-loaded on all dashboards)
+            # Register chat card JS static path + Lovelace resource
             card_dir = pathlib.Path(__file__).parent / "card"
             card_url = "/proxlab_panel/card"
+            card_js_url = f"{card_url}/proxlab-chat-card.js"
             if card_dir.is_dir():
                 await hass.http.async_register_static_paths(
                     [StaticPathConfig(card_url, str(card_dir), cache_headers=False)]
                 )
-                from homeassistant.components.frontend import add_extra_js_url
-                add_extra_js_url(hass, f"{card_url}/proxlab-chat-card.js")
-                _LOGGER.warning("ProxLab: Chat card JS registered at %s", card_url)
+                # Register as Lovelace resource (persists in .storage/lovelace_resources)
+                # This is the standard way to load custom card JS (same as HACS)
+                try:
+                    resources = await hass.data["lovelace"]["resources"].async_get_info()
+                    urls = [r["url"].split("?")[0] for r in resources]
+                    if card_js_url not in urls:
+                        await hass.data["lovelace"]["resources"].async_create_item(
+                            {"res_type": "module", "url": card_js_url}
+                        )
+                        _LOGGER.warning("ProxLab: Chat card registered as Lovelace resource")
+                    else:
+                        _LOGGER.debug("ProxLab: Chat card Lovelace resource already exists")
+                except Exception as res_err:
+                    _LOGGER.warning("ProxLab: Could not auto-register Lovelace resource: %s", res_err)
+                    _LOGGER.warning("ProxLab: Manually add resource: %s (type: module)", card_js_url)
         except Exception as err:
             _LOGGER.error("ProxLab: PANEL REGISTRATION FAILED: %s", err, exc_info=True)
 
