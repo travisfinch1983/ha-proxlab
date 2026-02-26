@@ -1,0 +1,139 @@
+[
+  {
+    "id": "proxlab_listen_flow",
+    "type": "tab",
+    "label": "ProxLab: Listen for Agent Events",
+    "info": "Listen for proxlab_agent_invoked events fired whenever an agent completes.\nFilter by agent_id to react to specific agent results."
+  },
+  {
+    "id": "proxlab_listen_events",
+    "type": "server-events",
+    "z": "proxlab_listen_flow",
+    "name": "Agent Invoked Events",
+    "server": "",
+    "version": 2,
+    "event_type": "proxlab_agent_invoked",
+    "exposeAsEntityConfig": "",
+    "waitForRunning": true,
+    "outputProperties": [
+      {
+        "property": "payload",
+        "propertyType": "msg",
+        "value": "",
+        "valueType": "eventData"
+      },
+      {
+        "property": "topic",
+        "propertyType": "msg",
+        "value": "event.event_type",
+        "valueType": "jsonata"
+      }
+    ],
+    "x": 150,
+    "y": 120,
+    "wires": [["proxlab_listen_filter"]]
+  },
+  {
+    "id": "proxlab_listen_filter",
+    "type": "switch",
+    "z": "proxlab_listen_flow",
+    "name": "Filter by Agent",
+    "property": "payload.agent_id",
+    "propertyType": "msg",
+    "rules": [
+      { "t": "eq", "v": "general", "vt": "str" },
+      { "t": "eq", "v": "security", "vt": "str" },
+      { "t": "eq", "v": "reporting", "vt": "str" },
+      { "t": "else" }
+    ],
+    "checkall": "false",
+    "repair": false,
+    "outputs": 4,
+    "x": 380,
+    "y": 120,
+    "wires": [
+      ["proxlab_listen_general"],
+      ["proxlab_listen_security"],
+      ["proxlab_listen_reporting"],
+      ["proxlab_listen_other"]
+    ]
+  },
+  {
+    "id": "proxlab_listen_general",
+    "type": "debug",
+    "z": "proxlab_listen_flow",
+    "name": "General Agent",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload.response_text",
+    "targetType": "msg",
+    "statusVal": "payload.response_text",
+    "statusType": "auto",
+    "x": 600,
+    "y": 60,
+    "wires": []
+  },
+  {
+    "id": "proxlab_listen_security",
+    "type": "debug",
+    "z": "proxlab_listen_flow",
+    "name": "Security Agent",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload.response_text",
+    "targetType": "msg",
+    "statusVal": "payload.response_text",
+    "statusType": "auto",
+    "x": 600,
+    "y": 120,
+    "wires": []
+  },
+  {
+    "id": "proxlab_listen_reporting",
+    "type": "debug",
+    "z": "proxlab_listen_flow",
+    "name": "Reporting Agent",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload.response_text",
+    "targetType": "msg",
+    "statusVal": "payload.response_text",
+    "statusType": "auto",
+    "x": 610,
+    "y": 180,
+    "wires": []
+  },
+  {
+    "id": "proxlab_listen_other",
+    "type": "debug",
+    "z": "proxlab_listen_flow",
+    "name": "Other Agents",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "payload.agent_name",
+    "statusType": "auto",
+    "x": 600,
+    "y": 240,
+    "wires": []
+  },
+  {
+    "id": "proxlab_listen_comment",
+    "type": "comment",
+    "z": "proxlab_listen_flow",
+    "name": "How to use",
+    "info": "This flow listens for proxlab_agent_invoked events.\nEvery time an agent completes (via conversation, invoke API, subscription, schedule, or chain),\nthis event fires with: agent_id, agent_name, response_text, tool_results, tokens, duration_ms, model, success.\n\nEdit the switch node to filter for the agents you care about.\nConnect downstream nodes to send notifications, update dashboards, trigger automations, etc.",
+    "x": 110,
+    "y": 40,
+    "wires": []
+  }
+]

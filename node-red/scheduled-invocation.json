@@ -1,0 +1,129 @@
+[
+  {
+    "id": "proxlab_sched_flow",
+    "type": "tab",
+    "label": "ProxLab: Scheduled Invocation",
+    "info": "Create a scheduled agent invocation that runs on an interval or at a specific time of day.\nThe schedule persists in HA and survives restarts."
+  },
+  {
+    "id": "proxlab_sched_inject_interval",
+    "type": "inject",
+    "z": "proxlab_sched_flow",
+    "name": "Create Interval Schedule",
+    "props": [{ "p": "payload", "v": "", "vt": "date" }],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 160,
+    "y": 120,
+    "wires": [["proxlab_sched_interval_config"]]
+  },
+  {
+    "id": "proxlab_sched_interval_config",
+    "type": "change",
+    "z": "proxlab_sched_flow",
+    "name": "Every 30 min",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload",
+        "pt": "msg",
+        "to": "{\"agent_id\": \"security\", \"schedule_type\": \"interval\", \"schedule_config\": {\"seconds\": 1800}, \"message_template\": \"Perform a routine security check of all systems.\", \"cooldown_seconds\": 60}",
+        "tot": "json"
+      }
+    ],
+    "x": 390,
+    "y": 120,
+    "wires": [["proxlab_sched_call"]]
+  },
+  {
+    "id": "proxlab_sched_inject_tod",
+    "type": "inject",
+    "z": "proxlab_sched_flow",
+    "name": "Create Daily Schedule",
+    "props": [{ "p": "payload", "v": "", "vt": "date" }],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 160,
+    "y": 200,
+    "wires": [["proxlab_sched_tod_config"]]
+  },
+  {
+    "id": "proxlab_sched_tod_config",
+    "type": "change",
+    "z": "proxlab_sched_flow",
+    "name": "Daily at 08:00",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload",
+        "pt": "msg",
+        "to": "{\"agent_id\": \"reporting\", \"schedule_type\": \"time_of_day\", \"schedule_config\": {\"hour\": 8, \"minute\": 0, \"second\": 0}, \"message_template\": \"Generate a morning summary report of all systems, energy usage, and notable events from overnight.\"}",
+        "tot": "json"
+      }
+    ],
+    "x": 390,
+    "y": 200,
+    "wires": [["proxlab_sched_call"]]
+  },
+  {
+    "id": "proxlab_sched_call",
+    "type": "api-call-service",
+    "z": "proxlab_sched_flow",
+    "name": "Create Schedule",
+    "server": "",
+    "version": 5,
+    "debugenabled": false,
+    "domain": "proxlab",
+    "service": "create_scheduled_invocation",
+    "areaId": [],
+    "deviceId": [],
+    "entityId": [],
+    "data": "payload",
+    "dataType": "jsonata",
+    "mergeContext": "",
+    "mustacheAltTags": false,
+    "outputProperties": [
+      {
+        "property": "payload",
+        "propertyType": "msg",
+        "value": "",
+        "valueType": "results"
+      }
+    ],
+    "queue": "none",
+    "x": 600,
+    "y": 160,
+    "wires": [["proxlab_sched_debug"]]
+  },
+  {
+    "id": "proxlab_sched_debug",
+    "type": "debug",
+    "z": "proxlab_sched_flow",
+    "name": "Result",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 770,
+    "y": 160,
+    "wires": []
+  },
+  {
+    "id": "proxlab_sched_comment",
+    "type": "comment",
+    "z": "proxlab_sched_flow",
+    "name": "How to use",
+    "info": "Two example schedules:\n\n1. INTERVAL (top): Runs the security agent every 30 minutes\n   - schedule_type: interval\n   - schedule_config.seconds: 1800 (30 min)\n\n2. TIME OF DAY (bottom): Runs the reporting agent daily at 8:00 AM\n   - schedule_type: time_of_day\n   - schedule_config: {hour: 8, minute: 0, second: 0}\n\nClick the inject button to create the schedule. It persists in HA.\nManage schedules from the ProxLab panel Schedules page.\n\nAvailable agents: general, repairman, security, reporting, worker, etc.",
+    "x": 110,
+    "y": 40,
+    "wires": []
+  }
+]

@@ -1,0 +1,98 @@
+[
+  {
+    "id": "proxlab_invoke_flow",
+    "type": "tab",
+    "label": "ProxLab: Invoke Agent",
+    "info": "Directly invoke a ProxLab agent via the proxlab.invoke_agent service.\nEdit the 'Set Agent Config' node to choose the agent and message."
+  },
+  {
+    "id": "proxlab_invoke_inject",
+    "type": "inject",
+    "z": "proxlab_invoke_flow",
+    "name": "Trigger",
+    "props": [{ "p": "payload", "v": "", "vt": "date" }],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 110,
+    "y": 120,
+    "wires": [["proxlab_invoke_config"]]
+  },
+  {
+    "id": "proxlab_invoke_config",
+    "type": "change",
+    "z": "proxlab_invoke_flow",
+    "name": "Set Agent Config",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload",
+        "pt": "msg",
+        "to": "{\"agent_id\": \"general\", \"message\": \"Summarize the current state of the house\", \"return_response\": true}",
+        "tot": "json"
+      }
+    ],
+    "x": 300,
+    "y": 120,
+    "wires": [["proxlab_invoke_call"]]
+  },
+  {
+    "id": "proxlab_invoke_call",
+    "type": "api-call-service",
+    "z": "proxlab_invoke_flow",
+    "name": "Invoke Agent",
+    "server": "",
+    "version": 5,
+    "debugenabled": false,
+    "domain": "proxlab",
+    "service": "invoke_agent",
+    "areaId": [],
+    "deviceId": [],
+    "entityId": [],
+    "data": "{\"agent_id\": \"{{payload.agent_id}}\", \"message\": \"{{payload.message}}\"}",
+    "dataType": "json",
+    "mergeContext": "",
+    "mustacheAltTags": false,
+    "outputProperties": [
+      {
+        "property": "payload",
+        "propertyType": "msg",
+        "value": "",
+        "valueType": "results"
+      }
+    ],
+    "queue": "none",
+    "x": 510,
+    "y": 120,
+    "wires": [["proxlab_invoke_debug"]]
+  },
+  {
+    "id": "proxlab_invoke_debug",
+    "type": "debug",
+    "z": "proxlab_invoke_flow",
+    "name": "Agent Response",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "payload.response_text",
+    "statusType": "auto",
+    "x": 710,
+    "y": 120,
+    "wires": []
+  },
+  {
+    "id": "proxlab_invoke_comment",
+    "type": "comment",
+    "z": "proxlab_invoke_flow",
+    "name": "How to use",
+    "info": "1. Edit 'Set Agent Config' to set your agent_id and message\n2. Available agents: general, repairman, security, reporting, worker, etc.\n3. Click the inject button to trigger\n4. Response appears in debug sidebar\n\nThe service returns: agent_name, response_text, tool_results, tokens, duration_ms, model, success",
+    "x": 110,
+    "y": 40,
+    "wires": []
+  }
+]

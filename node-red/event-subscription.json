@@ -1,0 +1,141 @@
+[
+  {
+    "id": "proxlab_sub_flow",
+    "type": "tab",
+    "label": "ProxLab: Event Subscription",
+    "info": "Trigger a ProxLab agent automatically when a Home Assistant event occurs.\nUses the proxlab.create_event_subscription service to register a persistent subscription."
+  },
+  {
+    "id": "proxlab_sub_inject",
+    "type": "inject",
+    "z": "proxlab_sub_flow",
+    "name": "Create Subscription",
+    "props": [{ "p": "payload", "v": "", "vt": "date" }],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 140,
+    "y": 120,
+    "wires": [["proxlab_sub_config"]]
+  },
+  {
+    "id": "proxlab_sub_config",
+    "type": "change",
+    "z": "proxlab_sub_flow",
+    "name": "Configure Subscription",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload",
+        "pt": "msg",
+        "to": "{\"event_type\": \"state_changed\", \"agent_id\": \"general\", \"event_filter\": {\"entity_id\": \"binary_sensor.front_door\"}, \"message_template\": \"The front door sensor changed to {{ trigger.to_state }}. What should I do?\", \"cooldown_seconds\": 300}",
+        "tot": "json"
+      }
+    ],
+    "x": 370,
+    "y": 120,
+    "wires": [["proxlab_sub_call"]]
+  },
+  {
+    "id": "proxlab_sub_call",
+    "type": "api-call-service",
+    "z": "proxlab_sub_flow",
+    "name": "Create Subscription",
+    "server": "",
+    "version": 5,
+    "debugenabled": false,
+    "domain": "proxlab",
+    "service": "create_event_subscription",
+    "areaId": [],
+    "deviceId": [],
+    "entityId": [],
+    "data": "payload",
+    "dataType": "jsonata",
+    "mergeContext": "",
+    "mustacheAltTags": false,
+    "outputProperties": [
+      {
+        "property": "payload",
+        "propertyType": "msg",
+        "value": "",
+        "valueType": "results"
+      }
+    ],
+    "queue": "none",
+    "x": 590,
+    "y": 120,
+    "wires": [["proxlab_sub_debug"]]
+  },
+  {
+    "id": "proxlab_sub_debug",
+    "type": "debug",
+    "z": "proxlab_sub_flow",
+    "name": "Result",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": false,
+    "complete": "payload",
+    "targetType": "msg",
+    "x": 770,
+    "y": 120,
+    "wires": []
+  },
+  {
+    "id": "proxlab_sub_listen",
+    "type": "server-events",
+    "z": "proxlab_sub_flow",
+    "name": "Agent Responses",
+    "server": "",
+    "version": 2,
+    "event_type": "proxlab_agent_invoked",
+    "exposeAsEntityConfig": "",
+    "waitForRunning": true,
+    "outputProperties": [
+      {
+        "property": "payload",
+        "propertyType": "msg",
+        "value": "",
+        "valueType": "eventData"
+      }
+    ],
+    "x": 140,
+    "y": 240,
+    "wires": [["proxlab_sub_notify"]]
+  },
+  {
+    "id": "proxlab_sub_notify",
+    "type": "api-call-service",
+    "z": "proxlab_sub_flow",
+    "name": "Send Notification",
+    "server": "",
+    "version": 5,
+    "debugenabled": false,
+    "domain": "notify",
+    "service": "persistent_notification",
+    "areaId": [],
+    "deviceId": [],
+    "entityId": [],
+    "data": "{\"title\": \"ProxLab: {{payload.agent_name}}\", \"message\": \"{{payload.response_text}}\"}",
+    "dataType": "json",
+    "mergeContext": "",
+    "mustacheAltTags": false,
+    "outputProperties": [],
+    "queue": "none",
+    "x": 390,
+    "y": 240,
+    "wires": [[]]
+  },
+  {
+    "id": "proxlab_sub_comment",
+    "type": "comment",
+    "z": "proxlab_sub_flow",
+    "name": "How to use",
+    "info": "TOP ROW: Creates a persistent event subscription in ProxLab.\nWhen the specified HA event fires and matches the filter, ProxLab automatically invokes the agent.\n\nBOTTOM ROW: Listens for agent responses and sends a persistent notification.\nReplace the notification node with your own logic (Telegram, Slack, dashboard update, etc.).\n\nEdit 'Configure Subscription' to customize:\n- event_type: state_changed, automation_triggered, etc.\n- agent_id: which agent to invoke\n- event_filter: match specific entities/states\n- message_template: Jinja2 template with {{ trigger.* }} variables\n- cooldown_seconds: minimum time between triggers",
+    "x": 110,
+    "y": 40,
+    "wires": []
+  }
+]

@@ -1,0 +1,146 @@
+[
+  {
+    "id": "proxlab_chain_flow",
+    "type": "tab",
+    "label": "ProxLab: Agent Chain",
+    "info": "Run a multi-step agent chain where each agent's output feeds into the next.\nExample: Security scan -> Analysis -> Report generation."
+  },
+  {
+    "id": "proxlab_chain_inject",
+    "type": "inject",
+    "z": "proxlab_chain_flow",
+    "name": "Trigger Chain",
+    "props": [{ "p": "payload", "v": "", "vt": "date" }],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "x": 130,
+    "y": 200,
+    "wires": [["proxlab_chain_config"]]
+  },
+  {
+    "id": "proxlab_chain_config",
+    "type": "change",
+    "z": "proxlab_chain_flow",
+    "name": "Set Chain + Message",
+    "rules": [
+      {
+        "t": "set",
+        "p": "payload",
+        "pt": "msg",
+        "to": "{\"chain_id\": \"YOUR_CHAIN_ID_HERE\", \"initial_message\": \"Run a full security audit of the network and generate a report.\", \"initial_context\": {}}",
+        "tot": "json"
+      }
+    ],
+    "x": 340,
+    "y": 200,
+    "wires": [["proxlab_chain_call"]]
+  },
+  {
+    "id": "proxlab_chain_call",
+    "type": "api-call-service",
+    "z": "proxlab_chain_flow",
+    "name": "Run Chain",
+    "server": "",
+    "version": 5,
+    "debugenabled": false,
+    "domain": "proxlab",
+    "service": "run_agent_chain",
+    "areaId": [],
+    "deviceId": [],
+    "entityId": [],
+    "data": "{\"chain_id\": \"{{payload.chain_id}}\", \"initial_message\": \"{{payload.initial_message}}\"}",
+    "dataType": "json",
+    "mergeContext": "",
+    "mustacheAltTags": false,
+    "outputProperties": [
+      {
+        "property": "payload",
+        "propertyType": "msg",
+        "value": "",
+        "valueType": "results"
+      }
+    ],
+    "queue": "none",
+    "x": 550,
+    "y": 200,
+    "wires": [["proxlab_chain_switch"]]
+  },
+  {
+    "id": "proxlab_chain_switch",
+    "type": "switch",
+    "z": "proxlab_chain_flow",
+    "name": "Check Result",
+    "property": "payload.steps_completed",
+    "propertyType": "msg",
+    "rules": [
+      { "t": "eq", "v": "payload.steps_total", "vt": "msg" },
+      { "t": "else" }
+    ],
+    "checkall": "true",
+    "repair": false,
+    "outputs": 2,
+    "x": 730,
+    "y": 200,
+    "wires": [
+      ["proxlab_chain_success"],
+      ["proxlab_chain_partial"]
+    ]
+  },
+  {
+    "id": "proxlab_chain_success",
+    "type": "debug",
+    "z": "proxlab_chain_flow",
+    "name": "All Steps Complete",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload.final_response",
+    "targetType": "msg",
+    "statusVal": "payload.chain_name",
+    "statusType": "auto",
+    "x": 940,
+    "y": 160,
+    "wires": []
+  },
+  {
+    "id": "proxlab_chain_partial",
+    "type": "debug",
+    "z": "proxlab_chain_flow",
+    "name": "Partial / Failed",
+    "active": true,
+    "tosidebar": true,
+    "console": false,
+    "tostatus": true,
+    "complete": "payload",
+    "targetType": "msg",
+    "statusVal": "payload.steps_completed",
+    "statusType": "auto",
+    "x": 930,
+    "y": 240,
+    "wires": []
+  },
+  {
+    "id": "proxlab_chain_create_comment",
+    "type": "comment",
+    "z": "proxlab_chain_flow",
+    "name": "Step 1: Create a chain in ProxLab panel first",
+    "info": "Before running this flow, create a chain in the ProxLab panel:\n1. Go to ProxLab Panel > Chains\n2. Click 'New' to create a chain\n3. Add steps (e.g., security -> worker -> reporting)\n4. Save the chain and copy its ID\n5. Paste the chain_id into the 'Set Chain + Message' node below",
+    "x": 220,
+    "y": 60,
+    "wires": []
+  },
+  {
+    "id": "proxlab_chain_example_comment",
+    "type": "comment",
+    "z": "proxlab_chain_flow",
+    "name": "Example: Security Audit Chain",
+    "info": "Example chain setup in ProxLab panel:\n\nStep 1 - Security Agent:\n  message_template: \"Scan all network devices and identify vulnerabilities\"\n  context_includes: []\n\nStep 2 - Worker Agent:\n  message_template: \"Analyze these findings and prioritize by severity\"\n  context_includes: [response_text, tool_results]\n\nStep 3 - Reporting Agent:\n  message_template: \"Generate a formatted security audit report\"\n  context_includes: [response_text]\n\nThe chain returns:\n- chain_name, steps_completed, steps_total\n- results[] (array of per-step results)\n- final_response (last agent's response)",
+    "x": 190,
+    "y": 120,
+    "wires": []
+  }
+]
