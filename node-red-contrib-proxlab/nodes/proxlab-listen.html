@@ -1,0 +1,96 @@
+<script type="text/javascript">
+  RED.nodes.registerType("proxlab-listen", {
+    category: "ProxLab",
+    color: "#7c3aed",
+    defaults: {
+      name: { value: "" },
+      server: { value: "", type: "proxlab-server", required: true },
+      eventType: { value: "proxlab_agent_invoked" },
+      filterAgent: { value: "" },
+    },
+    inputs: 0,
+    outputs: 1,
+    icon: "font-awesome/fa-bell",
+    label: function () {
+      return this.name || this.eventType || "proxlab listen";
+    },
+    paletteLabel: "proxlab listen",
+  });
+</script>
+
+<script type="text/html" data-template-name="proxlab-listen">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-server"
+      ><i class="fa fa-server"></i> Server</label
+    >
+    <input type="text" id="node-input-server" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-eventType"
+      ><i class="fa fa-bell"></i> Event Type</label
+    >
+    <select id="node-input-eventType">
+      <option value="proxlab_agent_invoked">proxlab_agent_invoked</option>
+      <option value="proxlab_chain_completed">proxlab_chain_completed</option>
+      <option value="proxlab_subscription_triggered">
+        proxlab_subscription_triggered
+      </option>
+      <option value="state_changed">state_changed</option>
+    </select>
+  </div>
+  <div class="form-row">
+    <label for="node-input-filterAgent"
+      ><i class="fa fa-filter"></i> Filter Agent</label
+    >
+    <input
+      type="text"
+      id="node-input-filterAgent"
+      placeholder="Optional — e.g. general, router"
+    />
+  </div>
+</script>
+
+<script type="text/html" data-help-name="proxlab-listen">
+  <p>
+    Listens for ProxLab agent invocation events from Home Assistant and outputs
+    them as messages.
+  </p>
+
+  <h3>Outputs</h3>
+  <dl class="message-properties">
+    <dt>payload <span class="property-type">object</span></dt>
+    <dd>
+      The event data including agent_id, agent_name, response_text, tokens,
+      duration_ms, model, and success status.
+    </dd>
+    <dt>topic <span class="property-type">string</span></dt>
+    <dd>The event type name.</dd>
+    <dt>time_fired <span class="property-type">string</span></dt>
+    <dd>ISO timestamp of when the event was fired.</dd>
+  </dl>
+
+  <h3>Details</h3>
+  <p>
+    This node subscribes to Home Assistant events via WebSocket. By default it
+    listens for <code>proxlab_agent_invoked</code> events, which are fired
+    every time a ProxLab agent completes an invocation.
+  </p>
+  <p>
+    Use the <strong>Filter Agent</strong> field to only receive events from a
+    specific agent ID.
+  </p>
+  <p>
+    Other event types available:
+  </p>
+  <ul>
+    <li><code>proxlab_chain_completed</code> — when a chain finishes</li>
+    <li>
+      <code>proxlab_subscription_triggered</code> — when a subscription fires
+    </li>
+    <li><code>state_changed</code> — any HA state change</li>
+  </ul>
+</script>

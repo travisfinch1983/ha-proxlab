@@ -1,0 +1,62 @@
+<script type="text/javascript">
+  RED.nodes.registerType("proxlab-server", {
+    category: "config",
+    defaults: {
+      name: { value: "" },
+      url: { value: "ws://localhost:8123/api/websocket", required: true },
+    },
+    credentials: {
+      token: { type: "password" },
+    },
+    label: function () {
+      return this.name || this.url || "ProxLab Server";
+    },
+  });
+</script>
+
+<script type="text/html" data-template-name="proxlab-server">
+  <div class="form-row">
+    <label for="node-config-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-config-input-name" placeholder="My HA Server" />
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-url"
+      ><i class="fa fa-globe"></i> WebSocket URL</label
+    >
+    <input
+      type="text"
+      id="node-config-input-url"
+      placeholder="ws://10.0.0.2:8123/api/websocket"
+    />
+  </div>
+  <div class="form-row">
+    <label for="node-config-input-token"
+      ><i class="fa fa-key"></i> Access Token</label
+    >
+    <input
+      type="password"
+      id="node-config-input-token"
+      placeholder="Long-lived access token"
+    />
+  </div>
+</script>
+
+<script type="text/html" data-help-name="proxlab-server">
+  <p>
+    Configuration node that manages a persistent WebSocket connection to a Home
+    Assistant instance running the ProxLab integration.
+  </p>
+  <h3>Properties</h3>
+  <dl class="message-properties">
+    <dt>WebSocket URL</dt>
+    <dd>
+      The WebSocket URL of your Home Assistant instance (e.g.
+      <code>ws://10.0.0.2:8123/api/websocket</code>)
+    </dd>
+    <dt>Access Token</dt>
+    <dd>
+      A long-lived access token from Home Assistant. Generate one in your HA
+      profile settings.
+    </dd>
+  </dl>
+</script>

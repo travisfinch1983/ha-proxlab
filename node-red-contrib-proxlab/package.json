@@ -1,0 +1,30 @@
+{
+  "name": "node-red-contrib-proxlab",
+  "version": "1.0.0",
+  "description": "Node-RED nodes for ProxLab AI agent framework in Home Assistant",
+  "keywords": [
+    "node-red",
+    "home-assistant",
+    "proxlab",
+    "ai",
+    "llm",
+    "agent"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/travisfinch1983/ha-proxlab.git",
+    "directory": "node-red-contrib-proxlab"
+  },
+  "node-red": {
+    "version": ">=3.0.0",
+    "nodes": {
+      "proxlab-server": "nodes/proxlab-server.js",
+      "proxlab-invoke": "nodes/proxlab-invoke.js",
+      "proxlab-listen": "nodes/proxlab-listen.js"
+    }
+  },
+  "dependencies": {
+    "ws": "^8.0.0"
+  }
+}

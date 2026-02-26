@@ -1,0 +1,106 @@
+<script type="text/javascript">
+  RED.nodes.registerType("proxlab-invoke", {
+    category: "ProxLab",
+    color: "#7c3aed",
+    defaults: {
+      name: { value: "" },
+      server: { value: "", type: "proxlab-server", required: true },
+      agentId: { value: "" },
+      messageTemplate: { value: "" },
+      includeHistory: { value: false },
+    },
+    inputs: 1,
+    outputs: 1,
+    icon: "font-awesome/fa-robot",
+    label: function () {
+      return this.name || this.agentId || "proxlab invoke";
+    },
+    paletteLabel: "proxlab invoke",
+  });
+</script>
+
+<script type="text/html" data-template-name="proxlab-invoke">
+  <div class="form-row">
+    <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+    <input type="text" id="node-input-name" placeholder="Name" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-server"
+      ><i class="fa fa-server"></i> Server</label
+    >
+    <input type="text" id="node-input-server" />
+  </div>
+  <div class="form-row">
+    <label for="node-input-agentId"
+      ><i class="fa fa-robot"></i> Agent ID</label
+    >
+    <input
+      type="text"
+      id="node-input-agentId"
+      placeholder="e.g. general, router, ha_control"
+    />
+  </div>
+  <div class="form-row">
+    <label for="node-input-messageTemplate"
+      ><i class="fa fa-comment"></i> Message Template</label
+    >
+    <input
+      type="text"
+      id="node-input-messageTemplate"
+      placeholder="Optional — overridden by msg.payload"
+    />
+  </div>
+  <div class="form-row">
+    <input
+      type="checkbox"
+      id="node-input-includeHistory"
+      style="width: auto; margin-left: 105px"
+    />
+    <label for="node-input-includeHistory" style="width: auto">
+      Include conversation history
+    </label>
+  </div>
+</script>
+
+<script type="text/html" data-help-name="proxlab-invoke">
+  <p>
+    Invokes a ProxLab AI agent via the Home Assistant WebSocket API.
+  </p>
+
+  <h3>Inputs</h3>
+  <dl class="message-properties">
+    <dt>payload <span class="property-type">string</span></dt>
+    <dd>The message to send to the agent.</dd>
+    <dt class="optional">agent_id <span class="property-type">string</span></dt>
+    <dd>Override the configured agent ID.</dd>
+    <dt class="optional">context <span class="property-type">object</span></dt>
+    <dd>Additional context to pass to the agent.</dd>
+    <dt class="optional">
+      conversation_id <span class="property-type">string</span>
+    </dt>
+    <dd>Conversation ID for multi-turn conversations.</dd>
+  </dl>
+
+  <h3>Outputs</h3>
+  <dl class="message-properties">
+    <dt>payload <span class="property-type">string</span></dt>
+    <dd>The agent's response text.</dd>
+    <dt>proxlab <span class="property-type">object</span></dt>
+    <dd>
+      Full result including agent_name, model, tokens, duration_ms,
+      tool_results, and success status.
+    </dd>
+  </dl>
+
+  <h3>Details</h3>
+  <p>
+    This node sends a message to a ProxLab agent running in Home Assistant. The
+    agent processes the message using its configured LLM connection and returns
+    a response.
+  </p>
+  <p>
+    You can override the agent ID at runtime by setting
+    <code>msg.agent_id</code>. Additional context can be passed via
+    <code>msg.context</code>.
+  </p>
+</script>
