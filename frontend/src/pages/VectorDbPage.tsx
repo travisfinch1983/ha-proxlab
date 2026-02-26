@@ -27,6 +27,16 @@ export default function VectorDbPage() {
   const [milvusCollection, setMilvusCollection] = useState(
     vdb?.milvus_collection ?? "proxlab_entities"
   );
+  // Weaviate fields
+  const [weaviateUrl, setWeaviateUrl] = useState(
+    vdb?.weaviate_url ?? "http://localhost:8080"
+  );
+  const [weaviateApiKey, setWeaviateApiKey] = useState(
+    vdb?.weaviate_api_key ?? ""
+  );
+  const [weaviateCollection, setWeaviateCollection] = useState(
+    vdb?.weaviate_collection ?? "ProxlabEntities"
+  );
 
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
@@ -35,24 +45,35 @@ export default function VectorDbPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
-      const fields =
-        backend === "milvus"
-          ? {
-              vector_db_backend: backend,
-              milvus_host: milvusHost,
-              milvus_port: milvusPort,
-              milvus_collection: milvusCollection,
-              vector_db_top_k: topK,
-              vector_db_similarity_threshold: threshold,
-            }
-          : {
-              vector_db_backend: backend,
-              vector_db_host: host,
-              vector_db_port: port,
-              vector_db_collection: collection,
-              vector_db_top_k: topK,
-              vector_db_similarity_threshold: threshold,
-            };
+      let fields: Record<string, unknown>;
+      if (backend === "milvus") {
+        fields = {
+          vector_db_backend: backend,
+          milvus_host: milvusHost,
+          milvus_port: milvusPort,
+          milvus_collection: milvusCollection,
+          vector_db_top_k: topK,
+          vector_db_similarity_threshold: threshold,
+        };
+      } else if (backend === "weaviate") {
+        fields = {
+          vector_db_backend: backend,
+          weaviate_url: weaviateUrl,
+          weaviate_api_key: weaviateApiKey,
+          weaviate_collection: weaviateCollection,
+          vector_db_top_k: topK,
+          vector_db_similarity_threshold: threshold,
+        };
+      } else {
+        fields = {
+          vector_db_backend: backend,
+          vector_db_host: host,
+          vector_db_port: port,
+          vector_db_collection: collection,
+          vector_db_top_k: topK,
+          vector_db_similarity_threshold: threshold,
+        };
+      }
       await updateVectorDb(fields);
       const cfg = await fetchConfig();
       useStore.getState().setConfig(cfg);
@@ -83,6 +104,132 @@ export default function VectorDbPage() {
     }
   };
 
+  const renderBackendFields = () => {
+    switch (backend) {
+      case "milvus":
+        return (
+          <div className="grid grid-cols-2 gap-4">
+            <label className="form-control">
+              <div className="label">
+                <span className="label-text text-sm">Milvus Host</span>
+              </div>
+              <input
+                type="text"
+                className="input input-bordered input-sm"
+                value={milvusHost}
+                onChange={(e) => setMilvusHost(e.target.value)}
+              />
+            </label>
+            <label className="form-control">
+              <div className="label">
+                <span className="label-text text-sm">Milvus Port</span>
+              </div>
+              <input
+                type="number"
+                className="input input-bordered input-sm"
+                value={milvusPort}
+                onChange={(e) => setMilvusPort(parseInt(e.target.value))}
+              />
+            </label>
+            <label className="form-control col-span-2">
+              <div className="label">
+                <span className="label-text text-sm">Collection</span>
+              </div>
+              <input
+                type="text"
+                className="input input-bordered input-sm w-64"
+                value={milvusCollection}
+                onChange={(e) => setMilvusCollection(e.target.value)}
+              />
+            </label>
+          </div>
+        );
+
+      case "weaviate":
+        return (
+          <div className="grid grid-cols-2 gap-4">
+            <label className="form-control col-span-2">
+              <div className="label">
+                <span className="label-text text-sm">Weaviate URL</span>
+              </div>
+              <input
+                type="text"
+                className="input input-bordered input-sm"
+                value={weaviateUrl}
+                onChange={(e) => setWeaviateUrl(e.target.value)}
+                placeholder="http://localhost:8080"
+              />
+            </label>
+            <label className="form-control col-span-2">
+              <div className="label">
+                <span className="label-text text-sm">
+                  API Key{" "}
+                  <span className="text-base-content/50">(optional)</span>
+                </span>
+              </div>
+              <input
+                type="password"
+                className="input input-bordered input-sm"
+                value={weaviateApiKey}
+                onChange={(e) => setWeaviateApiKey(e.target.value)}
+                placeholder="Leave empty for local instances"
+              />
+            </label>
+            <label className="form-control col-span-2">
+              <div className="label">
+                <span className="label-text text-sm">Collection (Class)</span>
+              </div>
+              <input
+                type="text"
+                className="input input-bordered input-sm w-64"
+                value={weaviateCollection}
+                onChange={(e) => setWeaviateCollection(e.target.value)}
+              />
+            </label>
+          </div>
+        );
+
+      default:
+        return (
+          <div className="grid grid-cols-2 gap-4">
+            <label className="form-control">
+              <div className="label">
+                <span className="label-text text-sm">Host</span>
+              </div>
+              <input
+                type="text"
+                className="input input-bordered input-sm"
+                value={host}
+                onChange={(e) => setHost(e.target.value)}
+              />
+            </label>
+            <label className="form-control">
+              <div className="label">
+                <span className="label-text text-sm">Port</span>
+              </div>
+              <input
+                type="number"
+                className="input input-bordered input-sm"
+                value={port}
+                onChange={(e) => setPort(parseInt(e.target.value))}
+              />
+            </label>
+            <label className="form-control col-span-2">
+              <div className="label">
+                <span className="label-text text-sm">Collection</span>
+              </div>
+              <input
+                type="text"
+                className="input input-bordered input-sm w-64"
+                value={collection}
+                onChange={(e) => setCollection(e.target.value)}
+              />
+            </label>
+          </div>
+        );
+    }
+  };
+
   return (
     <>
       <NavBar title="Vector DB Settings" />
@@ -100,82 +247,11 @@ export default function VectorDbPage() {
               >
                 <option value="chromadb">ChromaDB</option>
                 <option value="milvus">Milvus</option>
+                <option value="weaviate">Weaviate</option>
               </select>
             </label>
 
-            {backend === "chromadb" ? (
-              <div className="grid grid-cols-2 gap-4">
-                <label className="form-control">
-                  <div className="label">
-                    <span className="label-text text-sm">Host</span>
-                  </div>
-                  <input
-                    type="text"
-                    className="input input-bordered input-sm"
-                    value={host}
-                    onChange={(e) => setHost(e.target.value)}
-                  />
-                </label>
-                <label className="form-control">
-                  <div className="label">
-                    <span className="label-text text-sm">Port</span>
-                  </div>
-                  <input
-                    type="number"
-                    className="input input-bordered input-sm"
-                    value={port}
-                    onChange={(e) => setPort(parseInt(e.target.value))}
-                  />
-                </label>
-                <label className="form-control col-span-2">
-                  <div className="label">
-                    <span className="label-text text-sm">Collection</span>
-                  </div>
-                  <input
-                    type="text"
-                    className="input input-bordered input-sm w-64"
-                    value={collection}
-                    onChange={(e) => setCollection(e.target.value)}
-                  />
-                </label>
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-4">
-                <label className="form-control">
-                  <div className="label">
-                    <span className="label-text text-sm">Milvus Host</span>
-                  </div>
-                  <input
-                    type="text"
-                    className="input input-bordered input-sm"
-                    value={milvusHost}
-                    onChange={(e) => setMilvusHost(e.target.value)}
-                  />
-                </label>
-                <label className="form-control">
-                  <div className="label">
-                    <span className="label-text text-sm">Milvus Port</span>
-                  </div>
-                  <input
-                    type="number"
-                    className="input input-bordered input-sm"
-                    value={milvusPort}
-                    onChange={(e) => setMilvusPort(parseInt(e.target.value))}
-                  />
-                </label>
-                <label className="form-control col-span-2">
-                  <div className="label">
-                    <span className="label-text text-sm">Collection</span>
-                  </div>
-                  <input
-                    type="text"
-                    className="input input-bordered input-sm w-64"
-                    value={milvusCollection}
-                    onChange={(e) => setMilvusCollection(e.target.value)}
-                  />
-                </label>
-              </div>
-            )}
+            {renderBackendFields()}
 
             <div className="grid grid-cols-2 gap-4">
               <label className="form-control">

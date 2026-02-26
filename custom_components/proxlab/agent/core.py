@@ -490,6 +490,21 @@ class ProxLabAgent(
         ha_system_log = HomeAssistantSystemLogTool(self.hass)
         self.tool_handler.register_tool(ha_system_log)
 
+        # Register camera vision tool
+        from ..tools.camera_vision import CameraVisionTool
+        camera_vision = CameraVisionTool(self.hass, self.config)
+        self.tool_handler.register_tool(camera_vision)
+
+        # Register image generation tool
+        from ..tools.image_generation import ImageGenerationTool
+        image_gen = ImageGenerationTool(self.hass, self.config)
+        self.tool_handler.register_tool(image_gen)
+
+        # Register SSH command tool
+        from ..tools.ssh_command import SSHCommandTool
+        ssh_cmd = SSHCommandTool(self.hass, self.config)
+        self.tool_handler.register_tool(ssh_cmd)
+
         # Register external LLM tool if enabled
         if self.config.get(CONF_EXTERNAL_LLM_ENABLED, False):
             external_llm = ExternalLLMTool(self.hass, self.config)

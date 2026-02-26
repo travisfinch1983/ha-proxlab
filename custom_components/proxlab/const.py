@@ -288,6 +288,11 @@ CONF_MILVUS_HOST: Final = "milvus_host"
 CONF_MILVUS_PORT: Final = "milvus_port"
 CONF_MILVUS_COLLECTION: Final = "milvus_collection"
 
+# Configuration keys - Weaviate
+CONF_WEAVIATE_URL: Final = "weaviate_url"
+CONF_WEAVIATE_API_KEY: Final = "weaviate_api_key"
+CONF_WEAVIATE_COLLECTION: Final = "weaviate_collection"
+
 # Configuration keys - LLM Configuration
 CONF_LLM_BASE_URL: Final = "llm_base_url"
 CONF_LLM_API_KEY: Final = "llm_api_key"
@@ -421,6 +426,7 @@ EMBEDDING_PROVIDER_OLLAMA: Final = "ollama"
 # Vector DB backend options
 VECTOR_DB_BACKEND_CHROMADB: Final = "chromadb"
 VECTOR_DB_BACKEND_MILVUS: Final = "milvus"
+VECTOR_DB_BACKEND_WEAVIATE: Final = "weaviate"
 
 # LLM Backend options
 LLM_BACKEND_DEFAULT: Final = "default"
@@ -442,6 +448,10 @@ DEFAULT_STT_LANGUAGE: Final = "en"
 DEFAULT_MILVUS_HOST: Final = "localhost"
 DEFAULT_MILVUS_PORT: Final = 19530
 DEFAULT_MILVUS_COLLECTION: Final = "proxlab_entities"
+
+# Default values - Weaviate
+DEFAULT_WEAVIATE_URL: Final = "http://localhost:8080"
+DEFAULT_WEAVIATE_COLLECTION: Final = "ProxlabEntities"
 
 # Default values - Vector DB Backend
 DEFAULT_VECTOR_DB_BACKEND: Final = VECTOR_DB_BACKEND_CHROMADB
@@ -575,6 +585,9 @@ TOOL_HA_QUERY: Final = "ha_query"
 TOOL_QUERY_EXTERNAL_LLM: Final = "query_external_llm"
 TOOL_ROUTE_TO_AGENT: Final = "route_to_agent"
 TOOL_HA_SYSTEM_LOG: Final = "ha_system_log"
+TOOL_CAMERA_VISION: Final = "camera_vision"
+TOOL_IMAGE_GENERATION: Final = "generate_image"
+TOOL_SSH_COMMAND: Final = "ssh_command"
 
 # Orchestrator events
 EVENT_ORCHESTRATOR_ROUTED: Final = f"{DOMAIN}.orchestrator.routed"
@@ -584,11 +597,11 @@ AGENT_TOOL_MAP: Final[dict[str, list[str] | None]] = {
     AGENT_ORCHESTRATOR: None,
     AGENT_CONVERSATION: [],
     AGENT_WORKER: [TOOL_HA_CONTROL, TOOL_HA_QUERY, TOOL_HA_SYSTEM_LOG],
-    AGENT_REPAIRMAN: [TOOL_HA_CONTROL, TOOL_HA_QUERY, TOOL_HA_SYSTEM_LOG],
+    AGENT_REPAIRMAN: [TOOL_HA_CONTROL, TOOL_HA_QUERY, TOOL_HA_SYSTEM_LOG, TOOL_SSH_COMMAND],
     AGENT_REPORTING: [TOOL_HA_QUERY, TOOL_HA_SYSTEM_LOG],
-    AGENT_SECURITY_GUARD: [TOOL_HA_QUERY],
+    AGENT_SECURITY_GUARD: [TOOL_HA_QUERY, TOOL_CAMERA_VISION],
     AGENT_MEMORY: [],
-    AGENT_CYBERSECURITY: [],
+    AGENT_CYBERSECURITY: [TOOL_HA_QUERY, TOOL_SSH_COMMAND],
     AGENT_MEDICAL_ADVISOR: [],
 }
 

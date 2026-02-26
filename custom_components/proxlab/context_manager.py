@@ -32,6 +32,7 @@ from .const import (
     MAX_CONTEXT_TOKENS,
     TOKEN_WARNING_THRESHOLD,
     VECTOR_DB_BACKEND_MILVUS,
+    VECTOR_DB_BACKEND_WEAVIATE,
 )
 from .context_providers import ContextProvider, DirectContextProvider
 from .exceptions import ContextInjectionError, TokenLimitExceeded
@@ -166,6 +167,11 @@ class ContextManager:
             from .context_providers.milvus import MilvusContextProvider
 
             return MilvusContextProvider(self.hass, self.config)
+
+        if backend == VECTOR_DB_BACKEND_WEAVIATE:
+            from .context_providers.weaviate import WeaviateContextProvider
+
+            return WeaviateContextProvider(self.hass, self.config)
 
         from .context_providers.vector_db import VectorDBContextProvider
 

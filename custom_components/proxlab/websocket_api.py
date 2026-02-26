@@ -43,6 +43,9 @@ from .const import (
     CONF_MILVUS_HOST,
     CONF_MILVUS_PORT,
     CONF_PROXLAB_URL,
+    CONF_WEAVIATE_API_KEY,
+    CONF_WEAVIATE_COLLECTION,
+    CONF_WEAVIATE_URL,
     CONF_ROLES,
     CONF_SESSION_PERSISTENCE_ENABLED,
     CONF_SESSION_TIMEOUT,
@@ -72,6 +75,8 @@ from .const import (
     DEFAULT_MILVUS_COLLECTION,
     DEFAULT_MILVUS_HOST,
     DEFAULT_MILVUS_PORT,
+    DEFAULT_WEAVIATE_COLLECTION,
+    DEFAULT_WEAVIATE_URL,
     DEFAULT_SESSION_PERSISTENCE_ENABLED,
     DEFAULT_SESSION_TIMEOUT,
     DEFAULT_STREAMING_ENABLED,
@@ -849,6 +854,9 @@ def ws_vector_db_get(
             "milvus_host": options.get(CONF_MILVUS_HOST, DEFAULT_MILVUS_HOST),
             "milvus_port": options.get(CONF_MILVUS_PORT, DEFAULT_MILVUS_PORT),
             "milvus_collection": options.get(CONF_MILVUS_COLLECTION, DEFAULT_MILVUS_COLLECTION),
+            "weaviate_url": options.get(CONF_WEAVIATE_URL, DEFAULT_WEAVIATE_URL),
+            "weaviate_api_key": options.get(CONF_WEAVIATE_API_KEY, ""),
+            "weaviate_collection": options.get(CONF_WEAVIATE_COLLECTION, DEFAULT_WEAVIATE_COLLECTION),
         },
     )
 
@@ -866,6 +874,9 @@ def ws_vector_db_get(
         vol.Optional("milvus_host"): str,
         vol.Optional("milvus_port"): vol.Coerce(int),
         vol.Optional("milvus_collection"): str,
+        vol.Optional("weaviate_url"): str,
+        vol.Optional("weaviate_api_key"): str,
+        vol.Optional("weaviate_collection"): str,
     }
 )
 @websocket_api.async_response
@@ -889,6 +900,9 @@ async def ws_vector_db_update(
         "milvus_host": CONF_MILVUS_HOST,
         "milvus_port": CONF_MILVUS_PORT,
         "milvus_collection": CONF_MILVUS_COLLECTION,
+        "weaviate_url": CONF_WEAVIATE_URL,
+        "weaviate_api_key": CONF_WEAVIATE_API_KEY,
+        "weaviate_collection": CONF_WEAVIATE_COLLECTION,
     }
 
     for param, conf_key in key_map.items():

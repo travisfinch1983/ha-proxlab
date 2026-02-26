@@ -84,6 +84,10 @@ export interface VectorDbSettings {
   milvus_host?: string;
   milvus_port?: number;
   milvus_collection?: string;
+  // Weaviate
+  weaviate_url?: string;
+  weaviate_api_key?: string;
+  weaviate_collection?: string;
 }
 
 export interface MemorySettings {
