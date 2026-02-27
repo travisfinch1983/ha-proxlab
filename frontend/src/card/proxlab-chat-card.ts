@@ -68,6 +68,15 @@ export class ProxLabChatCard extends LitElement {
     return Math.max(3, Math.ceil((this._cardConfig?.card_height ?? 500) / 50));
   }
 
+  getLayoutOptions() {
+    return {
+      grid_columns: 4,
+      grid_min_columns: 3,
+      grid_rows: "auto",
+      grid_min_rows: 3,
+    };
+  }
+
   // ---- Reactive updates ----
 
   protected willUpdate(changed: PropertyValues): void {

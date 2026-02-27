@@ -23,6 +23,8 @@ from .const import (
     AGENT_TOOL_MAP,
     ALL_AGENTS,
     CONF_AGENTS,
+    CONF_LLM_API_KEY,
+    CONF_LLM_BASE_URL,
     CONF_CONNECTIONS,
     CONF_CONTEXT_FORMAT,
     CONF_CONTEXT_MODE,
@@ -2656,8 +2658,8 @@ async def ws_card_voices(
 
     voices: list[dict[str, str]] = []
     if tts_config:
-        base_url = tts_config.get("base_url", "").rstrip("/")
-        api_key = tts_config.get("api_key", "")
+        base_url = tts_config.get(CONF_LLM_BASE_URL, tts_config.get("base_url", "")).rstrip("/")
+        api_key = tts_config.get(CONF_LLM_API_KEY, tts_config.get("api_key", ""))
         headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
 
         # Try multiple common voice-listing endpoints

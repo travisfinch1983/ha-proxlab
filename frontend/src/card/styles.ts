@@ -34,20 +34,22 @@ export const cardStyles = css`
   }
 
   .portrait-panel {
-    width: 180px;
-    flex-shrink: 0;
+    flex: 0 0 30%;
+    max-width: 200px;
+    min-width: 100px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-start;
-    padding: 16px 8px;
+    padding: 12px 6px;
     border-right: 1px solid var(--divider);
     background: var(--card-bg);
+    overflow: hidden;
   }
 
   .portrait-panel img {
-    width: 160px;
-    height: 220px;
+    width: 90%;
+    aspect-ratio: 3 / 4;
     border-radius: 12px;
     object-fit: cover;
     object-position: top;
