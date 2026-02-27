@@ -277,7 +277,7 @@ export class ProxLabChatCard extends LitElement {
       <div class="messages">
         ${this._messages.map(
           (msg, idx) => html`
-            <div class="message ${msg.role}">
+            <div class="message ${msg.role} ${this._editingIndex === idx ? "editing" : ""}">
               ${this._editingIndex === idx
                 ? this._renderEditBubble(idx)
                 : html`

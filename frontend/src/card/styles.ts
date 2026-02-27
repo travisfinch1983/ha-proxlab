@@ -311,6 +311,11 @@ export const cardStyles = css`
     width: 100%;
   }
 
+  .message.editing {
+    max-width: 100%;
+    align-self: stretch;
+  }
+
   .edit-textarea {
     border: 1px solid var(--accent);
     border-radius: 8px;
@@ -322,8 +327,10 @@ export const cardStyles = css`
     color: var(--card-text);
     outline: none;
     resize: vertical;
-    min-height: 40px;
-    max-height: 200px;
+    min-height: 96px;
+    max-height: 300px;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .edit-actions {

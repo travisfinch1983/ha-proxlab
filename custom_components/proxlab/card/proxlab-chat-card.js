@@ -831,6 +831,11 @@ const Ht = nt`
     width: 100%;
   }
 
+  .message.editing {
+    max-width: 100%;
+    align-self: stretch;
+  }
+
   .edit-textarea {
     border: 1px solid var(--accent);
     border-radius: 8px;
@@ -842,8 +847,10 @@ const Ht = nt`
     color: var(--card-text);
     outline: none;
     resize: vertical;
-    min-height: 40px;
-    max-height: 200px;
+    min-height: 96px;
+    max-height: 300px;
+    width: 100%;
+    box-sizing: border-box;
   }
 
   .edit-actions {
@@ -1900,7 +1907,7 @@ class W extends $ {
       <div class="messages">
         ${this._messages.map(
       (e, i) => n`
-            <div class="message ${e.role}">
+            <div class="message ${e.role} ${this._editingIndex === i ? "editing" : ""}">
               ${this._editingIndex === i ? this._renderEditBubble(i) : n`
                     <div class="bubble">${this._formatContent(e.content)}</div>
                     <div class="msg-actions">
