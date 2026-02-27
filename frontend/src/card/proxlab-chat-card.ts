@@ -417,23 +417,12 @@ export class ProxLabChatCard extends LitElement {
     const newContent = this._editValue.trim();
     if (!newContent) return;
 
-    const msg = this._messages[idx];
-    // Update the message content
+    // Update text in place — regeneration is manual via the regenerate button
     const updated = [...this._messages];
-    updated[idx] = { ...msg, content: newContent };
-
-    if (msg.role === "user") {
-      // If editing a user message, remove everything after it and re-send
-      this._messages = updated.slice(0, idx + 1);
-      this._editingIndex = -1;
-      this._editValue = "";
-      this._resendFromIndex(idx);
-    } else {
-      // If editing an assistant message, just update the text in place
-      this._messages = updated;
-      this._editingIndex = -1;
-      this._editValue = "";
-    }
+    updated[idx] = { ...this._messages[idx], content: newContent };
+    this._messages = updated;
+    this._editingIndex = -1;
+    this._editValue = "";
   }
 
   private async _regenerate(): Promise<void> {

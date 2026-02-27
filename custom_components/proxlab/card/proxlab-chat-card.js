@@ -2017,8 +2017,8 @@ class W extends $ {
   _confirmEdit(t) {
     const e = this._editValue.trim();
     if (!e) return;
-    const i = this._messages[t], s = [...this._messages];
-    s[t] = { ...i, content: e }, i.role === "user" ? (this._messages = s.slice(0, t + 1), this._editingIndex = -1, this._editValue = "", this._resendFromIndex(t)) : (this._messages = s, this._editingIndex = -1, this._editValue = "");
+    const i = [...this._messages];
+    i[t] = { ...this._messages[t], content: e }, this._messages = i, this._editingIndex = -1, this._editValue = "";
   }
   async _regenerate() {
     if (this._loading || !this.hass || !this._config?.card_id) return;
