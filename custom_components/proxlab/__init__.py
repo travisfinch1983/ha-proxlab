@@ -555,10 +555,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             card_dir = pathlib.Path(__file__).parent / "card"
             card_url = "/proxlab_panel/card"
             card_js_file = card_dir / "proxlab-chat-card.js"
-            # Cache-bust: use file mtime as version param
+            # Cache-bust: use file content hash (mtime unreliable across git pulls)
             card_version = ""
             if card_js_file.is_file():
-                card_version = str(int(card_js_file.stat().st_mtime))
+                import hashlib
+                content = card_js_file.read_bytes()
+                card_version = hashlib.md5(content).hexdigest()[:8]
             card_js_url = f"{card_url}/proxlab-chat-card.js"
             card_js_url_versioned = f"{card_js_url}?v={card_version}" if card_version else card_js_url
             if card_dir.is_dir():
