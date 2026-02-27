@@ -80,6 +80,15 @@ export const cardStyles = css`
     flex-shrink: 0;
   }
 
+  .portrait-agent {
+    font-size: 10px;
+    color: var(--card-secondary);
+    text-align: center;
+    opacity: 0.7;
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+
   .chat-area {
     flex: 1;
     display: flex;

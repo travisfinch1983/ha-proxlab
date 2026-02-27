@@ -45,7 +45,7 @@ const ut = (a) => new ot(typeof a == "string" ? a : a + "", void 0, B), nt = (a,
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const { is: _t, defineProperty: ft, getOwnPropertyDescriptor: vt, getOwnPropertyNames: mt, getOwnPropertySymbols: bt, getPrototypeOf: yt } = Object, v = globalThis, G = v.trustedTypes, xt = G ? G.emptyScript : "", $t = v.reactiveElementPolyfillSupport, k = (a, t) => a, L = { toAttribute(a, t) {
+const { is: _t, defineProperty: ft, getOwnPropertyDescriptor: vt, getOwnPropertyNames: mt, getOwnPropertySymbols: bt, getPrototypeOf: yt } = Object, v = globalThis, G = v.trustedTypes, xt = G ? G.emptyScript : "", $t = v.reactiveElementPolyfillSupport, k = (a, t) => a, R = { toAttribute(a, t) {
   switch (t) {
     case Boolean:
       a = a ? xt : null;
@@ -73,7 +73,7 @@ const { is: _t, defineProperty: ft, getOwnPropertyDescriptor: vt, getOwnProperty
       }
   }
   return e;
-} }, lt = (a, t) => !_t(a, t), X = { attribute: !0, type: String, converter: L, reflect: !1, useDefault: !1, hasChanged: lt };
+} }, lt = (a, t) => !_t(a, t), X = { attribute: !0, type: String, converter: R, reflect: !1, useDefault: !1, hasChanged: lt };
 Symbol.metadata ?? (Symbol.metadata = Symbol("metadata")), v.litPropertyMetadata ?? (v.litPropertyMetadata = /* @__PURE__ */ new WeakMap());
 let x = class extends HTMLElement {
   static addInitializer(t) {
@@ -172,14 +172,14 @@ let x = class extends HTMLElement {
   _$ET(t, e) {
     const i = this.constructor.elementProperties.get(t), s = this.constructor._$Eu(t, i);
     if (s !== void 0 && i.reflect === !0) {
-      const r = (i.converter?.toAttribute !== void 0 ? i.converter : L).toAttribute(e, i.type);
+      const r = (i.converter?.toAttribute !== void 0 ? i.converter : R).toAttribute(e, i.type);
       this._$Em = t, r == null ? this.removeAttribute(s) : this.setAttribute(s, r), this._$Em = null;
     }
   }
   _$AK(t, e) {
     const i = this.constructor, s = i._$Eh.get(t);
     if (s !== void 0 && this._$Em !== s) {
-      const r = i.getPropertyOptions(s), o = typeof r.converter == "function" ? { fromAttribute: r.converter } : r.converter?.fromAttribute !== void 0 ? r.converter : L;
+      const r = i.getPropertyOptions(s), o = typeof r.converter == "function" ? { fromAttribute: r.converter } : r.converter?.fromAttribute !== void 0 ? r.converter : R;
       this._$Em = s;
       const d = o.fromAttribute(e, r.type);
       this[s] = d ?? this._$Ej?.get(s) ?? d, this._$Em = null;
@@ -262,8 +262,8 @@ x.elementStyles = [], x.shadowRootOptions = { mode: "open" }, x[k("elementProper
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const S = globalThis, K = (a) => a, H = S.trustedTypes, J = H ? H.createPolicy("lit-html", { createHTML: (a) => a }) : void 0, dt = "$lit$", f = `lit$${Math.random().toFixed(9).slice(2)}$`, ct = "?" + f, wt = `<${ct}>`, y = document, P = () => y.createComment(""), M = (a) => a === null || typeof a != "object" && typeof a != "function", F = Array.isArray, At = (a) => F(a) || typeof a?.[Symbol.iterator] == "function", D = `[ 	
-\f\r]`, C = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, Z = /-->/g, Y = />/g, m = RegExp(`>|${D}(?:([^\\s"'>=/]+)(${D}*=${D}*(?:[^ 	
+const S = globalThis, K = (a) => a, H = S.trustedTypes, J = H ? H.createPolicy("lit-html", { createHTML: (a) => a }) : void 0, dt = "$lit$", f = `lit$${Math.random().toFixed(9).slice(2)}$`, ct = "?" + f, wt = `<${ct}>`, y = document, P = () => y.createComment(""), M = (a) => a === null || typeof a != "object" && typeof a != "function", F = Array.isArray, At = (a) => F(a) || typeof a?.[Symbol.iterator] == "function", L = `[ 	
+\f\r]`, C = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, Z = /-->/g, Y = />/g, m = RegExp(`>|${L}(?:([^\\s"'>=/]+)(${L}*=${L}*(?:[^ 	
 \f\r"'\`<>=]|("|')|))|$)`, "g"), tt = /'/g, et = /"/g, ht = /^(?:script|style|textarea|title)$/i, Ct = (a) => (t, ...e) => ({ _$litType$: a, strings: t, values: e }), n = Ct(1), w = Symbol.for("lit-noChange"), c = Symbol.for("lit-nothing"), it = /* @__PURE__ */ new WeakMap(), b = y.createTreeWalker(y, 129);
 function pt(a, t) {
   if (!F(a) || !a.hasOwnProperty("raw")) throw Error("invalid template strings array");
@@ -598,6 +598,15 @@ const Ht = nt`
     color: var(--card-secondary);
     text-align: center;
     flex-shrink: 0;
+  }
+
+  .portrait-agent {
+    font-size: 10px;
+    color: var(--card-secondary);
+    text-align: center;
+    opacity: 0.7;
+    flex-shrink: 0;
+    margin-top: 2px;
   }
 
   .chat-area {
@@ -1209,16 +1218,16 @@ const at = {
   hide_header: !1,
   portrait_width: "auto"
 };
-async function Dt(a) {
+async function Lt(a) {
   try {
     const t = await a.arrayBuffer(), e = new Uint8Array(t), i = [137, 80, 78, 71, 13, 10, 26, 10];
     for (let r = 0; r < 8; r++)
       if (e[r] !== i[r]) return null;
     let s = 8;
     for (; s < e.length - 12; ) {
-      const r = Lt(e, s), o = N(e, s + 4, 4);
+      const r = Rt(e, s), o = N(e, s + 4, 4);
       if (o === "tEXt" || o === "iTXt") {
-        const d = e.slice(s + 8, s + 8 + r), l = Rt(d, o);
+        const d = e.slice(s + 8, s + 8 + r), l = Dt(d, o);
         if (l) return l;
       }
       s += 12 + r;
@@ -1228,7 +1237,7 @@ async function Dt(a) {
     return null;
   }
 }
-function Rt(a, t) {
+function Dt(a, t) {
   if (t === "tEXt") {
     const e = a.indexOf(0);
     if (e < 0) return null;
@@ -1261,12 +1270,12 @@ function rt(a, t) {
       e = a;
     }
     const i = JSON.parse(e);
-    return i.spec === "chara_card_v3" && i.data || i.spec === "chara_card_v2" && i.data ? R(i.data) : i.name || i.description || i.personality ? R(i) : null;
+    return i.spec === "chara_card_v3" && i.data || i.spec === "chara_card_v2" && i.data ? D(i.data) : i.name || i.description || i.personality ? D(i) : null;
   } catch {
     return null;
   }
 }
-function R(a) {
+function D(a) {
   return {
     name: String(a.name || ""),
     description: String(a.description || ""),
@@ -1281,7 +1290,7 @@ function R(a) {
     creator_notes: String(a.creator_notes || "")
   };
 }
-function Lt(a, t) {
+function Rt(a, t) {
   return (a[t] << 24 | a[t + 1] << 16 | a[t + 2] << 8 | a[t + 3]) >>> 0;
 }
 function N(a, t, e) {
@@ -1715,7 +1724,7 @@ class j extends $ {
   async _onPngUpload(t) {
     const e = t.target.files?.[0];
     if (!e) return;
-    const i = await Dt(e);
+    const i = await Lt(e);
     if (i && (this._cardConfig = {
       ...this._cardConfig,
       personality: i,
@@ -1848,6 +1857,10 @@ class W extends $ {
   _resolveStatus() {
     return this._cardConfig?.status_override ? this._cardConfig.status_override : this._loading ? "Thinking..." : "Online";
   }
+  _resolveAgentLabel() {
+    const t = this._cardConfig?.agent_id;
+    return t ? t === "orchestrator" ? "Orchestrator" : t === "conversation_agent" ? "Conversation Agent" : t.replace(/_/g, " ").replace(/\b\w/g, (e) => e.toUpperCase()) : "";
+  }
   _renderHeader(t, e, i) {
     return n`
       <div class="card-header">
@@ -1862,12 +1875,13 @@ class W extends $ {
     `;
   }
   _renderPortraitPanel(t, e, i) {
-    const s = this._cardConfig?.portrait_width ?? "auto", r = typeof s == "number" && s > 0, o = r ? s : this._portraitWidth, d = o ? `width: ${o}px; max-width: 50%;` : "width: 25%; max-width: 50%;";
+    const s = this._cardConfig?.portrait_width ?? "auto", r = typeof s == "number" && s > 0, o = r ? s : this._portraitWidth, d = o ? `width: ${o}px; max-width: 50%;` : "width: 25%; max-width: 50%;", l = r ? "portrait-img-cover" : "portrait-img-contain", p = this._resolveAgentLabel();
     return n`
       <div class="portrait-panel" style="${d}">
-        <img class="${r ? "portrait-img-cover" : "portrait-img-contain"}" src="${t}" alt="${e}" />
+        <img class="${l}" src="${t}" alt="${e}" />
         <div class="portrait-name">${e}</div>
         <div class="portrait-status">${i}</div>
+        ${p ? n`<div class="portrait-agent">${p}</div>` : c}
       </div>
     `;
   }

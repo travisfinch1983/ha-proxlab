@@ -213,6 +213,15 @@ export class ProxLabChatCard extends LitElement {
     return this._loading ? "Thinking..." : "Online";
   }
 
+  private _resolveAgentLabel(): string {
+    const id = this._cardConfig?.agent_id;
+    if (!id) return "";
+    if (id === "orchestrator") return "Orchestrator";
+    if (id === "conversation_agent") return "Conversation Agent";
+    // Title-case the agent_id: "security_guard" → "Security Guard"
+    return id.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  }
+
   private _renderHeader(name: string, status: string, avatar?: string) {
     return html`
       <div class="card-header">
@@ -239,11 +248,13 @@ export class ProxLabChatCard extends LitElement {
     // Manual width: image can overflow card height, crop with cover (shows face at top)
     // Auto: image fits within card height, no cropping (contain)
     const imgClass = isManual ? "portrait-img-cover" : "portrait-img-contain";
+    const agentLabel = this._resolveAgentLabel();
     return html`
       <div class="portrait-panel" style="${widthStyle}">
         <img class="${imgClass}" src="${avatar}" alt="${name}" />
         <div class="portrait-name">${name}</div>
         <div class="portrait-status">${status}</div>
+        ${agentLabel ? html`<div class="portrait-agent">${agentLabel}</div>` : nothing}
       </div>
     `;
   }
