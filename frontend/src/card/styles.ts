@@ -263,6 +263,27 @@ export const cardStyles = css`
     background: rgba(34, 197, 94, 0.15);
   }
 
+  .msg-btn.delete:hover {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.15);
+  }
+
+  /* Text formatting classes */
+  .text-narration {
+    font-style: italic;
+    color: var(--narration-color, #9e9e9e);
+  }
+
+  .text-speech {
+    color: var(--speech-color, #f59e0b);
+  }
+
+  .text-thoughts {
+    font-style: italic;
+    font-weight: 600;
+    color: var(--thoughts-color, #a855f7);
+  }
+
   /* Inline edit mode */
   .edit-bubble {
     display: flex;

@@ -20,7 +20,7 @@ export interface ProxLabChatCardConfig {
   agent_id: string;
   prompt_override: string;
   avatar: string;
-  tts_voice: string;
+  tts_voices: TtsVoices;
   stt_enabled: boolean;
   personality_enabled: boolean;
   personality: CharacterCardV3;
@@ -90,13 +90,21 @@ export interface TtsVoice {
   language: string;
 }
 
+/** Per-text-type TTS voice configuration */
+export interface TtsVoices {
+  normal: string;
+  narration: string;
+  speech: string;
+  thoughts: string;
+}
+
 /** Default config for new cards */
 export const DEFAULT_CARD_CONFIG: ProxLabChatCardConfig = {
   card_id: "",
   agent_id: "conversation_agent",
   prompt_override: "",
   avatar: "",
-  tts_voice: "",
+  tts_voices: { normal: "", narration: "", speech: "", thoughts: "" },
   stt_enabled: false,
   personality_enabled: false,
   personality: {

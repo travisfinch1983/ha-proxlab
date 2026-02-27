@@ -254,6 +254,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_card_avatar_upload)
     websocket_api.async_register_command(hass, ws_card_invoke)
     websocket_api.async_register_command(hass, ws_card_agent_prompt)
+    websocket_api.async_register_command(hass, ws_card_tts_speak)
 
 
 # ---------------------------------------------------------------------------
@@ -2704,6 +2705,108 @@ async def ws_card_voices(
             voices.append({"id": configured_voice, "name": configured_voice})
 
     connection.send_result(msg["id"], voices)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/card/tts/speak",
+        vol.Optional("entry_id"): str,
+        vol.Required("card_id"): str,
+        vol.Required("segments"): [
+            {
+                vol.Required("text"): str,
+                vol.Required("voice"): str,
+            }
+        ],
+    }
+)
+@websocket_api.async_response
+async def ws_card_tts_speak(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Generate TTS audio for multiple text segments with per-segment voices."""
+    import aiohttp
+    import base64
+
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+
+    from .connection_manager import resolve_agent_to_flat_config
+
+    config = dict(entry.data) | dict(entry.options)
+    tts_config = resolve_agent_to_flat_config(config, "tts_agent")
+
+    if not tts_config:
+        connection.send_error(msg["id"], "no_tts", "No TTS connection configured")
+        return
+
+    base_url = tts_config.get(CONF_LLM_BASE_URL, tts_config.get("base_url", "")).rstrip("/")
+    api_key = tts_config.get(CONF_LLM_API_KEY, tts_config.get("api_key", ""))
+    model = tts_config.get("model", "tts-1")
+    speed = tts_config.get("speed", 1.0)
+    resp_format = tts_config.get("format", "mp3")
+
+    headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+    headers["Content-Type"] = "application/json"
+
+    audio_segments: list[dict[str, str]] = []
+
+    # Determine TTS speech endpoint — try common patterns
+    speech_urls = [
+        f"{base_url}/audio/speech",
+        f"{base_url}/v1/audio/speech",
+    ]
+
+    try:
+        async with aiohttp.ClientSession() as session:
+            for seg in msg["segments"]:
+                text = seg.get("text", "").strip()
+                voice = seg.get("voice", "").strip()
+                if not text or not voice:
+                    continue
+
+                payload = {
+                    "model": model,
+                    "input": text,
+                    "voice": voice,
+                    "speed": speed,
+                    "response_format": resp_format,
+                }
+
+                generated = False
+                for url in speech_urls:
+                    try:
+                        async with session.post(
+                            url,
+                            json=payload,
+                            headers=headers,
+                            timeout=aiohttp.ClientTimeout(total=30),
+                        ) as resp:
+                            if resp.status == 200:
+                                audio_bytes = await resp.read()
+                                b64 = base64.b64encode(audio_bytes).decode("ascii")
+                                mime = f"audio/{resp_format}"
+                                data_url = f"data:{mime};base64,{b64}"
+                                audio_segments.append({"data_url": data_url})
+                                generated = True
+                                break
+                    except Exception:
+                        continue
+
+                if not generated:
+                    _LOGGER.warning(
+                        "TTS speech generation failed for voice=%s text=%s",
+                        voice,
+                        text[:50],
+                    )
+    except Exception as err:
+        _LOGGER.error("TTS speak session error: %s", err)
+        connection.send_error(msg["id"], "tts_failed", str(err))
+        return
+
+    connection.send_result(msg["id"], {"audio_segments": audio_segments})
 
 
 @websocket_api.websocket_command(

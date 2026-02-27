@@ -7,6 +7,7 @@ import type {
   CardChatMessage,
   CardInvokeResponse,
 } from "./types";
+import { parseFormattedText } from "./format-parser";
 
 // Import editor so it's included in the bundle
 import "./proxlab-chat-card-editor";
@@ -19,6 +20,7 @@ const editIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="curr
 const regenerateIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`;
 const checkIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`;
 const cancelIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>`;
+const deleteIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
 
 export class ProxLabChatCard extends LitElement {
   static styles = cardStyles;
@@ -52,6 +54,8 @@ export class ProxLabChatCard extends LitElement {
   private _mediaRecorder?: MediaRecorder;
   private _audioChunks: Blob[] = [];
   private _lastAvatarUrl = "";
+  private _audioQueue: string[] = [];
+  private _audioPlaying = false;
 
   // ---- Lovelace lifecycle ----
 
@@ -263,7 +267,7 @@ export class ProxLabChatCard extends LitElement {
               ${this._editingIndex === idx
                 ? this._renderEditBubble(idx)
                 : html`
-                    <div class="bubble">${msg.content}</div>
+                    <div class="bubble">${this._formatContent(msg.content)}</div>
                     <div class="msg-actions">
                       ${this._cardConfig?.show_metadata !== false && msg.metadata
                         ? html`<span class="meta-inline">
@@ -274,6 +278,9 @@ export class ProxLabChatCard extends LitElement {
                         ? html`
                             <button class="msg-btn" title="Edit" @click=${() => this._startEdit(idx)}>
                               ${editIcon}
+                            </button>
+                            <button class="msg-btn delete" title="Delete" @click=${() => this._deleteMessage(idx)}>
+                              ${deleteIcon}
                             </button>
                             ${msg.role === "assistant" && idx === lastAssistantIdx
                               ? html`<button class="msg-btn" title="Regenerate" @click=${() => this._regenerate()}>
@@ -455,9 +462,8 @@ export class ProxLabChatCard extends LitElement {
         },
       ];
 
-      if (result.tts_audio_url && this._cardConfig?.tts_voice) {
-        this._playAudio(result.tts_audio_url);
-      }
+      // TTS playback — per-segment voices
+      this._speakSegments(result.response_text || "");
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       this._messages = [
@@ -513,10 +519,8 @@ export class ProxLabChatCard extends LitElement {
         },
       ];
 
-      // TTS playback
-      if (result.tts_audio_url && this._cardConfig?.tts_voice) {
-        this._playAudio(result.tts_audio_url);
-      }
+      // TTS playback — per-segment voices
+      this._speakSegments(result.response_text || "");
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       this._messages = [
@@ -542,12 +546,78 @@ export class ProxLabChatCard extends LitElement {
     });
   }
 
-  private _playAudio(url: string): void {
+  private _formatContent(content: string) {
+    const segments = parseFormattedText(content);
+    return segments.map((seg) => {
+      if (seg.type === "normal") return html`<span>${seg.text}</span>`;
+      return html`<span class="text-${seg.type}">${seg.text}</span>`;
+    });
+  }
+
+  private _deleteMessage(idx: number): void {
+    const updated = [...this._messages];
+    updated.splice(idx, 1);
+    this._messages = updated;
+  }
+
+  private async _speakSegments(responseText: string): Promise<void> {
+    const voices = this._cardConfig?.tts_voices;
+    if (!voices) return;
+
+    // Check if any voice is configured
+    const hasAnyVoice = voices.normal || voices.narration || voices.speech || voices.thoughts;
+    if (!hasAnyVoice || !this.hass || !this._config?.card_id) return;
+
+    const segments = parseFormattedText(responseText);
+
+    // Build request segments: pair text with the configured voice for its type
+    const reqSegments = segments
+      .filter((s) => s.text.trim())
+      .map((s) => ({ text: s.text, voice: voices[s.type] || "" }))
+      .filter((s) => s.voice);
+
+    if (reqSegments.length === 0) return;
+
+    try {
+      const result = await this.hass.callWS<{ audio_segments: { data_url: string }[] }>({
+        type: "proxlab/card/tts/speak",
+        card_id: this._config.card_id,
+        segments: reqSegments,
+      });
+
+      if (result?.audio_segments?.length) {
+        for (const seg of result.audio_segments) {
+          if (seg.data_url) this._audioQueue.push(seg.data_url);
+        }
+        this._playAudioQueue();
+      }
+    } catch {
+      // TTS failed silently
+    }
+  }
+
+  private _playAudioQueue(): void {
+    if (this._audioPlaying || this._audioQueue.length === 0) return;
+    this._audioPlaying = true;
+
+    const url = this._audioQueue.shift()!;
     try {
       const audio = new Audio(url);
-      audio.play().catch(() => {});
+      audio.onended = () => {
+        this._audioPlaying = false;
+        this._playAudioQueue();
+      };
+      audio.onerror = () => {
+        this._audioPlaying = false;
+        this._playAudioQueue();
+      };
+      audio.play().catch(() => {
+        this._audioPlaying = false;
+        this._playAudioQueue();
+      });
     } catch {
-      // Ignore audio errors
+      this._audioPlaying = false;
+      this._playAudioQueue();
     }
   }
 

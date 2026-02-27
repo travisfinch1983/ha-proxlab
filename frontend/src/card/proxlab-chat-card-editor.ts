@@ -6,11 +6,12 @@ import type {
   ProxLabChatCardConfig,
   AvailableAgent,
   TtsVoice,
+  TtsVoices,
 } from "./types";
 import { DEFAULT_CARD_CONFIG } from "./types";
 import { parseCharacterCardPNG } from "./character-card-parser";
 
-type EditorTab = "general" | "personality" | "prompt" | "advanced";
+type EditorTab = "general" | "voice" | "personality" | "prompt" | "advanced";
 
 export class ProxLabChatCardEditor extends LitElement {
   static styles = editorStyles;
@@ -59,6 +60,21 @@ export class ProxLabChatCardEditor extends LitElement {
       ]);
 
       if (config) {
+        // Migrate old tts_voice → tts_voices if needed
+        const raw = config as Record<string, unknown>;
+        if (typeof raw.tts_voice === "string" && !raw.tts_voices) {
+          (config as any).tts_voices = {
+            normal: raw.tts_voice as string,
+            narration: "",
+            speech: "",
+            thoughts: "",
+          };
+          delete (config as any).tts_voice;
+        }
+        // Ensure tts_voices exists even on older configs
+        if (!config.tts_voices) {
+          config.tts_voices = { normal: "", narration: "", speech: "", thoughts: "" };
+        }
         this._cardConfig = config;
       } else {
         this._cardConfig = { ...DEFAULT_CARD_CONFIG, card_id: this._config!.card_id };
@@ -89,6 +105,7 @@ export class ProxLabChatCardEditor extends LitElement {
     const customizeOn = this._cardConfig.customize_enabled;
     const tabs: { id: EditorTab; label: string; disabled: boolean }[] = [
       { id: "general", label: "General", disabled: false },
+      { id: "voice", label: "Voice", disabled: false },
       { id: "personality", label: "Personality", disabled: !customizeOn },
       { id: "prompt", label: "Prompt", disabled: !customizeOn },
       { id: "advanced", label: "Advanced", disabled: false },
@@ -110,6 +127,7 @@ export class ProxLabChatCardEditor extends LitElement {
         </div>
         <div class="tab-content">
           ${this._tab === "general" ? this._renderGeneralTab() : nothing}
+          ${this._tab === "voice" ? this._renderVoiceTab() : nothing}
           ${this._tab === "personality" ? this._renderPersonalityTab() : nothing}
           ${this._tab === "prompt" ? this._renderPromptTab() : nothing}
           ${this._tab === "advanced" ? this._renderAdvancedTab() : nothing}
@@ -153,20 +171,6 @@ export class ProxLabChatCardEditor extends LitElement {
             : html`<div class="avatar-preview" style="display:flex;align-items:center;justify-content:center;background:var(--divider)">?</div>`}
           <input type="file" accept="image/*" @change=${this._onAvatarUpload} />
         </div>
-      </div>
-      <div class="field">
-        <label>TTS Voice</label>
-        <select
-          .value=${this._cardConfig.tts_voice}
-          @change=${(e: Event) => this._updateField("tts_voice", (e.target as HTMLSelectElement).value)}
-        >
-          <option value="">Disabled</option>
-          ${this._voices.map(
-            (v) => html`<option value=${v.id} ?selected=${this._cardConfig.tts_voice === v.id}>
-              ${v.name}
-            </option>`
-          )}
-        </select>
       </div>
       <div class="field">
         <label>Title Override</label>
@@ -247,6 +251,37 @@ export class ProxLabChatCardEditor extends LitElement {
           <span class="slider"></span>
         </label>
       </div>
+    `;
+  }
+
+  private _renderVoiceTab() {
+    const voices = this._cardConfig.tts_voices ?? { normal: "", narration: "", speech: "", thoughts: "" };
+    const voiceDropdown = (label: string, sublabel: string, field: keyof TtsVoices) => html`
+      <div class="field">
+        <label>${label}</label>
+        <div class="sublabel" style="font-size:11px;color:var(--card-secondary);margin-bottom:2px">${sublabel}</div>
+        <select
+          .value=${voices[field]}
+          @change=${(e: Event) => {
+            const val = (e.target as HTMLSelectElement).value;
+            this._updateField("tts_voices", { ...voices, [field]: val });
+          }}
+        >
+          <option value="">Disabled</option>
+          ${this._voices.map(
+            (v) => html`<option value=${v.id} ?selected=${voices[field] === v.id}>
+              ${v.name}
+            </option>`
+          )}
+        </select>
+      </div>
+    `;
+
+    return html`
+      ${voiceDropdown("Normal Text", "Voice for unformatted text", "normal")}
+      ${voiceDropdown("Narration", "Voice for *narration* text", "narration")}
+      ${voiceDropdown("Speech", 'Voice for "speech" text', "speech")}
+      ${voiceDropdown("Thoughts", "Voice for \`\`\`thoughts\`\`\` text", "thoughts")}
     `;
   }
 
