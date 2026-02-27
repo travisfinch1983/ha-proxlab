@@ -220,6 +220,25 @@ export class ProxLabGroupChatCardEditor extends LitElement {
 
       <div class="toggle-row">
         <div>
+          <label>Auto TTS</label>
+          <div class="sublabel">Automatically voice all agent responses using profile TTS voices</div>
+        </div>
+        <label class="switch">
+          <input
+            type="checkbox"
+            .checked=${this._cardConfig.auto_tts ?? false}
+            @change=${(e: Event) =>
+              this._updateField(
+                "auto_tts",
+                (e.target as HTMLInputElement).checked
+              )}
+          />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div>
           <label>Text Streaming</label>
           <div class="sublabel">Show text progressively as agents generate responses</div>
         </div>

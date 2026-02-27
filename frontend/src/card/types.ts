@@ -116,7 +116,6 @@ export interface AgentProfile {
   personality_enabled: boolean;
   personality: CharacterCardV3;
   tts_voices: TtsVoices;
-  auto_tts: boolean;
   portrait_width: "auto" | number;
   per_card_memory: boolean;
   memory_universal_access: boolean;
@@ -141,6 +140,8 @@ export interface GroupChatCardConfig {
   allowed_users: string[];
   /** When true, stream text progressively from the LLM */
   streaming_enabled: boolean;
+  /** When true, auto-play TTS for all agent responses */
+  auto_tts: boolean;
 }
 
 /** A single message in group chat */
@@ -183,6 +184,7 @@ export const DEFAULT_GROUP_CARD_CONFIG: GroupChatCardConfig = {
   show_metadata: false,
   allowed_users: [],
   streaming_enabled: false,
+  auto_tts: false,
 };
 
 /** Default config for new cards */

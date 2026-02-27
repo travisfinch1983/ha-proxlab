@@ -42,7 +42,6 @@ interface FormData {
   tts_narration: string;
   tts_speech: string;
   tts_thoughts: string;
-  auto_tts: boolean;
   per_card_memory: boolean;
   memory_universal_access: boolean;
 }
@@ -65,7 +64,6 @@ const EMPTY_FORM: FormData = {
   tts_narration: "",
   tts_speech: "",
   tts_thoughts: "",
-  auto_tts: false,
   per_card_memory: false,
   memory_universal_access: false,
 };
@@ -89,7 +87,6 @@ function profileToForm(p: AgentProfile): FormData {
     tts_narration: p.tts_voices?.narration ?? "",
     tts_speech: p.tts_voices?.speech ?? "",
     tts_thoughts: p.tts_voices?.thoughts ?? "",
-    auto_tts: p.auto_tts,
     per_card_memory: p.per_card_memory ?? false,
     memory_universal_access: p.memory_universal_access ?? false,
   };
@@ -122,7 +119,6 @@ function formToProfile(form: FormData): Omit<AgentProfile, "profile_id"> {
       speech: form.tts_speech,
       thoughts: form.tts_thoughts,
     },
-    auto_tts: form.auto_tts,
     portrait_width: "auto",
     per_card_memory: form.per_card_memory,
     memory_universal_access: form.memory_universal_access,
@@ -856,24 +852,6 @@ export default function AgentProfilesPage() {
                     </div>
                   ))}
 
-                  <label className="flex items-center gap-3 cursor-pointer mt-2">
-                    <input
-                      type="checkbox"
-                      className="toggle toggle-primary toggle-sm"
-                      checked={form.auto_tts}
-                      onChange={(e) =>
-                        setForm({ ...form, auto_tts: e.target.checked })
-                      }
-                    />
-                    <div>
-                      <span className="label-text font-medium">
-                        Auto-play TTS on response
-                      </span>
-                      <p className="text-xs text-base-content/40 mt-0.5">
-                        Automatically speak the agent's response when received
-                      </p>
-                    </div>
-                  </label>
                 </>
               )}
 

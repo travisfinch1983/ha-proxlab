@@ -297,7 +297,6 @@ export interface AgentProfile {
     creator_notes: string;
   };
   tts_voices: { normal: string; narration: string; speech: string; thoughts: string };
-  auto_tts: boolean;
   portrait_width: "auto" | number;
   per_card_memory: boolean;
   memory_universal_access: boolean;

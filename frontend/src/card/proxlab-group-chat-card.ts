@@ -132,6 +132,7 @@ export class ProxLabGroupChatCard extends LitElement {
           show_metadata: false,
           allowed_users: [],
           streaming_enabled: false,
+          auto_tts: false,
         };
         this._profiles = [];
       }
@@ -522,14 +523,16 @@ export class ProxLabGroupChatCard extends LitElement {
         }));
         this._messages = [...this._messages, ...newMessages];
 
-        // Auto-TTS for profiles that have it enabled
-        for (const r of result.responses) {
-          if (!r.success) continue;
-          const profile = this._profiles.find(
-            (p) => p.profile_id === r.profile_id
-          );
-          if (profile?.auto_tts && profile.tts_voices?.normal) {
-            this._speakSegmentsForProfile(r.response_text, profile);
+        // Auto-TTS if enabled on the card
+        if (this._cardConfig?.auto_tts) {
+          for (const r of result.responses) {
+            if (!r.success) continue;
+            const profile = this._profiles.find(
+              (p) => p.profile_id === r.profile_id
+            );
+            if (profile?.tts_voices?.normal) {
+              this._speakSegmentsForProfile(r.response_text, profile);
+            }
           }
         }
       }
@@ -746,8 +749,9 @@ export class ProxLabGroupChatCard extends LitElement {
   // ---- TTS Chunking (Streaming) ----
 
   private _checkTtsChunk(profileId: string): void {
+    if (!this._cardConfig?.auto_tts) return;
     const profile = this._profiles.find((p) => p.profile_id === profileId);
-    if (!profile?.auto_tts) return;
+    if (!profile) return;
 
     const breakIdx = this._findChunkBreak(this._ttsBuffer);
     if (breakIdx > 0) {
@@ -759,8 +763,9 @@ export class ProxLabGroupChatCard extends LitElement {
 
   private _flushTtsBuffer(profileId: string): void {
     if (!this._ttsBuffer.trim()) return;
+    if (!this._cardConfig?.auto_tts) { this._ttsBuffer = ""; return; }
     const profile = this._profiles.find((p) => p.profile_id === profileId);
-    if (profile?.auto_tts) {
+    if (profile) {
       this._speakSegmentsForProfile(this._ttsBuffer, profile);
     }
     this._ttsBuffer = "";

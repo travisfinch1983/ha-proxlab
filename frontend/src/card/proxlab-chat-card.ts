@@ -137,7 +137,6 @@ export class ProxLabChatCard extends LitElement {
             config.prompt_override = profile.prompt_override;
             config.agent_id = profile.agent_id;
             config.tts_voices = profile.tts_voices;
-            config.auto_tts = profile.auto_tts;
             config.portrait_width = profile.portrait_width;
             // Use personality name as title if no title override set
             if (!config.title_override && profile.personality?.name) {

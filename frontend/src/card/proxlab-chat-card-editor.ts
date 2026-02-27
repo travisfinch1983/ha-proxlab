@@ -372,7 +372,25 @@ export class ProxLabChatCardEditor extends LitElement {
   }
 
   private _renderVoiceTab() {
-    // In profile mode, voice is managed by the profile — show read-only info
+    // Auto TTS is always a card-level setting
+    const autoTtsToggle = html`
+      <div class="toggle-row">
+        <div>
+          <label>Auto TTS</label>
+          <div class="sublabel">Automatically voice all agent responses</div>
+        </div>
+        <label class="switch">
+          <input
+            type="checkbox"
+            .checked=${this._cardConfig.auto_tts ?? false}
+            @change=${(e: Event) => this._updateField("auto_tts", (e.target as HTMLInputElement).checked)}
+          />
+          <span class="slider"></span>
+        </label>
+      </div>
+    `;
+
+    // In profile mode, voice selections are managed by the profile — show read-only info
     if (this._cardConfig.use_profile) {
       const profile = this._profiles.find(
         (p) => p.profile_id === this._cardConfig.profile_id
@@ -381,8 +399,9 @@ export class ProxLabChatCardEditor extends LitElement {
         const v = profile.tts_voices || { normal: "", narration: "", speech: "", thoughts: "" };
         const voiceName = (id: string) => this._voices.find((vo) => vo.id === id)?.name ?? id ?? "None";
         return html`
-          <div style="padding: 4px 0; opacity: 0.7; font-size: 13px;">
-            Voice settings are managed by the linked profile. Edit in Agents → Profiles.
+          ${autoTtsToggle}
+          <div style="padding: 4px 0; opacity: 0.7; font-size: 13px; border-top: 1px solid var(--divider); margin-top: 8px; padding-top: 12px;">
+            Voice selections are managed by the linked profile. Edit in Agents → Profiles.
           </div>
           <div class="field">
             <label>Normal: <strong>${voiceName(v.normal)}</strong></label>
@@ -396,12 +415,12 @@ export class ProxLabChatCardEditor extends LitElement {
           <div class="field">
             <label>Thoughts: <strong>${voiceName(v.thoughts)}</strong></label>
           </div>
-          <div class="field">
-            <label>Auto TTS: <strong>${profile.auto_tts ? "On" : "Off"}</strong></label>
-          </div>
         `;
       }
-      return html`<div style="opacity: 0.5; padding: 12px;">Select an agent profile first.</div>`;
+      return html`
+        ${autoTtsToggle}
+        <div style="opacity: 0.5; padding: 12px;">Select an agent profile first to see voice settings.</div>
+      `;
     }
 
     const voices = this._cardConfig.tts_voices ?? { normal: "", narration: "", speech: "", thoughts: "" };
@@ -427,20 +446,7 @@ export class ProxLabChatCardEditor extends LitElement {
     `;
 
     return html`
-      <div class="toggle-row">
-        <div>
-          <label>Auto TTS</label>
-          <div class="sublabel">Automatically voice all agent responses</div>
-        </div>
-        <label class="switch">
-          <input
-            type="checkbox"
-            .checked=${this._cardConfig.auto_tts ?? false}
-            @change=${(e: Event) => this._updateField("auto_tts", (e.target as HTMLInputElement).checked)}
-          />
-          <span class="slider"></span>
-        </label>
-      </div>
+      ${autoTtsToggle}
       ${voiceDropdown("Normal Text", "Voice for unformatted text", "normal")}
       ${voiceDropdown("Narration", "Voice for *narration* text", "narration")}
       ${voiceDropdown("Speech", 'Voice for "speech" text', "speech")}
