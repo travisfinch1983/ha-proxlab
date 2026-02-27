@@ -57,9 +57,10 @@ export class ProxLabChatCard extends LitElement {
   }
 
   static getStubConfig(): Record<string, unknown> {
+    const id = Math.random().toString(36).substring(2, 10);
     return {
       type: "custom:proxlab-chat-card",
-      card_id: crypto.randomUUID().slice(0, 8),
+      card_id: id,
     };
   }
 
