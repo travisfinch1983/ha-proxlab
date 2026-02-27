@@ -2727,60 +2727,92 @@ async def ws_card_tts_speak(
 ) -> None:
     """Generate TTS audio for multiple text segments with per-segment voices.
 
-    Uses HA's built-in TTS pipeline (tts.proxlab_tts entity) via the media
-    source system.  Returns playable proxy URLs instead of base64 blobs.
+    Calls the TTS endpoint directly using the same config as tts.proxlab_tts.
+    Returns base64 data-URL audio segments that the frontend plays via Audio().
 
     Designed for easy swap: to use a different TTS provider later, add a
-    config-driven branch here that calls _tts_generate_custom() instead.
+    config-driven branch here (e.g. based on a card/entry setting).
     """
-    # --- Discover HA TTS engine entity ---
-    tts_engine = None
-    for state in hass.states.async_all("tts"):
-        tts_engine = state.entity_id
-        break  # Use the first available; could be made configurable later
+    import aiohttp
+    import base64
 
-    if not tts_engine:
-        connection.send_error(
-            msg["id"], "no_tts", "No TTS engine entity found in Home Assistant"
-        )
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
         return
+
+    from .connection_manager import resolve_connections_to_flat_config
+    from .const import (
+        CONF_CONNECTIONS,
+        CONF_TTS_BASE_URL,
+        CONF_TTS_MODEL,
+        CONF_TTS_SPEED,
+        CONF_TTS_FORMAT,
+        DEFAULT_TTS_MODEL,
+        DEFAULT_TTS_SPEED,
+        DEFAULT_TTS_FORMAT,
+    )
+
+    config = dict(entry.data) | dict(entry.options)
+    if CONF_CONNECTIONS in config:
+        config = resolve_connections_to_flat_config(config)
+
+    tts_base_url = config.get(CONF_TTS_BASE_URL, "").rstrip("/")
+    if not tts_base_url:
+        connection.send_error(msg["id"], "no_tts", "No TTS base URL configured")
+        return
+
+    model = config.get(CONF_TTS_MODEL, DEFAULT_TTS_MODEL)
+    speed = float(config.get(CONF_TTS_SPEED, DEFAULT_TTS_SPEED))
+    resp_format = config.get(CONF_TTS_FORMAT, DEFAULT_TTS_FORMAT)
+    speech_url = f"{tts_base_url}/audio/speech"
 
     audio_segments: list[dict[str, str]] = []
 
     try:
-        from homeassistant.components.tts import generate_media_source_id
-        from homeassistant.components.media_source import async_resolve_media
-    except ImportError as err:
-        connection.send_error(msg["id"], "tts_unavailable", str(err))
+        async with aiohttp.ClientSession() as session:
+            for seg in msg["segments"]:
+                text = seg.get("text", "").strip()
+                voice = seg.get("voice", "").strip()
+                if not text or not voice:
+                    continue
+
+                payload = {
+                    "model": model,
+                    "input": text,
+                    "voice": voice,
+                    "speed": speed,
+                    "response_format": resp_format,
+                }
+
+                try:
+                    async with session.post(
+                        speech_url,
+                        json=payload,
+                        timeout=aiohttp.ClientTimeout(total=30),
+                    ) as resp:
+                        if resp.status == 200:
+                            audio_bytes = await resp.read()
+                            b64 = base64.b64encode(audio_bytes).decode("ascii")
+                            mime = f"audio/{resp_format}"
+                            audio_segments.append(
+                                {"url": f"data:{mime};base64,{b64}"}
+                            )
+                        else:
+                            err_text = await resp.text()
+                            _LOGGER.warning(
+                                "TTS %d for voice=%s text=%s: %s",
+                                resp.status, voice, text[:50], err_text[:200],
+                            )
+                except Exception as err:
+                    _LOGGER.warning(
+                        "TTS request failed for voice=%s text=%s: %s",
+                        voice, text[:50], err,
+                    )
+    except Exception as err:
+        _LOGGER.error("TTS session error: %s", err)
+        connection.send_error(msg["id"], "tts_failed", str(err))
         return
-
-    for seg in msg["segments"]:
-        text = seg.get("text", "").strip()
-        voice = seg.get("voice", "").strip()
-        if not text or not voice:
-            continue
-
-        try:
-            media_source_id = generate_media_source_id(
-                hass,
-                engine=tts_engine,
-                message=text,
-                language=hass.config.language or "en",
-                options={"voice": voice},
-            )
-            resolved = await async_resolve_media(hass, media_source_id, None)
-            if resolved and resolved.url:
-                audio_segments.append({"url": resolved.url})
-            else:
-                _LOGGER.warning(
-                    "TTS returned no URL for voice=%s text=%s",
-                    voice, text[:50],
-                )
-        except Exception as err:
-            _LOGGER.warning(
-                "TTS generation failed for voice=%s text=%s: %s",
-                voice, text[:50], err,
-            )
 
     connection.send_result(msg["id"], {"audio_segments": audio_segments})
 
