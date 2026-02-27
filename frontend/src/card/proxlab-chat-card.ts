@@ -28,6 +28,7 @@ export class ProxLabChatCard extends LitElement {
     _inputValue: { state: true },
     _recording: { state: true },
     _configLoaded: { state: true },
+    _portraitWidth: { state: true },
   };
 
   hass!: HomeAssistant;
@@ -38,9 +39,11 @@ export class ProxLabChatCard extends LitElement {
   _inputValue = "";
   _recording = false;
   _configLoaded = false;
+  _portraitWidth = 0;
 
   private _mediaRecorder?: MediaRecorder;
   private _audioChunks: Blob[] = [];
+  private _lastAvatarUrl = "";
 
   // ---- Lovelace lifecycle ----
 
@@ -96,6 +99,12 @@ export class ProxLabChatCard extends LitElement {
       });
       this._cardConfig = config ?? undefined;
 
+      // Measure avatar for portrait panel sizing
+      if (config?.avatar && config.avatar !== this._lastAvatarUrl) {
+        this._lastAvatarUrl = config.avatar;
+        this._measureAvatar(config.avatar, config.card_height ?? 500);
+      }
+
       // Show first_mes if personality is enabled and no messages yet
       if (
         this._messages.length === 0 &&
@@ -113,6 +122,20 @@ export class ProxLabChatCard extends LitElement {
     } catch {
       // Config not saved yet — card is unconfigured, show empty state
     }
+  }
+
+  private _measureAvatar(url: string, cardHeight: number): void {
+    const img = new Image();
+    img.onload = () => {
+      if (!img.naturalWidth || !img.naturalHeight) return;
+      // Available height = card height - header (~56px) - input bar (~52px) - panel padding (16px) - name/status (~36px)
+      const availableHeight = cardHeight - 56 - 52 - 16 - 36;
+      const aspectRatio = img.naturalWidth / img.naturalHeight;
+      const idealWidth = Math.round(availableHeight * aspectRatio);
+      // Clamp: at least 80px, no more than half the card
+      this._portraitWidth = Math.max(80, Math.min(idealWidth, 600));
+    };
+    img.src = url;
   }
 
   // ---- Rendering ----
@@ -192,8 +215,11 @@ export class ProxLabChatCard extends LitElement {
   }
 
   private _renderPortraitPanel(avatar: string, name: string, status: string) {
+    const widthStyle = this._portraitWidth
+      ? `width: ${this._portraitWidth}px; max-width: 50%;`
+      : "width: 25%; max-width: 50%;";
     return html`
-      <div class="portrait-panel">
+      <div class="portrait-panel" style="${widthStyle}">
         <img src="${avatar}" alt="${name}" />
         <div class="portrait-name">${name}</div>
         <div class="portrait-status">${status}</div>

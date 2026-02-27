@@ -35,7 +35,6 @@ export const cardStyles = css`
 
   .portrait-panel {
     flex: 0 0 auto;
-    max-width: 50%;
     display: flex;
     flex-direction: column;
     padding: 8px;
@@ -47,12 +46,10 @@ export const cardStyles = css`
   .portrait-panel img {
     flex: 1;
     min-height: 0;
-    width: auto;
-    max-width: 100%;
-    object-fit: cover;
+    width: 100%;
+    object-fit: contain;
     object-position: top;
     border-radius: 12px;
-    border: 2px solid var(--divider);
   }
 
   .portrait-name {
