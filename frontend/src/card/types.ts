@@ -28,6 +28,10 @@ export interface ProxLabChatCardConfig {
   allowed_users: string[];
   show_metadata: boolean;
   card_height: number;
+  customize_enabled: boolean;
+  title_override: string;
+  status_override: string;
+  hide_header: boolean;
 }
 
 /** Character Card V3 personality fields (SillyTavern-compatible) */
@@ -111,4 +115,8 @@ export const DEFAULT_CARD_CONFIG: ProxLabChatCardConfig = {
   allowed_users: [],
   show_metadata: true,
   card_height: 500,
+  customize_enabled: false,
+  title_override: "",
+  status_override: "",
+  hide_header: false,
 };

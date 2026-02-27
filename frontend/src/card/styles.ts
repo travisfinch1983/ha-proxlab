@@ -26,6 +26,55 @@ export const cardStyles = css`
     box-shadow: var(--shadow);
   }
 
+  /* Portrait layout: avatar panel on left + chat area on right */
+  .card-layout {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  .portrait-panel {
+    width: 140px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 16px 8px;
+    border-right: 1px solid var(--divider);
+    background: var(--card-bg);
+  }
+
+  .portrait-panel img {
+    width: 110px;
+    height: 110px;
+    border-radius: 12px;
+    object-fit: cover;
+    border: 2px solid var(--divider);
+  }
+
+  .portrait-name {
+    margin-top: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--card-text);
+    text-align: center;
+    word-break: break-word;
+  }
+
+  .portrait-status {
+    font-size: 11px;
+    color: var(--card-secondary);
+    text-align: center;
+  }
+
+  .chat-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+
   /* Header */
   .card-header {
     display: flex;
@@ -318,8 +367,14 @@ export const editorStyles = css`
     border-bottom-color: var(--accent);
   }
 
-  .tab:hover {
+  .tab:hover:not(.disabled) {
     color: var(--card-text);
+  }
+
+  .tab.disabled {
+    opacity: 0.4;
+    cursor: default;
+    pointer-events: none;
   }
 
   .tab-content {

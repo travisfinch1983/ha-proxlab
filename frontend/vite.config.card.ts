@@ -20,5 +20,13 @@ export default defineConfig({
   },
   esbuild: {
     target: "es2020",
+    // Lit requires [[Set]] semantics for class fields so that reactive
+    // property accessors registered via `static properties` are not
+    // overwritten by Object.defineProperty.
+    tsconfigRaw: {
+      compilerOptions: {
+        useDefineForClassFields: false,
+      },
+    },
   },
 });

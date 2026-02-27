@@ -122,24 +122,51 @@ export class ProxLabChatCard extends LitElement {
     }
 
     const height = this._cardConfig?.card_height ?? 500;
-    const name =
-      this._cardConfig?.personality_enabled && this._cardConfig?.personality?.name
-        ? this._cardConfig.personality.name
-        : "ProxLab Chat";
+    const hideHeader = this._cardConfig?.hide_header ?? false;
     const avatar = this._cardConfig?.avatar;
+    const hasPortrait = !!avatar;
+
+    // Resolve display name and status
+    const name = this._resolveTitle();
+    const status = this._resolveStatus();
 
     return html`
       <ha-card>
         <div class="card-container" style="height: ${height}px">
-          ${this._renderHeader(name, avatar)}
-          ${this._renderMessages()}
-          ${this._renderInputBar()}
+          ${hideHeader ? nothing : this._renderHeader(name, status, avatar)}
+          ${hasPortrait
+            ? html`
+                <div class="card-layout">
+                  ${this._renderPortraitPanel(avatar!, name, status)}
+                  <div class="chat-area">
+                    ${this._renderMessages()}
+                    ${this._renderInputBar()}
+                  </div>
+                </div>
+              `
+            : html`
+                ${this._renderMessages()}
+                ${this._renderInputBar()}
+              `}
         </div>
       </ha-card>
     `;
   }
 
-  private _renderHeader(name: string, avatar?: string) {
+  private _resolveTitle(): string {
+    if (this._cardConfig?.title_override) return this._cardConfig.title_override;
+    if (this._cardConfig?.personality_enabled && this._cardConfig?.personality?.name) {
+      return this._cardConfig.personality.name;
+    }
+    return "ProxLab Chat";
+  }
+
+  private _resolveStatus(): string {
+    if (this._cardConfig?.status_override) return this._cardConfig.status_override;
+    return this._loading ? "Thinking..." : "Online";
+  }
+
+  private _renderHeader(name: string, status: string, avatar?: string) {
     return html`
       <div class="card-header">
         <div class="avatar">
@@ -149,10 +176,18 @@ export class ProxLabChatCard extends LitElement {
         </div>
         <div class="header-info">
           <div class="header-name">${name}</div>
-          <div class="header-status">
-            ${this._loading ? "Thinking..." : "Online"}
-          </div>
+          <div class="header-status">${status}</div>
         </div>
+      </div>
+    `;
+  }
+
+  private _renderPortraitPanel(avatar: string, name: string, status: string) {
+    return html`
+      <div class="portrait-panel">
+        <img src="${avatar}" alt="${name}" />
+        <div class="portrait-name">${name}</div>
+        <div class="portrait-status">${status}</div>
       </div>
     `;
   }
@@ -201,15 +236,13 @@ export class ProxLabChatCard extends LitElement {
   private _renderInputBar() {
     return html`
       <div class="input-bar">
-        ${this._cardConfig?.stt_enabled
-          ? html`<button
-              class="btn-icon btn-mic ${this._recording ? "recording" : ""}"
-              @click=${this._toggleRecording}
-              title="Voice input"
-            >
-              ${micIcon}
-            </button>`
-          : nothing}
+        <button
+          class="btn-icon btn-mic ${this._recording ? "recording" : ""}"
+          @click=${this._toggleRecording}
+          title="Voice input"
+        >
+          ${micIcon}
+        </button>
         <input
           type="text"
           placeholder="Type a message..."

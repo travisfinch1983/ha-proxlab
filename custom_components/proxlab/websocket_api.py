@@ -251,6 +251,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_card_voices)
     websocket_api.async_register_command(hass, ws_card_avatar_upload)
     websocket_api.async_register_command(hass, ws_card_invoke)
+    websocket_api.async_register_command(hass, ws_card_agent_prompt)
 
 
 # ---------------------------------------------------------------------------
@@ -2793,9 +2794,7 @@ async def ws_card_invoke(
     if prompt_override:
         system_parts.append(f"Additional Instructions: {prompt_override}")
 
-    context = {}
-    if system_parts:
-        context["card_system_prompt"] = "\n\n".join(system_parts)
+    card_system_prompt = "\n\n".join(system_parts) if system_parts else None
 
     # Handle first_mes for new conversations
     first_mes = personality.get("first_mes", "") if personality_enabled else ""
@@ -2804,9 +2803,9 @@ async def ws_card_invoke(
         result = await agent.invoke_agent(
             agent_id=agent_id,
             message=msg["message"],
-            context=context if context else None,
             conversation_id=msg.get("conversation_id", f"card_{msg['card_id']}"),
             include_history=True,
+            system_prompt_override=card_system_prompt,
         )
         # Attach first_mes if this was a new conversation
         result["first_mes"] = first_mes
@@ -2817,3 +2816,32 @@ async def ws_card_invoke(
     except Exception as err:
         _LOGGER.error("Card invoke failed: %s", err, exc_info=True)
         connection.send_error(msg["id"], "invoke_failed", str(err))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/card/agent_prompt",
+        vol.Required("agent_id"): str,
+        vol.Optional("entry_id"): str,
+    }
+)
+@callback
+def ws_card_agent_prompt(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Return an agent's default system prompt for the card editor."""
+    agent_id = msg["agent_id"]
+
+    # Check for a custom prompt set via the Agents tab first
+    entry = _get_entry(hass, msg)
+    if entry:
+        config = dict(entry.data) | dict(entry.options)
+        agents_cfg = config.get(CONF_AGENTS, {})
+        custom_prompt = agents_cfg.get(agent_id, {}).get("system_prompt")
+        if custom_prompt:
+            connection.send_result(msg["id"], {"prompt": custom_prompt})
+            return
+
+    # Fall back to the built-in default prompt
+    prompt = get_default_prompt(agent_id)
+    connection.send_result(msg["id"], {"prompt": prompt})

@@ -10,7 +10,7 @@ import type {
 import { DEFAULT_CARD_CONFIG } from "./types";
 import { parseCharacterCardPNG } from "./character-card-parser";
 
-type EditorTab = "basic" | "personality" | "appearance" | "voice" | "advanced";
+type EditorTab = "general" | "personality" | "prompt" | "advanced";
 
 export class ProxLabChatCardEditor extends LitElement {
   static styles = editorStyles;
@@ -23,15 +23,17 @@ export class ProxLabChatCardEditor extends LitElement {
     _agents: { state: true },
     _voices: { state: true },
     _loaded: { state: true },
+    _defaultPrompt: { state: true },
   };
 
   hass!: HomeAssistant;
   _config?: ProxLabChatCardYamlConfig;
   _cardConfig: ProxLabChatCardConfig = { ...DEFAULT_CARD_CONFIG };
-  _tab: EditorTab = "basic";
+  _tab: EditorTab = "general";
   _agents: AvailableAgent[] = [];
   _voices: TtsVoice[] = [];
   _loaded = false;
+  _defaultPrompt = "";
 
   setConfig(config: ProxLabChatCardYamlConfig): void {
     this._config = config;
@@ -63,31 +65,53 @@ export class ProxLabChatCardEditor extends LitElement {
       }
       this._agents = agents || [];
       this._voices = voices || [];
+
+      // Load the agent's default prompt
+      this._loadAgentPrompt(this._cardConfig.agent_id);
     } catch {
       // First run, use defaults
     }
   }
 
+  private async _loadAgentPrompt(agentId: string): Promise<void> {
+    try {
+      const result = await this.hass.callWS<{ prompt: string }>({
+        type: "proxlab/card/agent_prompt",
+        agent_id: agentId,
+      });
+      this._defaultPrompt = result?.prompt ?? "";
+    } catch {
+      this._defaultPrompt = "";
+    }
+  }
+
   protected render() {
+    const customizeOn = this._cardConfig.customize_enabled;
+    const tabs: { id: EditorTab; label: string; disabled: boolean }[] = [
+      { id: "general", label: "General", disabled: false },
+      { id: "personality", label: "Personality", disabled: !customizeOn },
+      { id: "prompt", label: "Prompt", disabled: !customizeOn },
+      { id: "advanced", label: "Advanced", disabled: false },
+    ];
+
     return html`
       <div class="editor">
         <div class="tabs">
-          ${(["basic", "personality", "appearance", "voice", "advanced"] as EditorTab[]).map(
-            (tab) => html`
+          ${tabs.map(
+            (t) => html`
               <button
-                class="tab ${this._tab === tab ? "active" : ""}"
-                @click=${() => { this._tab = tab; }}
+                class="tab ${this._tab === t.id ? "active" : ""} ${t.disabled ? "disabled" : ""}"
+                @click=${() => { if (!t.disabled) this._tab = t.id; }}
               >
-                ${tab.charAt(0).toUpperCase() + tab.slice(1)}
+                ${t.label}
               </button>
             `
           )}
         </div>
         <div class="tab-content">
-          ${this._tab === "basic" ? this._renderBasicTab() : nothing}
+          ${this._tab === "general" ? this._renderGeneralTab() : nothing}
           ${this._tab === "personality" ? this._renderPersonalityTab() : nothing}
-          ${this._tab === "appearance" ? this._renderAppearanceTab() : nothing}
-          ${this._tab === "voice" ? this._renderVoiceTab() : nothing}
+          ${this._tab === "prompt" ? this._renderPromptTab() : nothing}
           ${this._tab === "advanced" ? this._renderAdvancedTab() : nothing}
         </div>
       </div>
@@ -96,15 +120,24 @@ export class ProxLabChatCardEditor extends LitElement {
 
   // ---- Tabs ----
 
-  private _renderBasicTab() {
+  private _renderGeneralTab() {
     return html`
       <div class="field">
         <label>Agent</label>
         <select
           .value=${this._cardConfig.agent_id}
-          @change=${(e: Event) => this._updateField("agent_id", (e.target as HTMLSelectElement).value)}
+          @change=${(e: Event) => {
+            const val = (e.target as HTMLSelectElement).value;
+            this._updateField("agent_id", val);
+            this._loadAgentPrompt(val);
+          }}
         >
-          <option value="conversation">Default (Orchestrator)</option>
+          <option value="orchestrator" ?selected=${this._cardConfig.agent_id === "orchestrator"}>
+            Orchestrator (Default Pipeline)
+          </option>
+          <option value="conversation" ?selected=${this._cardConfig.agent_id === "conversation"}>
+            Conversation Agent
+          </option>
           ${this._agents.map(
             (a) => html`<option value=${a.agent_id} ?selected=${this._cardConfig.agent_id === a.agent_id}>
               ${a.name}
@@ -113,12 +146,45 @@ export class ProxLabChatCardEditor extends LitElement {
         </select>
       </div>
       <div class="field">
-        <label>Custom Prompt</label>
-        <textarea
-          placeholder="Override the agent's default prompt..."
-          .value=${this._cardConfig.prompt_override}
-          @input=${(e: Event) => this._updateField("prompt_override", (e.target as HTMLTextAreaElement).value)}
-        ></textarea>
+        <label>Avatar</label>
+        <div class="avatar-upload">
+          ${this._cardConfig.avatar
+            ? html`<img class="avatar-preview" src="${this._cardConfig.avatar}" />`
+            : html`<div class="avatar-preview" style="display:flex;align-items:center;justify-content:center;background:var(--divider)">?</div>`}
+          <input type="file" accept="image/*" @change=${this._onAvatarUpload} />
+        </div>
+      </div>
+      <div class="field">
+        <label>TTS Voice</label>
+        <select
+          .value=${this._cardConfig.tts_voice}
+          @change=${(e: Event) => this._updateField("tts_voice", (e.target as HTMLSelectElement).value)}
+        >
+          <option value="">Disabled</option>
+          ${this._voices.map(
+            (v) => html`<option value=${v.id} ?selected=${this._cardConfig.tts_voice === v.id}>
+              ${v.name}
+            </option>`
+          )}
+        </select>
+      </div>
+      <div class="field">
+        <label>Title Override</label>
+        <input
+          type="text"
+          placeholder="Default: agent/personality name"
+          .value=${this._cardConfig.title_override}
+          @input=${(e: Event) => this._updateField("title_override", (e.target as HTMLInputElement).value)}
+        />
+      </div>
+      <div class="field">
+        <label>Status Override</label>
+        <input
+          type="text"
+          placeholder="Default: Online"
+          .value=${this._cardConfig.status_override}
+          @input=${(e: Event) => this._updateField("status_override", (e.target as HTMLInputElement).value)}
+        />
       </div>
       <div class="field">
         <label>Card Height (px)</label>
@@ -129,6 +195,36 @@ export class ProxLabChatCardEditor extends LitElement {
           .value=${String(this._cardConfig.card_height)}
           @input=${(e: Event) => this._updateField("card_height", parseInt((e.target as HTMLInputElement).value) || 500)}
         />
+      </div>
+      <div class="toggle-row">
+        <div>
+          <label>Hide Header</label>
+          <div class="sublabel">Hide the title bar (portrait panel still shows if avatar set)</div>
+        </div>
+        <label class="switch">
+          <input
+            type="checkbox"
+            .checked=${this._cardConfig.hide_header}
+            @change=${(e: Event) => this._updateField("hide_header", (e.target as HTMLInputElement).checked)}
+          />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div>
+          <label>Customize</label>
+          <div class="sublabel">Unlock Personality and Prompt tabs</div>
+        </div>
+        <label class="switch">
+          <input
+            type="checkbox"
+            .checked=${this._cardConfig.customize_enabled}
+            @change=${(e: Event) => {
+              this._updateField("customize_enabled", (e.target as HTMLInputElement).checked);
+            }}
+          />
+          <span class="slider"></span>
+        </label>
       </div>
     `;
   }
@@ -219,64 +315,33 @@ export class ProxLabChatCardEditor extends LitElement {
     `;
   }
 
-  private _renderAppearanceTab() {
+  private _renderPromptTab() {
+    // Show the card's custom prompt, pre-populated from the agent's default if empty
+    const currentPrompt = this._cardConfig.prompt_override;
     return html`
       <div class="field">
-        <label>Avatar</label>
-        <div class="avatar-upload">
-          ${this._cardConfig.avatar
-            ? html`<img class="avatar-preview" src="${this._cardConfig.avatar}" />`
-            : html`<div class="avatar-preview" style="display:flex;align-items:center;justify-content:center;background:var(--divider)">?</div>`}
-          <input type="file" accept="image/*" @change=${this._onAvatarUpload} />
+        <label>System Prompt</label>
+        <div class="sublabel" style="margin-bottom:4px;font-size:12px;color:var(--card-secondary)">
+          Override the agent's default prompt. Leave empty to use the agent's built-in prompt.
         </div>
+        <textarea
+          style="min-height:200px"
+          placeholder="${this._defaultPrompt || 'Loading agent default prompt...'}"
+          .value=${currentPrompt}
+          @input=${(e: Event) => this._updateField("prompt_override", (e.target as HTMLTextAreaElement).value)}
+        ></textarea>
       </div>
-      <div class="toggle-row">
-        <div>
-          <label>Show Metadata</label>
-          <div class="sublabel">Display model, tokens, and timing on messages</div>
-        </div>
-        <label class="switch">
-          <input
-            type="checkbox"
-            .checked=${this._cardConfig.show_metadata}
-            @change=${(e: Event) => this._updateField("show_metadata", (e.target as HTMLInputElement).checked)}
-          />
-          <span class="slider"></span>
-        </label>
-      </div>
-    `;
-  }
-
-  private _renderVoiceTab() {
-    return html`
-      <div class="field">
-        <label>TTS Voice</label>
-        <select
-          .value=${this._cardConfig.tts_voice}
-          @change=${(e: Event) => this._updateField("tts_voice", (e.target as HTMLSelectElement).value)}
-        >
-          <option value="">Disabled</option>
-          ${this._voices.map(
-            (v) => html`<option value=${v.id} ?selected=${this._cardConfig.tts_voice === v.id}>
-              ${v.name}
-            </option>`
-          )}
-        </select>
-      </div>
-      <div class="toggle-row">
-        <div>
-          <label>Speech-to-Text</label>
-          <div class="sublabel">Enable microphone input for voice messages</div>
-        </div>
-        <label class="switch">
-          <input
-            type="checkbox"
-            .checked=${this._cardConfig.stt_enabled}
-            @change=${(e: Event) => this._updateField("stt_enabled", (e.target as HTMLInputElement).checked)}
-          />
-          <span class="slider"></span>
-        </label>
-      </div>
+      ${this._defaultPrompt
+        ? html`
+            <button
+              class="tab"
+              style="align-self:flex-start;padding:6px 12px;border:1px solid var(--divider);border-radius:6px;cursor:pointer"
+              @click=${() => this._updateField("prompt_override", this._defaultPrompt)}
+            >
+              Copy Agent Default
+            </button>
+          `
+        : nothing}
     `;
   }
 
@@ -292,6 +357,20 @@ export class ProxLabChatCardEditor extends LitElement {
             type="checkbox"
             .checked=${this._cardConfig.per_card_memory}
             @change=${(e: Event) => this._updateField("per_card_memory", (e.target as HTMLInputElement).checked)}
+          />
+          <span class="slider"></span>
+        </label>
+      </div>
+      <div class="toggle-row">
+        <div>
+          <label>Show Metadata</label>
+          <div class="sublabel">Display model, tokens, and timing on messages</div>
+        </div>
+        <label class="switch">
+          <input
+            type="checkbox"
+            .checked=${this._cardConfig.show_metadata}
+            @change=${(e: Event) => this._updateField("show_metadata", (e.target as HTMLInputElement).checked)}
           />
           <span class="slider"></span>
         </label>

@@ -194,6 +194,7 @@ class ProxLabAgent(
         hass: HomeAssistant,
         config: dict[str, Any],
         session_manager: "ConversationSessionManager",
+        entry_id: str | None = None,
     ) -> None:
         """Initialize the ProxLab.
 
@@ -201,10 +202,12 @@ class ProxLabAgent(
             hass: Home Assistant instance
             config: Configuration dictionary containing LLM settings, context config, etc.
             session_manager: Conversation session manager for persistent voice conversations
+            entry_id: Config entry ID for fetching fresh config on demand.
         """
         self.hass = hass
         self.config = config
         self.session_manager = session_manager
+        self._entry_id = entry_id
 
         # Initialize components
         self.context_manager = ContextManager(hass, config)
@@ -1135,6 +1138,14 @@ class ProxLabAgent(
 
             raise
 
+    def _get_fresh_config(self) -> dict[str, Any]:
+        """Fetch fresh config from the config entry, falling back to self.config."""
+        if self._entry_id:
+            entry = self.hass.config_entries.async_get_entry(self._entry_id)
+            if entry:
+                return dict(entry.data) | dict(entry.options)
+        return self.config
+
     async def invoke_agent(
         self,
         agent_id: str,
@@ -1143,6 +1154,7 @@ class ProxLabAgent(
         user_id: str | None = None,
         conversation_id: str | None = None,
         include_history: bool = False,
+        system_prompt_override: str | None = None,
     ) -> dict[str, Any]:
         """Directly invoke a specific agent, bypassing orchestrator routing.
 
@@ -1153,6 +1165,7 @@ class ProxLabAgent(
             user_id: Optional user ID.
             conversation_id: Optional conversation ID for history tracking.
             include_history: Whether to include conversation history (default stateless).
+            system_prompt_override: If set, replaces the agent's default prompt entirely.
 
         Returns:
             Structured result dict with response_text, tool_results, tokens, etc.
@@ -1172,19 +1185,25 @@ class ProxLabAgent(
 
         start_time = time.time()
 
+        # Use fresh config so connection/agent changes take effect immediately
+        live_config = self._get_fresh_config()
+
         # Resolve agent's LLM config
-        flat_config = resolve_agent_to_flat_config(self.config, agent_id)
+        flat_config = resolve_agent_to_flat_config(live_config, agent_id)
         if flat_config is None:
-            flat_config = resolve_agent_to_flat_config(self.config, AGENT_CONVERSATION)
+            flat_config = resolve_agent_to_flat_config(live_config, AGENT_CONVERSATION)
         if flat_config is None:
             flat_config = {}
 
-        resolved_model = flat_config.get(CONF_LLM_MODEL) or self.config.get(CONF_LLM_MODEL, "unknown")
+        resolved_model = flat_config.get(CONF_LLM_MODEL) or live_config.get(CONF_LLM_MODEL, "unknown")
 
         # Build system prompt
-        agents_cfg = self.config.get(CONF_AGENTS, {})
-        custom_prompt = agents_cfg.get(agent_id, {}).get("system_prompt")
-        system_prompt = custom_prompt if custom_prompt else get_default_prompt(agent_id)
+        if system_prompt_override:
+            system_prompt = system_prompt_override
+        else:
+            agents_cfg = live_config.get(CONF_AGENTS, {})
+            custom_prompt = agents_cfg.get(agent_id, {}).get("system_prompt")
+            system_prompt = custom_prompt if custom_prompt else get_default_prompt(agent_id)
 
         # Append context section if provided
         if context:
@@ -1193,10 +1212,10 @@ class ProxLabAgent(
         # Build messages
         messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
 
-        if include_history and conversation_id and self.config.get(CONF_HISTORY_ENABLED, True):
+        if include_history and conversation_id and live_config.get(CONF_HISTORY_ENABLED, True):
             history = self.conversation_manager.get_history(
                 conversation_id,
-                max_messages=self.config.get(CONF_HISTORY_MAX_MESSAGES, DEFAULT_HISTORY_MAX_MESSAGES),
+                max_messages=live_config.get(CONF_HISTORY_MAX_MESSAGES, DEFAULT_HISTORY_MAX_MESSAGES),
             )
             messages.extend(history)
 
@@ -1212,7 +1231,7 @@ class ProxLabAgent(
         tool_results_list: list[dict[str, Any]] = []
 
         # Tool calling loop
-        max_iterations = self.config.get(CONF_TOOLS_MAX_CALLS_PER_TURN, DEFAULT_TOOLS_MAX_CALLS_PER_TURN)
+        max_iterations = live_config.get(CONF_TOOLS_MAX_CALLS_PER_TURN, DEFAULT_TOOLS_MAX_CALLS_PER_TURN)
         final_text = ""
 
         for iteration in range(max_iterations):

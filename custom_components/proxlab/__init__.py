@@ -415,7 +415,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     if llm_base_url:
         # Create ProxLab instance with session manager
-        agent = ProxLabAgent(hass, config, session_manager)
+        agent = ProxLabAgent(hass, config, session_manager, entry_id=entry.entry_id)
     else:
         _LOGGER.warning(
             "ProxLab: LLM base URL not configured — conversation agent disabled. "
