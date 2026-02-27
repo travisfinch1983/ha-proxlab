@@ -196,6 +196,27 @@ export class ProxLabChatCardEditor extends LitElement {
           @input=${(e: Event) => this._updateField("card_height", parseInt((e.target as HTMLInputElement).value) || 500)}
         />
       </div>
+      <div class="field">
+        <label>Portrait Width</label>
+        <select
+          .value=${String(this._cardConfig.portrait_width ?? "auto")}
+          @change=${(e: Event) => {
+            const val = (e.target as HTMLSelectElement).value;
+            this._updateField("portrait_width", val === "auto" ? "auto" : parseInt(val));
+          }}
+        >
+          <option value="auto" ?selected=${this._cardConfig.portrait_width === "auto"}>Auto (fit to card height)</option>
+          <option value="150" ?selected=${this._cardConfig.portrait_width === 150}>150px</option>
+          <option value="200" ?selected=${this._cardConfig.portrait_width === 200}>200px</option>
+          <option value="250" ?selected=${this._cardConfig.portrait_width === 250}>250px</option>
+          <option value="300" ?selected=${this._cardConfig.portrait_width === 300}>300px</option>
+          <option value="350" ?selected=${this._cardConfig.portrait_width === 350}>350px</option>
+          <option value="400" ?selected=${this._cardConfig.portrait_width === 400}>400px</option>
+        </select>
+        <div class="sublabel" style="font-size:11px;color:var(--card-secondary);margin-top:2px">
+          Auto: full image visible. Manual: fills width, crops bottom (focuses on face).
+        </div>
+      </div>
       <div class="toggle-row">
         <div>
           <label>Hide Header</label>
@@ -435,7 +456,9 @@ export class ProxLabChatCardEditor extends LitElement {
           data: base64,
           filename: file.name,
         });
-        this._updateField("avatar", result.url);
+        // Append timestamp to bust browser cache when replacing an existing avatar
+        const bustUrl = result.url.split("?")[0] + "?v=" + Date.now();
+        this._updateField("avatar", bustUrl);
       } catch {
         // Upload failed
       }
@@ -469,7 +492,8 @@ export class ProxLabChatCardEditor extends LitElement {
             data: base64,
             filename: file.name,
           });
-          this._updateField("avatar", result.url);
+          const bustUrl = result.url.split("?")[0] + "?v=" + Date.now();
+          this._updateField("avatar", bustUrl);
         } catch {
           // Avatar upload from PNG failed
         }

@@ -32,6 +32,7 @@ export interface ProxLabChatCardConfig {
   title_override: string;
   status_override: string;
   hide_header: boolean;
+  portrait_width: "auto" | number;
 }
 
 /** Character Card V3 personality fields (SillyTavern-compatible) */
@@ -119,4 +120,5 @@ export const DEFAULT_CARD_CONFIG: ProxLabChatCardConfig = {
   title_override: "",
   status_override: "",
   hide_header: false,
+  portrait_width: "auto",
 };

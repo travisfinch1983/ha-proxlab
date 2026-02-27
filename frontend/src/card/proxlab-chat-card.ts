@@ -15,6 +15,10 @@ import "./proxlab-chat-card-editor";
 const sendIcon = html`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`;
 const micIcon = html`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>`;
 const chatIcon = html`<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" opacity="0.4"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>`;
+const editIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`;
+const regenerateIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`;
+const checkIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`;
+const cancelIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>`;
 
 export class ProxLabChatCard extends LitElement {
   static styles = cardStyles;
@@ -29,6 +33,8 @@ export class ProxLabChatCard extends LitElement {
     _recording: { state: true },
     _configLoaded: { state: true },
     _portraitWidth: { state: true },
+    _editingIndex: { state: true },
+    _editValue: { state: true },
   };
 
   hass!: HomeAssistant;
@@ -40,6 +46,8 @@ export class ProxLabChatCard extends LitElement {
   _recording = false;
   _configLoaded = false;
   _portraitWidth = 0;
+  _editingIndex = -1;
+  _editValue = "";
 
   private _mediaRecorder?: MediaRecorder;
   private _audioChunks: Blob[] = [];
@@ -215,12 +223,18 @@ export class ProxLabChatCard extends LitElement {
   }
 
   private _renderPortraitPanel(avatar: string, name: string, status: string) {
-    const widthStyle = this._portraitWidth
-      ? `width: ${this._portraitWidth}px; max-width: 50%;`
+    const configWidth = this._cardConfig?.portrait_width ?? "auto";
+    const isManual = typeof configWidth === "number" && configWidth > 0;
+    const panelWidth = isManual ? configWidth : this._portraitWidth;
+    const widthStyle = panelWidth
+      ? `width: ${panelWidth}px; max-width: 50%;`
       : "width: 25%; max-width: 50%;";
+    // Manual width: image can overflow card height, crop with cover (shows face at top)
+    // Auto: image fits within card height, no cropping (contain)
+    const imgClass = isManual ? "portrait-img-cover" : "portrait-img-contain";
     return html`
       <div class="portrait-panel" style="${widthStyle}">
-        <img src="${avatar}" alt="${name}" />
+        <img class="${imgClass}" src="${avatar}" alt="${name}" />
         <div class="portrait-name">${name}</div>
         <div class="portrait-status">${status}</div>
       </div>
@@ -239,21 +253,37 @@ export class ProxLabChatCard extends LitElement {
       `;
     }
 
+    const lastAssistantIdx = this._findLastAssistantIndex();
+
     return html`
       <div class="messages">
         ${this._messages.map(
-          (msg) => html`
+          (msg, idx) => html`
             <div class="message ${msg.role}">
-              <div class="bubble">${msg.content}</div>
-              ${this._cardConfig?.show_metadata !== false && msg.metadata
-                ? html`<div class="meta">
-                    ${msg.metadata.model ? msg.metadata.model : ""}
-                    ${msg.metadata.tokens ? ` | ${msg.metadata.tokens} tokens` : ""}
-                    ${msg.metadata.duration_ms
-                      ? ` | ${(msg.metadata.duration_ms / 1000).toFixed(1)}s`
-                      : ""}
-                  </div>`
-                : nothing}
+              ${this._editingIndex === idx
+                ? this._renderEditBubble(idx)
+                : html`
+                    <div class="bubble">${msg.content}</div>
+                    <div class="msg-actions">
+                      ${this._cardConfig?.show_metadata !== false && msg.metadata
+                        ? html`<span class="meta-inline">
+                            ${msg.metadata.model ?? ""}${msg.metadata.tokens ? ` | ${msg.metadata.tokens} tok` : ""}${msg.metadata.duration_ms ? ` | ${(msg.metadata.duration_ms / 1000).toFixed(1)}s` : ""}
+                          </span>`
+                        : nothing}
+                      ${!this._loading
+                        ? html`
+                            <button class="msg-btn" title="Edit" @click=${() => this._startEdit(idx)}>
+                              ${editIcon}
+                            </button>
+                            ${msg.role === "assistant" && idx === lastAssistantIdx
+                              ? html`<button class="msg-btn" title="Regenerate" @click=${() => this._regenerate()}>
+                                  ${regenerateIcon}
+                                </button>`
+                              : nothing}
+                          `
+                        : nothing}
+                    </div>
+                  `}
             </div>
           `
         )}
@@ -266,6 +296,42 @@ export class ProxLabChatCard extends LitElement {
           : nothing}
       </div>
     `;
+  }
+
+  private _renderEditBubble(idx: number) {
+    return html`
+      <div class="edit-bubble">
+        <textarea
+          class="edit-textarea"
+          .value=${this._editValue}
+          @input=${(e: Event) => { this._editValue = (e.target as HTMLTextAreaElement).value; }}
+          @keydown=${(e: KeyboardEvent) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              this._confirmEdit(idx);
+            }
+            if (e.key === "Escape") {
+              this._cancelEdit();
+            }
+          }}
+        ></textarea>
+        <div class="edit-actions">
+          <button class="msg-btn confirm" title="Save" @click=${() => this._confirmEdit(idx)}>
+            ${checkIcon}
+          </button>
+          <button class="msg-btn" title="Cancel" @click=${() => this._cancelEdit()}>
+            ${cancelIcon}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  private _findLastAssistantIndex(): number {
+    for (let i = this._messages.length - 1; i >= 0; i--) {
+      if (this._messages[i].role === "assistant") return i;
+    }
+    return -1;
   }
 
   private _renderInputBar() {
@@ -303,6 +369,109 @@ export class ProxLabChatCard extends LitElement {
         </button>
       </div>
     `;
+  }
+
+  // ---- Edit & Regenerate ----
+
+  private _startEdit(idx: number): void {
+    this._editingIndex = idx;
+    this._editValue = this._messages[idx].content;
+  }
+
+  private _cancelEdit(): void {
+    this._editingIndex = -1;
+    this._editValue = "";
+  }
+
+  private _confirmEdit(idx: number): void {
+    const newContent = this._editValue.trim();
+    if (!newContent) return;
+
+    const msg = this._messages[idx];
+    // Update the message content
+    const updated = [...this._messages];
+    updated[idx] = { ...msg, content: newContent };
+
+    if (msg.role === "user") {
+      // If editing a user message, remove everything after it and re-send
+      this._messages = updated.slice(0, idx + 1);
+      this._editingIndex = -1;
+      this._editValue = "";
+      this._resendFromIndex(idx);
+    } else {
+      // If editing an assistant message, just update the text in place
+      this._messages = updated;
+      this._editingIndex = -1;
+      this._editValue = "";
+    }
+  }
+
+  private async _regenerate(): Promise<void> {
+    if (this._loading || !this.hass || !this._config?.card_id) return;
+
+    // Find the last user message
+    let lastUserIdx = -1;
+    for (let i = this._messages.length - 1; i >= 0; i--) {
+      if (this._messages[i].role === "user") {
+        lastUserIdx = i;
+        break;
+      }
+    }
+    if (lastUserIdx < 0) return;
+
+    // Remove messages from that user message's assistant response onward
+    this._messages = this._messages.slice(0, lastUserIdx + 1);
+    this._resendFromIndex(lastUserIdx);
+  }
+
+  private async _resendFromIndex(userMsgIdx: number): Promise<void> {
+    const text = this._messages[userMsgIdx].content;
+    if (!text || !this.hass || !this._config?.card_id) return;
+
+    this._loading = true;
+    this._scrollToBottom();
+
+    try {
+      const result = await this.hass.callWS<CardInvokeResponse>({
+        type: "proxlab/card/invoke",
+        card_id: this._config.card_id,
+        message: text,
+        conversation_id: `card_${this._config.card_id}`,
+      });
+
+      this._messages = [
+        ...this._messages,
+        {
+          role: "assistant",
+          content: result.response_text || "No response",
+          timestamp: Date.now(),
+          metadata: {
+            agent_name: result.agent_name,
+            tokens: result.tokens,
+            duration_ms: result.duration_ms,
+            model: result.model,
+            tool_results: result.tool_results,
+          },
+        },
+      ];
+
+      if (result.tts_audio_url && this._cardConfig?.tts_voice) {
+        this._playAudio(result.tts_audio_url);
+      }
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message : String(err);
+      this._messages = [
+        ...this._messages,
+        {
+          role: "assistant",
+          content: `Error: ${errMsg}`,
+          timestamp: Date.now(),
+        },
+      ];
+    } finally {
+      this._loading = false;
+      this._scrollToBottom();
+    }
   }
 
   // ---- Actions ----

@@ -43,11 +43,22 @@ export const cardStyles = css`
     overflow: hidden;
   }
 
-  .portrait-panel img {
+  /* Auto mode: full image visible, no cropping */
+  .portrait-panel .portrait-img-contain {
     flex: 1;
     min-height: 0;
     width: 100%;
     object-fit: contain;
+    object-position: top;
+    border-radius: 12px;
+  }
+
+  /* Manual mode: image fills width, overflows/crops at bottom (shows face) */
+  .portrait-panel .portrait-img-cover {
+    width: 100%;
+    flex: 1;
+    min-height: 0;
+    object-fit: cover;
     object-position: top;
     border-radius: 12px;
   }
@@ -197,6 +208,91 @@ export const cardStyles = css`
 
   .message.user .meta {
     text-align: right;
+  }
+
+  /* Message action buttons (edit, regenerate) */
+  .msg-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-top: 2px;
+    padding: 0 2px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .message:hover .msg-actions {
+    opacity: 1;
+  }
+
+  .message.user .msg-actions {
+    justify-content: flex-end;
+  }
+
+  .meta-inline {
+    font-size: 11px;
+    color: var(--card-secondary);
+    margin-right: 4px;
+  }
+
+  .msg-btn {
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--card-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .msg-btn:hover {
+    background: var(--divider);
+    color: var(--card-text);
+  }
+
+  .msg-btn.confirm {
+    color: #22c55e;
+  }
+
+  .msg-btn.confirm:hover {
+    background: rgba(34, 197, 94, 0.15);
+  }
+
+  /* Inline edit mode */
+  .edit-bubble {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+  }
+
+  .edit-textarea {
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 14px;
+    line-height: 1.4;
+    font-family: inherit;
+    background: transparent;
+    color: var(--card-text);
+    outline: none;
+    resize: vertical;
+    min-height: 40px;
+    max-height: 200px;
+  }
+
+  .edit-actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  .message.user .edit-actions {
+    justify-content: flex-end;
   }
 
   /* Typing indicator */
