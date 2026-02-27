@@ -21,6 +21,7 @@ export interface ProxLabChatCardConfig {
   prompt_override: string;
   avatar: string;
   tts_voices: TtsVoices;
+  auto_tts: boolean;
   stt_enabled: boolean;
   personality_enabled: boolean;
   personality: CharacterCardV3;
@@ -105,6 +106,7 @@ export const DEFAULT_CARD_CONFIG: ProxLabChatCardConfig = {
   prompt_override: "",
   avatar: "",
   tts_voices: { normal: "", narration: "", speech: "", thoughts: "" },
+  auto_tts: false,
   stt_enabled: false,
   personality_enabled: false,
   personality: {

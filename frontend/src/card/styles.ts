@@ -268,6 +268,16 @@ export const cardStyles = css`
     background: rgba(239, 68, 68, 0.15);
   }
 
+  .msg-btn.speak:hover {
+    color: var(--accent);
+    background: rgba(124, 58, 237, 0.15);
+  }
+
+  .msg-btn.speaking {
+    color: var(--accent);
+    animation: pulse 1.5s infinite;
+  }
+
   /* Text formatting classes */
   .text-narration {
     font-style: italic;

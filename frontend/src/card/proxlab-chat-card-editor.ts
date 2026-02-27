@@ -278,6 +278,20 @@ export class ProxLabChatCardEditor extends LitElement {
     `;
 
     return html`
+      <div class="toggle-row">
+        <div>
+          <label>Auto TTS</label>
+          <div class="sublabel">Automatically voice all agent responses</div>
+        </div>
+        <label class="switch">
+          <input
+            type="checkbox"
+            .checked=${this._cardConfig.auto_tts ?? false}
+            @change=${(e: Event) => this._updateField("auto_tts", (e.target as HTMLInputElement).checked)}
+          />
+          <span class="slider"></span>
+        </label>
+      </div>
       ${voiceDropdown("Normal Text", "Voice for unformatted text", "normal")}
       ${voiceDropdown("Narration", "Voice for *narration* text", "narration")}
       ${voiceDropdown("Speech", 'Voice for "speech" text', "speech")}

@@ -21,6 +21,7 @@ const regenerateIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill
 const checkIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`;
 const cancelIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>`;
 const deleteIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
+const speakerIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`;
 
 export class ProxLabChatCard extends LitElement {
   static styles = cardStyles;
@@ -37,6 +38,7 @@ export class ProxLabChatCard extends LitElement {
     _portraitWidth: { state: true },
     _editingIndex: { state: true },
     _editValue: { state: true },
+    _speakingIndex: { state: true },
   };
 
   hass!: HomeAssistant;
@@ -50,6 +52,7 @@ export class ProxLabChatCard extends LitElement {
   _portraitWidth = 0;
   _editingIndex = -1;
   _editValue = "";
+  _speakingIndex = -1;
 
   private _mediaRecorder?: MediaRecorder;
   private _audioChunks: Blob[] = [];
@@ -282,6 +285,15 @@ export class ProxLabChatCard extends LitElement {
                             <button class="msg-btn delete" title="Delete" @click=${() => this._deleteMessage(idx)}>
                               ${deleteIcon}
                             </button>
+                            ${msg.role === "assistant"
+                              ? html`<button
+                                  class="msg-btn speak ${this._speakingIndex === idx ? "speaking" : ""}"
+                                  title="Speak"
+                                  @click=${() => this._speakMessage(idx)}
+                                >
+                                  ${speakerIcon}
+                                </button>`
+                              : nothing}
                             ${msg.role === "assistant" && idx === lastAssistantIdx
                               ? html`<button class="msg-btn" title="Regenerate" @click=${() => this._regenerate()}>
                                   ${regenerateIcon}
@@ -462,8 +474,10 @@ export class ProxLabChatCard extends LitElement {
         },
       ];
 
-      // TTS playback — per-segment voices
-      this._speakSegments(result.response_text || "");
+      // Auto TTS playback — per-segment voices (assistant only)
+      if (this._cardConfig?.auto_tts) {
+        this._speakSegments(result.response_text || "");
+      }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       this._messages = [
@@ -519,8 +533,10 @@ export class ProxLabChatCard extends LitElement {
         },
       ];
 
-      // TTS playback — per-segment voices
-      this._speakSegments(result.response_text || "");
+      // Auto TTS playback — per-segment voices (assistant only)
+      if (this._cardConfig?.auto_tts) {
+        this._speakSegments(result.response_text || "");
+      }
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
       this._messages = [
@@ -560,13 +576,20 @@ export class ProxLabChatCard extends LitElement {
     this._messages = updated;
   }
 
-  private async _speakSegments(responseText: string): Promise<void> {
+  private async _speakMessage(idx: number): Promise<void> {
+    const msg = this._messages[idx];
+    if (!msg || msg.role !== "assistant") return;
+    this._speakingIndex = idx;
+    await this._speakSegments(msg.content, () => { this._speakingIndex = -1; });
+  }
+
+  private async _speakSegments(responseText: string, onDone?: () => void): Promise<void> {
     const voices = this._cardConfig?.tts_voices;
-    if (!voices) return;
+    if (!voices) { onDone?.(); return; }
 
     // Check if any voice is configured
     const hasAnyVoice = voices.normal || voices.narration || voices.speech || voices.thoughts;
-    if (!hasAnyVoice || !this.hass || !this._config?.card_id) return;
+    if (!hasAnyVoice || !this.hass || !this._config?.card_id) { onDone?.(); return; }
 
     const segments = parseFormattedText(responseText);
 
@@ -576,7 +599,7 @@ export class ProxLabChatCard extends LitElement {
       .map((s) => ({ text: s.text, voice: voices[s.type] || "" }))
       .filter((s) => s.voice);
 
-    if (reqSegments.length === 0) return;
+    if (reqSegments.length === 0) { onDone?.(); return; }
 
     try {
       const result = await this.hass.callWS<{ audio_segments: { data_url: string }[] }>({
@@ -589,15 +612,27 @@ export class ProxLabChatCard extends LitElement {
         for (const seg of result.audio_segments) {
           if (seg.data_url) this._audioQueue.push(seg.data_url);
         }
+        this._onAudioQueueDone = onDone ?? null;
         this._playAudioQueue();
+      } else {
+        onDone?.();
       }
     } catch {
-      // TTS failed silently
+      onDone?.();
     }
   }
 
+  private _onAudioQueueDone: (() => void) | null = null;
+
   private _playAudioQueue(): void {
-    if (this._audioPlaying || this._audioQueue.length === 0) return;
+    if (this._audioPlaying || this._audioQueue.length === 0) {
+      if (!this._audioPlaying && this._audioQueue.length === 0 && this._onAudioQueueDone) {
+        const cb = this._onAudioQueueDone;
+        this._onAudioQueueDone = null;
+        cb();
+      }
+      return;
+    }
     this._audioPlaying = true;
 
     const url = this._audioQueue.shift()!;
