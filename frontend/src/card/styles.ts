@@ -34,41 +34,42 @@ export const cardStyles = css`
   }
 
   .portrait-panel {
-    flex: 0 0 30%;
-    max-width: 200px;
-    min-width: 100px;
+    flex: 0 0 auto;
+    max-width: 50%;
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: flex-start;
-    padding: 12px 6px;
+    padding: 8px;
     border-right: 1px solid var(--divider);
     background: var(--card-bg);
     overflow: hidden;
   }
 
   .portrait-panel img {
-    width: 90%;
-    aspect-ratio: 3 / 4;
-    border-radius: 12px;
+    flex: 1;
+    min-height: 0;
+    width: auto;
+    max-width: 100%;
     object-fit: cover;
     object-position: top;
+    border-radius: 12px;
     border: 2px solid var(--divider);
   }
 
   .portrait-name {
-    margin-top: 8px;
+    margin-top: 6px;
     font-size: 13px;
     font-weight: 600;
     color: var(--card-text);
     text-align: center;
     word-break: break-word;
+    flex-shrink: 0;
   }
 
   .portrait-status {
     font-size: 11px;
     color: var(--card-secondary);
     text-align: center;
+    flex-shrink: 0;
   }
 
   .chat-area {
