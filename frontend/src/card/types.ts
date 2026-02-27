@@ -38,6 +38,8 @@ export interface ProxLabChatCardConfig {
   use_profile: boolean;
   /** ID of the linked agent profile (only used when use_profile=true) */
   profile_id: string;
+  /** When true, stream text progressively from the LLM */
+  streaming_enabled: boolean;
 }
 
 /** Character Card V3 personality fields (SillyTavern-compatible) */
@@ -137,6 +139,8 @@ export interface GroupChatCardConfig {
   card_height: number;
   show_metadata: boolean;
   allowed_users: string[];
+  /** When true, stream text progressively from the LLM */
+  streaming_enabled: boolean;
 }
 
 /** A single message in group chat */
@@ -178,6 +182,7 @@ export const DEFAULT_GROUP_CARD_CONFIG: GroupChatCardConfig = {
   card_height: 600,
   show_metadata: false,
   allowed_users: [],
+  streaming_enabled: false,
 };
 
 /** Default config for new cards */
@@ -214,4 +219,5 @@ export const DEFAULT_CARD_CONFIG: ProxLabChatCardConfig = {
   portrait_width: "auto",
   use_profile: false,
   profile_id: "",
+  streaming_enabled: false,
 };

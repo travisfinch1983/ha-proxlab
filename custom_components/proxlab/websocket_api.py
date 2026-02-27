@@ -255,6 +255,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_card_voices)
     websocket_api.async_register_command(hass, ws_card_avatar_upload)
     websocket_api.async_register_command(hass, ws_card_invoke)
+    websocket_api.async_register_command(hass, ws_card_invoke_stream)
     websocket_api.async_register_command(hass, ws_card_agent_prompt)
     websocket_api.async_register_command(hass, ws_card_tts_speak)
     websocket_api.async_register_command(hass, ws_card_stt_transcribe)
@@ -271,6 +272,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_group_config_list)
     websocket_api.async_register_command(hass, ws_group_config_delete)
     websocket_api.async_register_command(hass, ws_group_invoke)
+    websocket_api.async_register_command(hass, ws_group_invoke_stream)
 
 
 # ---------------------------------------------------------------------------
@@ -3091,6 +3093,278 @@ async def ws_card_invoke(
     except Exception as err:
         _LOGGER.error("Card invoke failed: %s", err, exc_info=True)
         connection.send_error(msg["id"], "invoke_failed", str(err))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/card/invoke_stream",
+        vol.Optional("entry_id"): str,
+        vol.Required("card_id"): str,
+        vol.Required("message"): str,
+        vol.Optional("conversation_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_card_invoke_stream(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Invoke agent with streaming — sends progressive text deltas as events."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    agent = entry_data.get("agent")
+    if agent is None:
+        connection.send_error(
+            msg["id"], "not_configured", "LLM not configured — agent unavailable"
+        )
+        return
+
+    # Load card config (same as ws_card_invoke)
+    cards_data, _ = _get_chat_cards(hass)
+    card_config = cards_data.get("cards", {}).get(msg["card_id"], {})
+
+    use_profile = card_config.get("use_profile", False)
+    profile_id = card_config.get("profile_id", "")
+    flat_config_override = None
+    if use_profile and profile_id:
+        profiles_data, _ = _get_agent_profiles(hass)
+        profile = profiles_data.get("profiles", {}).get(profile_id, {})
+        connection_id = profile.get("connection_id", "")
+        if connection_id:
+            from .connection_manager import resolve_connection_to_flat_config
+            config = dict(entry.data) | dict(entry.options)
+            flat_config_override = resolve_connection_to_flat_config(config, connection_id)
+            agent_id = "conversation_agent"
+        else:
+            agent_id = profile.get("agent_id", "conversation_agent")
+        prompt_override = profile.get("prompt_override", "")
+        personality_enabled = profile.get("personality_enabled", False)
+        personality = profile.get("personality", {})
+    else:
+        agent_id = card_config.get("agent_id", "conversation_agent")
+        prompt_override = card_config.get("prompt_override", "")
+        personality_enabled = card_config.get("personality_enabled", False)
+        personality = card_config.get("personality", {})
+
+    card_system_prompt = _build_profile_system_prompt(
+        personality_enabled, personality, prompt_override
+    )
+
+    # Confirm subscription
+    connection.send_result(msg["id"])
+
+    # Register unsubscribe handler
+    connection.subscriptions[msg["id"]] = lambda: None
+
+    try:
+        async for chunk in agent.invoke_agent_streaming(
+            agent_id=agent_id,
+            message=msg["message"],
+            conversation_id=msg.get("conversation_id", f"card_{msg['card_id']}"),
+            include_history=True,
+            system_prompt_override=card_system_prompt,
+            config_override=flat_config_override,
+        ):
+            connection.send_message(
+                websocket_api.event_message(msg["id"], chunk)
+            )
+    except Exception as err:
+        _LOGGER.error("Card stream invoke failed: %s", err, exc_info=True)
+        connection.send_message(
+            websocket_api.event_message(msg["id"], {"type": "error", "error": str(err)})
+        )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/group/invoke_stream",
+        vol.Optional("entry_id"): str,
+        vol.Required("card_id"): str,
+        vol.Required("message"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_group_invoke_stream(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Invoke multiple agents with streaming — sends progressive deltas per profile."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    agent = entry_data.get("agent")
+    if agent is None:
+        connection.send_error(
+            msg["id"], "not_configured", "LLM not configured — agent unavailable"
+        )
+        return
+
+    group_data, _ = _get_group_chat_cards(hass)
+    group_config = group_data.get("cards", {}).get(msg["card_id"])
+    if not group_config:
+        connection.send_error(msg["id"], "not_found", "Group card config not found")
+        return
+
+    profile_ids = group_config.get("profile_ids", [])
+    turn_mode = group_config.get("turn_mode", "round_robin")
+
+    profiles_data, _ = _get_agent_profiles(hass)
+    all_profiles = profiles_data.get("profiles", {})
+
+    responding_profiles = []
+    for pid in profile_ids:
+        profile = all_profiles.get(pid)
+        if profile:
+            responding_profiles.append(profile)
+
+    # Confirm subscription
+    connection.send_result(msg["id"])
+    connection.subscriptions[msg["id"]] = lambda: None
+
+    if not responding_profiles:
+        connection.send_message(
+            websocket_api.event_message(msg["id"], {"type": "done"})
+        )
+        return
+
+    # Filter by @mention if needed
+    user_message = msg["message"]
+    if turn_mode == "at_mention":
+        mentioned = []
+        lower_msg = user_message.lower()
+        for p in responding_profiles:
+            name = p.get("name", "")
+            if name and f"@{name.lower()}" in lower_msg:
+                mentioned.append(p)
+        if not mentioned:
+            connection.send_message(
+                websocket_api.event_message(msg["id"], {"type": "done"})
+            )
+            return
+        responding_profiles = mentioned
+
+    async def _stream_profile(profile: dict, prior_responses: list[dict] | None = None) -> dict:
+        """Stream a single profile and send events."""
+        pid = profile["profile_id"]
+        prompt_override = profile.get("prompt_override", "")
+        personality_enabled = profile.get("personality_enabled", False)
+        personality = profile.get("personality", {})
+
+        connection_id = profile.get("connection_id", "")
+        if connection_id:
+            from .connection_manager import resolve_connection_to_flat_config
+            config = dict(entry.data) | dict(entry.options)
+            profile_config_override = resolve_connection_to_flat_config(config, connection_id)
+            p_agent_id = "conversation_agent"
+        else:
+            profile_config_override = None
+            p_agent_id = profile.get("agent_id", "conversation_agent")
+
+        system_prompt = _build_profile_system_prompt(
+            personality_enabled, personality, prompt_override
+        )
+
+        effective_message = user_message
+        if prior_responses:
+            context_lines = []
+            for pr in prior_responses:
+                if pr.get("success") and pr.get("response_text"):
+                    context_lines.append(f"[{pr['profile_name']}]: {pr['response_text']}")
+            if context_lines:
+                effective_message = (
+                    user_message
+                    + "\n\n[The following agents have already responded to this message in the group chat:]\n"
+                    + "\n".join(context_lines)
+                )
+
+        # Signal profile start
+        connection.send_message(
+            websocket_api.event_message(msg["id"], {
+                "type": "profile_start",
+                "profile_id": pid,
+                "profile_name": profile.get("name", pid),
+                "avatar": profile.get("avatar", ""),
+            })
+        )
+
+        start = _time.monotonic()
+        final_text = ""
+        final_tokens = 0
+        final_model = ""
+        success = True
+
+        try:
+            async for chunk in agent.invoke_agent_streaming(
+                agent_id=p_agent_id,
+                message=effective_message,
+                conversation_id=f"group_{msg['card_id']}_{pid}",
+                include_history=True,
+                system_prompt_override=system_prompt,
+                config_override=profile_config_override,
+            ):
+                if chunk["type"] == "delta":
+                    connection.send_message(
+                        websocket_api.event_message(msg["id"], {
+                            "type": "delta",
+                            "text": chunk["text"],
+                            "profile_id": pid,
+                        })
+                    )
+                elif chunk["type"] == "done":
+                    final_text = chunk.get("response_text", "")
+                    final_tokens = chunk.get("tokens", 0)
+                    final_model = chunk.get("model", "")
+        except Exception as err:
+            _LOGGER.error("Group stream invoke failed for profile %s: %s", pid, err)
+            final_text = str(err)
+            success = False
+
+        duration_ms = int((_time.monotonic() - start) * 1000)
+
+        connection.send_message(
+            websocket_api.event_message(msg["id"], {
+                "type": "profile_done",
+                "profile_id": pid,
+                "profile_name": profile.get("name", pid),
+                "response_text": final_text,
+                "tokens": final_tokens,
+                "duration_ms": duration_ms,
+                "model": final_model,
+                "success": success,
+            })
+        )
+
+        return {
+            "profile_id": pid,
+            "profile_name": profile.get("name", pid),
+            "response_text": final_text,
+            "success": success,
+        }
+
+    try:
+        if turn_mode == "all_respond":
+            await asyncio.gather(
+                *[_stream_profile(p) for p in responding_profiles]
+            )
+        else:
+            responses: list[dict] = []
+            for p in responding_profiles:
+                resp = await _stream_profile(p, prior_responses=responses)
+                responses.append(resp)
+
+        connection.send_message(
+            websocket_api.event_message(msg["id"], {"type": "done"})
+        )
+    except Exception as err:
+        _LOGGER.error("Group stream invoke failed: %s", err, exc_info=True)
+        connection.send_message(
+            websocket_api.event_message(msg["id"], {"type": "error", "error": str(err)})
+        )
 
 
 @websocket_api.websocket_command(

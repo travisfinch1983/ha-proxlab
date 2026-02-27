@@ -471,6 +471,17 @@ export const cardStyles = css`
     font-size: 14px;
     text-align: center;
   }
+
+  /* Streaming cursor */
+  .streaming-cursor::after {
+    content: "\u258B";
+    animation: blink 0.7s infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
 `;
 
 export const editorStyles = css`
@@ -833,6 +844,131 @@ export const groupCardStyles = css`
   .text-narration { font-style: italic; opacity: 0.8; }
   .text-speech { color: var(--speech-color, #f59e0b); }
   .text-thoughts { font-style: italic; font-weight: 600; opacity: 0.7; }
+
+  /* Message action buttons */
+  .msg-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    margin-top: 2px;
+    padding: 0 2px;
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .msg:hover .msg-actions,
+  .agent-msg:hover .msg-actions {
+    opacity: 1;
+  }
+
+  .msg-user .msg-actions {
+    justify-content: flex-end;
+  }
+
+  .meta-inline {
+    font-size: 11px;
+    color: var(--meta-color);
+    margin-right: 4px;
+  }
+
+  .msg-btn {
+    width: 24px;
+    height: 24px;
+    border: none;
+    border-radius: 4px;
+    background: transparent;
+    color: var(--meta-color);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .msg-btn:hover {
+    background: var(--divider);
+    color: var(--card-text);
+  }
+
+  .msg-btn.confirm {
+    color: #22c55e;
+  }
+
+  .msg-btn.confirm:hover {
+    background: rgba(34, 197, 94, 0.15);
+  }
+
+  .msg-btn.delete:hover {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.15);
+  }
+
+  .msg-btn.speak:hover {
+    color: var(--accent);
+    background: rgba(124, 58, 237, 0.15);
+  }
+
+  .msg-btn.speaking {
+    color: var(--accent);
+    animation: pulse 1.5s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+  }
+
+  /* Inline edit mode */
+  .edit-bubble {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+  }
+
+  .msg.editing,
+  .agent-msg.editing {
+    max-width: 100%;
+    align-self: stretch;
+  }
+
+  .edit-textarea {
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: 14px;
+    line-height: 1.4;
+    font-family: inherit;
+    background: transparent;
+    color: var(--card-text);
+    outline: none;
+    resize: vertical;
+    min-height: 96px;
+    max-height: 300px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .edit-actions {
+    display: flex;
+    gap: 4px;
+  }
+
+  .msg-user .edit-actions {
+    justify-content: flex-end;
+  }
+
+  /* Streaming cursor */
+  .streaming-cursor::after {
+    content: "\u258B";
+    animation: blink 0.7s infinite;
+  }
+
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
 
   /* Loading indicator */
   .loading-row {

@@ -218,6 +218,25 @@ export class ProxLabGroupChatCardEditor extends LitElement {
         </label>
       </div>
 
+      <div class="toggle-row">
+        <div>
+          <label>Text Streaming</label>
+          <div class="sublabel">Show text progressively as agents generate responses</div>
+        </div>
+        <label class="switch">
+          <input
+            type="checkbox"
+            .checked=${this._cardConfig.streaming_enabled ?? false}
+            @change=${(e: Event) =>
+              this._updateField(
+                "streaming_enabled",
+                (e.target as HTMLInputElement).checked
+              )}
+          />
+          <span class="slider"></span>
+        </label>
+      </div>
+
       <div class="field">
         <label>Card ID</label>
         <input type="text" .value=${this._cardConfig.card_id} disabled />

@@ -14,6 +14,12 @@ import { parseFormattedText } from "./format-parser";
 import "./proxlab-group-chat-card-editor";
 
 const sendIcon = html`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`;
+const editIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`;
+const deleteIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`;
+const speakerIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`;
+const regenerateIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`;
+const checkIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`;
+const cancelIcon = html`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>`;
 
 // Agent bubble hue colors (cycle for participant index)
 const AGENT_HUES = [250, 160, 30, 340, 200, 80, 290, 120];
@@ -32,6 +38,10 @@ export class ProxLabGroupChatCard extends LitElement {
     _configLoaded: { state: true },
     _mentionOpen: { state: true },
     _mentionFilter: { state: true },
+    _editingIndex: { state: true },
+    _editValue: { state: true },
+    _speakingIndex: { state: true },
+    _streaming: { state: true },
   };
 
   hass!: HomeAssistant;
@@ -44,6 +54,16 @@ export class ProxLabGroupChatCard extends LitElement {
   _configLoaded = false;
   _mentionOpen = false;
   _mentionFilter = "";
+  _editingIndex = -1;
+  _editValue = "";
+  _speakingIndex = -1;
+  _streaming = false;
+
+  private _audioQueue: string[] = [];
+  private _audioPlaying = false;
+  private _onAudioQueueDone: (() => void) | null = null;
+  private _ttsBuffer = "";
+  private _streamingProfileId = "";
 
   setConfig(config: GroupChatCardYamlConfig): void {
     if (!config.card_id) {
@@ -111,6 +131,7 @@ export class ProxLabGroupChatCard extends LitElement {
           card_height: 600,
           show_metadata: false,
           allowed_users: [],
+          streaming_enabled: false,
         };
         this._profiles = [];
       }
@@ -142,7 +163,7 @@ export class ProxLabGroupChatCard extends LitElement {
                   </svg>
                   <span>Start a group conversation</span>
                 </div>`
-              : this._messages.map((msg) => this._renderMessage(msg))}
+              : this._messages.map((msg, idx) => this._renderMessage(msg, idx))}
             ${this._loading
               ? html`<div class="loading-row">
                   <div class="typing-indicator">
@@ -218,11 +239,27 @@ export class ProxLabGroupChatCard extends LitElement {
     }
   }
 
-  private _renderMessage(msg: GroupChatMessage) {
+  private _renderMessage(msg: GroupChatMessage, idx: number) {
     if (msg.role === "user") {
       return html`
-        <div class="msg msg-user">
-          <div class="bubble user-bubble">${this._formatContent(msg.content)}</div>
+        <div class="msg msg-user ${this._editingIndex === idx ? "editing" : ""}">
+          ${this._editingIndex === idx
+            ? this._renderEditBubble(idx)
+            : html`
+                <div class="bubble user-bubble">${this._formatContent(msg.content)}</div>
+                <div class="msg-actions">
+                  ${!this._loading
+                    ? html`
+                        <button class="msg-btn" title="Edit" @click=${() => this._startEdit(idx)}>
+                          ${editIcon}
+                        </button>
+                        <button class="msg-btn delete" title="Delete" @click=${() => this._deleteMessage(idx)}>
+                          ${deleteIcon}
+                        </button>
+                      `
+                    : nothing}
+                </div>
+              `}
         </div>
       `;
     }
@@ -232,27 +269,91 @@ export class ProxLabGroupChatCard extends LitElement {
       (p) => p.profile_id === msg.profile_id
     );
     const hue = AGENT_HUES[profileIdx >= 0 ? profileIdx % AGENT_HUES.length : 0];
+    const isLastAgent = idx === this._findLastAgentIndex();
+    const isStreaming = this._streaming && this._streamingProfileId === msg.profile_id && idx === this._messages.length - 1;
 
     return html`
-      <div class="msg agent-msg">
+      <div class="agent-msg ${this._editingIndex === idx ? "editing" : ""}">
         ${msg.avatar
           ? html`<img class="msg-avatar" src="${msg.avatar}" alt="${msg.profile_name}" />`
           : html`<div class="msg-avatar placeholder">${(msg.profile_name ?? "?").charAt(0).toUpperCase()}</div>`}
         <div class="agent-body">
           <span class="msg-name" style="color: hsl(${hue}, 60%, 55%);">${msg.profile_name}</span>
-          <div class="bubble agent-bubble" style="border-left: 3px solid hsl(${hue}, 60%, 55%);">
-            ${this._formatContent(msg.content)}
-          </div>
-          ${this._cardConfig?.show_metadata && msg.metadata
-            ? html`<div class="msg-meta">
-                ${msg.metadata.model ? html`<span>${msg.metadata.model}</span>` : nothing}
-                ${msg.metadata.tokens ? html`<span>${msg.metadata.tokens} tok</span>` : nothing}
-                ${msg.metadata.duration_ms ? html`<span>${(msg.metadata.duration_ms / 1000).toFixed(1)}s</span>` : nothing}
-              </div>`
-            : nothing}
+          ${this._editingIndex === idx
+            ? this._renderEditBubble(idx)
+            : html`
+                <div class="bubble agent-bubble ${isStreaming ? "streaming-cursor" : ""}" style="border-left: 3px solid hsl(${hue}, 60%, 55%);">
+                  ${this._formatContent(msg.content)}
+                </div>
+                <div class="msg-actions">
+                  ${this._cardConfig?.show_metadata && msg.metadata
+                    ? html`<span class="meta-inline">
+                        ${msg.metadata.model ?? ""}${msg.metadata.tokens ? ` | ${msg.metadata.tokens} tok` : ""}${msg.metadata.duration_ms ? ` | ${(msg.metadata.duration_ms / 1000).toFixed(1)}s` : ""}
+                      </span>`
+                    : nothing}
+                  ${!this._loading
+                    ? html`
+                        <button class="msg-btn" title="Edit" @click=${() => this._startEdit(idx)}>
+                          ${editIcon}
+                        </button>
+                        <button class="msg-btn delete" title="Delete" @click=${() => this._deleteMessage(idx)}>
+                          ${deleteIcon}
+                        </button>
+                        <button
+                          class="msg-btn speak ${this._speakingIndex === idx ? "speaking" : ""}"
+                          title="Speak"
+                          @click=${() => this._speakGroupMessage(idx)}
+                        >
+                          ${speakerIcon}
+                        </button>
+                        ${isLastAgent
+                          ? html`<button class="msg-btn" title="Regenerate" @click=${() => this._regenerate()}>
+                              ${regenerateIcon}
+                            </button>`
+                          : nothing}
+                      `
+                    : nothing}
+                </div>
+              `}
         </div>
       </div>
     `;
+  }
+
+  private _renderEditBubble(idx: number) {
+    return html`
+      <div class="edit-bubble">
+        <textarea
+          class="edit-textarea"
+          .value=${this._editValue}
+          @input=${(e: Event) => { this._editValue = (e.target as HTMLTextAreaElement).value; }}
+          @keydown=${(e: KeyboardEvent) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              this._confirmEdit(idx);
+            }
+            if (e.key === "Escape") {
+              this._cancelEdit();
+            }
+          }}
+        ></textarea>
+        <div class="edit-actions">
+          <button class="msg-btn confirm" title="Save" @click=${() => this._confirmEdit(idx)}>
+            ${checkIcon}
+          </button>
+          <button class="msg-btn" title="Cancel" @click=${() => this._cancelEdit()}>
+            ${cancelIcon}
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  private _findLastAgentIndex(): number {
+    for (let i = this._messages.length - 1; i >= 0; i--) {
+      if (this._messages[i].role === "assistant") return i;
+    }
+    return -1;
   }
 
   private _formatContent(content: string) {
@@ -262,6 +363,8 @@ export class ProxLabGroupChatCard extends LitElement {
       return html`<span class="text-${seg.type}">${seg.text}</span>`;
     });
   }
+
+  // ---- Input & Mention ----
 
   private _onInput(e: Event): void {
     const input = e.target as HTMLInputElement;
@@ -319,6 +422,56 @@ export class ProxLabGroupChatCard extends LitElement {
     input?.focus();
   }
 
+  // ---- Edit / Delete / Regenerate ----
+
+  private _startEdit(idx: number): void {
+    this._editingIndex = idx;
+    this._editValue = this._messages[idx].content;
+  }
+
+  private _cancelEdit(): void {
+    this._editingIndex = -1;
+    this._editValue = "";
+  }
+
+  private _confirmEdit(idx: number): void {
+    const newContent = this._editValue.trim();
+    if (!newContent) return;
+
+    const updated = [...this._messages];
+    updated[idx] = { ...this._messages[idx], content: newContent };
+    this._messages = updated;
+    this._editingIndex = -1;
+    this._editValue = "";
+  }
+
+  private _deleteMessage(idx: number): void {
+    const updated = [...this._messages];
+    updated.splice(idx, 1);
+    this._messages = updated;
+  }
+
+  private async _regenerate(): Promise<void> {
+    if (this._loading || !this.hass || !this._config?.card_id) return;
+
+    // Find the last user message
+    let lastUserIdx = -1;
+    for (let i = this._messages.length - 1; i >= 0; i--) {
+      if (this._messages[i].role === "user") {
+        lastUserIdx = i;
+        break;
+      }
+    }
+    if (lastUserIdx < 0) return;
+
+    // Remove messages after the last user message
+    this._messages = this._messages.slice(0, lastUserIdx + 1);
+    const text = this._messages[lastUserIdx].content;
+    await this._doSendMessage(text);
+  }
+
+  // ---- Send Message ----
+
   private async _sendMessage(): Promise<void> {
     const text = this._inputValue.trim();
     if (!text || !this._config?.card_id || this._loading) return;
@@ -329,13 +482,27 @@ export class ProxLabGroupChatCard extends LitElement {
       { role: "user", content: text, timestamp: Date.now() },
     ];
     this._inputValue = "";
+    await this._doSendMessage(text);
+  }
+
+  private async _doSendMessage(text: string): Promise<void> {
+    if (!this._config?.card_id || this._loading) return;
+
+    if (this._cardConfig?.streaming_enabled) {
+      await this._sendMessageStreaming(text);
+    } else {
+      await this._sendMessageSync(text);
+    }
+  }
+
+  private async _sendMessageSync(text: string): Promise<void> {
     this._loading = true;
     this._scrollToBottom();
 
     try {
       const result = await this.hass.callWS<GroupInvokeResponse>({
         type: "proxlab/group/invoke",
-        card_id: this._config.card_id,
+        card_id: this._config!.card_id,
         message: text,
       });
 
@@ -362,7 +529,7 @@ export class ProxLabGroupChatCard extends LitElement {
             (p) => p.profile_id === r.profile_id
           );
           if (profile?.auto_tts && profile.tts_voices?.normal) {
-            this._speakForProfile(r.response_text, profile);
+            this._speakSegmentsForProfile(r.response_text, profile);
           }
         }
       }
@@ -382,22 +549,243 @@ export class ProxLabGroupChatCard extends LitElement {
     }
   }
 
-  private async _speakForProfile(
-    text: string,
-    profile: AgentProfile
-  ): Promise<void> {
-    const voice = profile.tts_voices?.normal;
-    if (!voice) return;
+  private async _sendMessageStreaming(text: string): Promise<void> {
+    this._loading = true;
+    this._streaming = true;
+    this._ttsBuffer = "";
+    this._scrollToBottom();
+
     try {
-      await this.hass.callWS({
-        type: "proxlab/card/tts/speak",
-        text,
-        voice,
-      });
-    } catch {
-      // TTS failed — non-critical
+      const unsub = await (this.hass as any).connection.subscribeMessage(
+        (event: any) => {
+          if (event.type === "profile_start") {
+            // New agent is about to stream — add placeholder message
+            this._streamingProfileId = event.profile_id;
+            this._messages = [
+              ...this._messages,
+              {
+                role: "assistant",
+                content: "",
+                timestamp: Date.now(),
+                profile_id: event.profile_id,
+                profile_name: event.profile_name,
+                avatar: event.avatar,
+              },
+            ];
+            this._ttsBuffer = "";
+            this._scrollToBottom();
+          } else if (event.type === "delta") {
+            // Progressive text
+            const msgIdx = this._messages.length - 1;
+            if (msgIdx >= 0) {
+              const updated = [...this._messages];
+              updated[msgIdx] = {
+                ...updated[msgIdx],
+                content: (updated[msgIdx].content || "") + event.text,
+              };
+              this._messages = updated;
+              this._scrollToBottom();
+
+              // TTS chunking
+              this._ttsBuffer += event.text;
+              this._checkTtsChunk(event.profile_id);
+            }
+          } else if (event.type === "profile_done") {
+            // Profile finished streaming
+            const msgIdx = this._messages.length - 1;
+            if (msgIdx >= 0) {
+              const updated = [...this._messages];
+              updated[msgIdx] = {
+                ...updated[msgIdx],
+                content: event.response_text || updated[msgIdx].content,
+                metadata: {
+                  tokens: event.tokens,
+                  duration_ms: event.duration_ms,
+                  model: event.model,
+                },
+              };
+              this._messages = updated;
+            }
+            // Flush remaining TTS buffer
+            this._flushTtsBuffer(event.profile_id);
+            this._streamingProfileId = "";
+          } else if (event.type === "done") {
+            // All profiles done
+            this._streaming = false;
+            this._loading = false;
+            this._streamingProfileId = "";
+            this._scrollToBottom();
+            unsub();
+          } else if (event.type === "error") {
+            this._messages = [
+              ...this._messages,
+              {
+                role: "assistant",
+                content: `Error: ${event.error}`,
+                timestamp: Date.now(),
+                profile_name: "System",
+              },
+            ];
+            this._streaming = false;
+            this._loading = false;
+            this._scrollToBottom();
+            unsub();
+          }
+        },
+        {
+          type: "proxlab/group/invoke_stream",
+          card_id: this._config!.card_id,
+          message: text,
+        },
+      );
+    } catch (err) {
+      this._messages = [
+        ...this._messages,
+        {
+          role: "assistant",
+          content: `Error: ${err}`,
+          timestamp: Date.now(),
+          profile_name: "System",
+        },
+      ];
+      this._streaming = false;
+      this._loading = false;
+      this._scrollToBottom();
     }
   }
+
+  // ---- TTS ----
+
+  private async _speakGroupMessage(idx: number): Promise<void> {
+    const msg = this._messages[idx];
+    if (!msg || msg.role !== "assistant") return;
+
+    // Find the profile for this message
+    const profile = this._profiles.find((p) => p.profile_id === msg.profile_id);
+    if (!profile) return;
+
+    this._speakingIndex = idx;
+    await this._speakSegmentsForProfile(msg.content, profile, () => {
+      this._speakingIndex = -1;
+    });
+  }
+
+  private async _speakSegmentsForProfile(
+    responseText: string,
+    profile: AgentProfile,
+    onDone?: () => void,
+  ): Promise<void> {
+    const voices = profile.tts_voices;
+    if (!voices) { onDone?.(); return; }
+
+    const hasAnyVoice = voices.normal || voices.narration || voices.speech || voices.thoughts;
+    if (!hasAnyVoice || !this.hass || !this._config?.card_id) { onDone?.(); return; }
+
+    const segments = parseFormattedText(responseText);
+    const reqSegments = segments
+      .filter((s) => s.text.trim())
+      .map((s) => ({ text: s.text, voice: voices[s.type as keyof typeof voices] || "" }))
+      .filter((s) => s.voice);
+
+    if (reqSegments.length === 0) { onDone?.(); return; }
+
+    try {
+      const result = await this.hass.callWS<{ audio_segments: { url?: string; data_url?: string }[] }>({
+        type: "proxlab/card/tts/speak",
+        card_id: this._config.card_id,
+        segments: reqSegments,
+      });
+
+      if (result?.audio_segments?.length) {
+        for (const seg of result.audio_segments) {
+          const audioUrl = seg.url || seg.data_url;
+          if (audioUrl) this._audioQueue.push(audioUrl);
+        }
+        this._onAudioQueueDone = onDone ?? null;
+        this._playAudioQueue();
+      } else {
+        onDone?.();
+      }
+    } catch {
+      onDone?.();
+    }
+  }
+
+  private _playAudioQueue(): void {
+    if (this._audioPlaying || this._audioQueue.length === 0) {
+      if (!this._audioPlaying && this._audioQueue.length === 0 && this._onAudioQueueDone) {
+        const cb = this._onAudioQueueDone;
+        this._onAudioQueueDone = null;
+        cb();
+      }
+      return;
+    }
+    this._audioPlaying = true;
+
+    const url = this._audioQueue.shift()!;
+    try {
+      const audio = new Audio(url);
+      audio.onended = () => {
+        this._audioPlaying = false;
+        this._playAudioQueue();
+      };
+      audio.onerror = () => {
+        this._audioPlaying = false;
+        this._playAudioQueue();
+      };
+      audio.play().catch(() => {
+        this._audioPlaying = false;
+        this._playAudioQueue();
+      });
+    } catch {
+      this._audioPlaying = false;
+      this._playAudioQueue();
+    }
+  }
+
+  // ---- TTS Chunking (Streaming) ----
+
+  private _checkTtsChunk(profileId: string): void {
+    const profile = this._profiles.find((p) => p.profile_id === profileId);
+    if (!profile?.auto_tts) return;
+
+    const breakIdx = this._findChunkBreak(this._ttsBuffer);
+    if (breakIdx > 0) {
+      const chunk = this._ttsBuffer.substring(0, breakIdx);
+      this._ttsBuffer = this._ttsBuffer.substring(breakIdx);
+      this._speakSegmentsForProfile(chunk, profile);
+    }
+  }
+
+  private _flushTtsBuffer(profileId: string): void {
+    if (!this._ttsBuffer.trim()) return;
+    const profile = this._profiles.find((p) => p.profile_id === profileId);
+    if (profile?.auto_tts) {
+      this._speakSegmentsForProfile(this._ttsBuffer, profile);
+    }
+    this._ttsBuffer = "";
+  }
+
+  private _findChunkBreak(text: string): number {
+    if (text.length < 80) return -1;
+
+    // Prefer paragraph breaks
+    const paraIdx = text.indexOf("\n\n");
+    if (paraIdx > 0) return paraIdx + 2;
+
+    // Sentence endings after 80+ chars
+    const sentenceEnds = [". ", "! ", "? ", ".\n", "!\n", "?\n"];
+    for (let i = 80; i < text.length; i++) {
+      for (const end of sentenceEnds) {
+        if (text.substring(i, i + end.length) === end) {
+          return i + end.length;
+        }
+      }
+    }
+    return -1;
+  }
+
+  // ---- Scroll ----
 
   private _scrollToBottom(): void {
     requestAnimationFrame(() => {

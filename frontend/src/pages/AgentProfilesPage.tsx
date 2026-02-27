@@ -363,20 +363,16 @@ export default function AgentProfilesPage() {
     formKey: keyof FormData,
     minRows: number = 4
   ) => (
-    <div className="form-control">
-      <div className="label">
-        <span className="label-text font-medium">{label}</span>
-      </div>
+    <div className="w-full">
+      <div className="text-sm font-medium mb-0.5">{label}</div>
+      <div className="text-xs text-base-content/40 mb-1.5">{description}</div>
       <textarea
-        className="textarea textarea-bordered text-sm leading-relaxed"
+        className="textarea textarea-bordered w-full text-sm leading-relaxed"
         style={{ minHeight: `${minRows * 1.75}rem` }}
         value={form[formKey] as string}
         onInput={(e) => autoExpand(e.currentTarget)}
         onChange={(e) => setForm({ ...form, [formKey]: e.target.value })}
       />
-      <div className="label pt-0.5">
-        <span className="label-text-alt text-base-content/40">{description}</span>
-      </div>
     </div>
   );
 

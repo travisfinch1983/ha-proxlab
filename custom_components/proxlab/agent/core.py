@@ -94,7 +94,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, AsyncGenerator
 
 if TYPE_CHECKING:
     from ..conversation_session import ConversationSessionManager
@@ -173,6 +173,50 @@ from .streaming import StreamingMixin
 from .memory_extraction import MemoryExtractionMixin
 
 _LOGGER = logging.getLogger(__name__)
+
+
+def _parse_sse_delta(line: str) -> dict[str, Any] | None:
+    """Parse a single SSE line from an OpenAI-compatible streaming response.
+
+    Returns dict with optional keys: text, tool_calls, usage, finish_reason.
+    Returns None for non-data lines or [DONE].
+    """
+    line = line.strip()
+    if not line or not line.startswith("data:"):
+        return None
+
+    data_str = line[5:].strip()
+    if data_str == "[DONE]":
+        return None
+
+    try:
+        data = json.loads(data_str)
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+    result: dict[str, Any] = {}
+
+    # Extract usage from final chunk (OpenAI stream_options.include_usage)
+    if data.get("usage"):
+        result["usage"] = data["usage"]
+
+    choices = data.get("choices", [])
+    if not choices:
+        return result if result else None
+
+    choice = choices[0]
+    delta = choice.get("delta", {})
+
+    if delta.get("content"):
+        result["text"] = delta["content"]
+
+    if delta.get("tool_calls"):
+        result["tool_calls"] = delta["tool_calls"]
+
+    if choice.get("finish_reason"):
+        result["finish_reason"] = choice["finish_reason"]
+
+    return result if result else None
 
 
 class ProxLabAgent(
@@ -1399,6 +1443,193 @@ class ProxLabAgent(
             _LOGGER.debug("Failed to emit trace for invoke_agent: %s", trace_err)
 
         return result
+
+    async def invoke_agent_streaming(
+        self,
+        agent_id: str,
+        message: str,
+        context: dict[str, Any] | None = None,
+        user_id: str | None = None,
+        conversation_id: str | None = None,
+        include_history: bool = False,
+        system_prompt_override: str | None = None,
+        config_override: dict[str, Any] | None = None,
+    ) -> "AsyncGenerator[dict[str, Any], None]":
+        """Invoke agent with streaming. Yields delta dicts.
+
+        Yields:
+            {"type": "delta", "text": "..."} — progressive text chunks
+            {"type": "tool_start", "tools": [...]} — tool calls beginning
+            {"type": "tool_done"} — tool calls finished
+            {"type": "done", "response_text": "...", ...} — final result
+        """
+        from ..agent_prompts import get_default_prompt
+        from ..connection_manager import resolve_agent_to_flat_config
+        from ..helpers import normalize_usage, strip_thinking_blocks
+
+        self._ensure_tools_registered()
+
+        if agent_id not in AGENT_DEFINITIONS:
+            raise ValueError(f"Unknown agent_id: {agent_id}")
+
+        start_time = time.time()
+        live_config = self._get_fresh_config()
+
+        if config_override:
+            flat_config = config_override
+        else:
+            flat_config = resolve_agent_to_flat_config(live_config, agent_id)
+            if flat_config is None:
+                flat_config = resolve_agent_to_flat_config(live_config, AGENT_CONVERSATION)
+            if flat_config is None:
+                flat_config = {}
+
+        resolved_model = flat_config.get(CONF_LLM_MODEL) or live_config.get(CONF_LLM_MODEL, "unknown")
+
+        if system_prompt_override:
+            system_prompt = system_prompt_override
+        else:
+            agents_cfg = live_config.get(CONF_AGENTS, {})
+            custom_prompt = agents_cfg.get(agent_id, {}).get("system_prompt")
+            system_prompt = custom_prompt if custom_prompt else get_default_prompt(agent_id)
+
+        if context:
+            system_prompt += "\n\n## Context\n\n```json\n" + json.dumps(context, indent=2) + "\n```"
+
+        messages: list[dict[str, Any]] = [{"role": "system", "content": system_prompt}]
+
+        if include_history and conversation_id and live_config.get(CONF_HISTORY_ENABLED, True):
+            history = self.conversation_manager.get_history(
+                conversation_id,
+                max_messages=live_config.get(CONF_HISTORY_MAX_MESSAGES, DEFAULT_HISTORY_MAX_MESSAGES),
+            )
+            messages.extend(history)
+
+        messages.append({"role": "user", "content": message})
+
+        tool_names = AGENT_TOOL_MAP.get(agent_id)
+        tool_definitions = self.tool_handler.get_tool_definitions_for_agent(tool_names)
+
+        total_prompt_tokens = 0
+        total_completion_tokens = 0
+        tool_results_list: list[dict[str, Any]] = []
+
+        max_iterations = live_config.get(CONF_TOOLS_MAX_CALLS_PER_TURN, DEFAULT_TOOLS_MAX_CALLS_PER_TURN)
+        final_text = ""
+
+        for iteration in range(max_iterations):
+            accumulated_text = ""
+            tool_calls_buffer: list[dict[str, Any]] = []
+            usage_data: dict[str, Any] = {}
+
+            async for sse_line in self._call_llm_streaming(
+                messages, config_override=flat_config or None, tools_override=tool_definitions
+            ):
+                parsed = _parse_sse_delta(sse_line)
+                if parsed is None:
+                    continue
+
+                if parsed.get("text"):
+                    accumulated_text += parsed["text"]
+                    yield {"type": "delta", "text": parsed["text"]}
+
+                if parsed.get("tool_calls"):
+                    for tc in parsed["tool_calls"]:
+                        idx = tc.get("index", 0)
+                        while len(tool_calls_buffer) <= idx:
+                            tool_calls_buffer.append({"id": "", "function": {"name": "", "arguments": ""}})
+                        if tc.get("id"):
+                            tool_calls_buffer[idx]["id"] = tc["id"]
+                        if tc.get("function", {}).get("name"):
+                            tool_calls_buffer[idx]["function"]["name"] = tc["function"]["name"]
+                        if tc.get("function", {}).get("arguments"):
+                            tool_calls_buffer[idx]["function"]["arguments"] += tc["function"]["arguments"]
+
+                if parsed.get("usage"):
+                    usage_data = parsed["usage"]
+
+            if usage_data:
+                norm = normalize_usage(usage_data)
+                total_prompt_tokens += norm["prompt"]
+                total_completion_tokens += norm["completion"]
+
+            # Filter out empty tool calls
+            tool_calls_buffer = [tc for tc in tool_calls_buffer if tc.get("function", {}).get("name")]
+
+            if not tool_calls_buffer:
+                final_text = strip_thinking_blocks(accumulated_text) or accumulated_text
+                break
+
+            # Execute tool calls
+            response_message = {
+                "role": "assistant",
+                "content": accumulated_text or None,
+                "tool_calls": tool_calls_buffer,
+            }
+            messages.append(response_message)
+
+            yield {"type": "tool_start", "tools": [tc["function"]["name"] for tc in tool_calls_buffer]}
+
+            for tool_call in tool_calls_buffer:
+                tool_name = tool_call.get("function", {}).get("name", "")
+                tool_args_raw = tool_call.get("function", {}).get("arguments", "{}")
+                tool_call_id = tool_call.get("id", "")
+                tool_args: dict[str, Any] = {}
+
+                try:
+                    if isinstance(tool_args_raw, str):
+                        tool_args = json.loads(tool_args_raw)
+                    elif isinstance(tool_args_raw, dict):
+                        tool_args = tool_args_raw
+
+                    result = await self.tool_handler.execute_tool(
+                        tool_name, tool_args, conversation_id or "invoke"
+                    )
+                    tool_results_list.append({
+                        "tool_name": tool_name,
+                        "arguments": tool_args,
+                        "result": result,
+                    })
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "name": tool_name,
+                        "content": json.dumps(result),
+                    })
+                except Exception as err:
+                    _LOGGER.error("invoke_agent_streaming tool '%s' failed: %s", tool_name, err)
+                    error_result = {"success": False, "error": str(err)}
+                    tool_results_list.append({
+                        "tool_name": tool_name,
+                        "arguments": tool_args,
+                        "result": error_result,
+                    })
+                    messages.append({
+                        "role": "tool",
+                        "tool_call_id": tool_call_id,
+                        "name": tool_name,
+                        "content": json.dumps(error_result),
+                    })
+
+            yield {"type": "tool_done"}
+        else:
+            if not final_text:
+                final_text = "Agent reached maximum tool call iterations without a final response."
+
+        duration_ms = int((time.time() - start_time) * 1000)
+
+        defn = AGENT_DEFINITIONS[agent_id]
+        yield {
+            "type": "done",
+            "response_text": final_text,
+            "agent_id": agent_id,
+            "agent_name": defn.name,
+            "tool_results": tool_results_list,
+            "tokens": total_prompt_tokens + total_completion_tokens,
+            "duration_ms": duration_ms,
+            "model": resolved_model,
+            "success": True,
+        }
 
     async def _async_process_streaming(
         self,

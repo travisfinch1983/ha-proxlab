@@ -41,6 +41,7 @@ export class ProxLabChatCard extends LitElement {
     _editingIndex: { state: true },
     _editValue: { state: true },
     _speakingIndex: { state: true },
+    _streaming: { state: true },
   };
 
   hass!: HomeAssistant;
@@ -55,12 +56,14 @@ export class ProxLabChatCard extends LitElement {
   _editingIndex = -1;
   _editValue = "";
   _speakingIndex = -1;
+  _streaming = false;
 
   private _mediaRecorder?: MediaRecorder;
   private _audioChunks: Blob[] = [];
   private _lastAvatarUrl = "";
   private _audioQueue: string[] = [];
   private _audioPlaying = false;
+  private _ttsBuffer = "";
 
   // ---- Lovelace lifecycle ----
 
@@ -312,12 +315,14 @@ export class ProxLabChatCard extends LitElement {
     return html`
       <div class="messages">
         ${this._messages.map(
-          (msg, idx) => html`
+          (msg, idx) => {
+            const isStreamingMsg = this._streaming && msg.role === "assistant" && idx === this._messages.length - 1;
+            return html`
             <div class="message ${msg.role} ${this._editingIndex === idx ? "editing" : ""}">
               ${this._editingIndex === idx
                 ? this._renderEditBubble(idx)
                 : html`
-                    <div class="bubble">${this._formatContent(msg.content)}</div>
+                    <div class="bubble ${isStreamingMsg ? "streaming-cursor" : ""}">${this._formatContent(msg.content)}</div>
                     <div class="msg-actions">
                       ${this._cardConfig?.show_metadata !== false && msg.metadata
                         ? html`<span class="meta-inline">
@@ -351,9 +356,9 @@ export class ProxLabChatCard extends LitElement {
                     </div>
                   `}
             </div>
-          `
+          `}
         )}
-        ${this._loading
+        ${this._loading && !this._streaming
           ? html`<div class="typing">
               <div class="typing-dot"></div>
               <div class="typing-dot"></div>
@@ -483,15 +488,43 @@ export class ProxLabChatCard extends LitElement {
     const text = this._messages[userMsgIdx].content;
     if (!text || !this.hass || !this._config?.card_id) return;
 
+    if (this._cardConfig?.streaming_enabled) {
+      await this._doSendStreaming(text);
+    } else {
+      await this._doSendSync(text);
+    }
+  }
+
+  // ---- Actions ----
+
+  private async _sendMessage(): Promise<void> {
+    const text = this._inputValue.trim();
+    if (!text || this._loading || !this.hass || !this._config?.card_id) return;
+
+    // Add user message
+    this._messages = [
+      ...this._messages,
+      { role: "user", content: text, timestamp: Date.now() },
+    ];
+    this._inputValue = "";
+
+    if (this._cardConfig?.streaming_enabled) {
+      await this._doSendStreaming(text);
+    } else {
+      await this._doSendSync(text);
+    }
+  }
+
+  private async _doSendSync(text: string): Promise<void> {
     this._loading = true;
     this._scrollToBottom();
 
     try {
       const result = await this.hass.callWS<CardInvokeResponse>({
         type: "proxlab/card/invoke",
-        card_id: this._config.card_id,
+        card_id: this._config!.card_id,
         message: text,
-        conversation_id: `card_${this._config.card_id}`,
+        conversation_id: `card_${this._config!.card_id}`,
       });
 
       this._messages = [
@@ -530,63 +563,123 @@ export class ProxLabChatCard extends LitElement {
     }
   }
 
-  // ---- Actions ----
-
-  private async _sendMessage(): Promise<void> {
-    const text = this._inputValue.trim();
-    if (!text || this._loading || !this.hass || !this._config?.card_id) return;
-
-    // Add user message
-    this._messages = [
-      ...this._messages,
-      { role: "user", content: text, timestamp: Date.now() },
-    ];
-    this._inputValue = "";
+  private async _doSendStreaming(text: string): Promise<void> {
     this._loading = true;
+    this._streaming = true;
+    this._ttsBuffer = "";
     this._scrollToBottom();
 
+    // Add placeholder assistant message
+    const msgIdx = this._messages.length;
+    this._messages = [
+      ...this._messages,
+      { role: "assistant", content: "", timestamp: Date.now() },
+    ];
+
     try {
-      const result = await this.hass.callWS<CardInvokeResponse>({
-        type: "proxlab/card/invoke",
-        card_id: this._config.card_id,
-        message: text,
-        conversation_id: `card_${this._config.card_id}`,
-      });
+      const unsub = await (this.hass as any).connection.subscribeMessage(
+        (event: any) => {
+          if (event.type === "delta") {
+            const updated = [...this._messages];
+            updated[msgIdx] = {
+              ...updated[msgIdx],
+              content: (updated[msgIdx].content || "") + event.text,
+            };
+            this._messages = updated;
+            this._scrollToBottom();
 
-      this._messages = [
-        ...this._messages,
-        {
-          role: "assistant",
-          content: result.response_text || "No response",
-          timestamp: Date.now(),
-          metadata: {
-            agent_name: result.agent_name,
-            tokens: result.tokens,
-            duration_ms: result.duration_ms,
-            model: result.model,
-            tool_results: result.tool_results,
-          },
+            // TTS chunking
+            this._ttsBuffer += event.text;
+            this._checkTtsChunk();
+          } else if (event.type === "done") {
+            this._streaming = false;
+            this._loading = false;
+            const updated = [...this._messages];
+            updated[msgIdx] = {
+              ...updated[msgIdx],
+              content: event.response_text || updated[msgIdx].content,
+              metadata: {
+                agent_name: event.agent_name,
+                tokens: event.tokens,
+                duration_ms: event.duration_ms,
+                model: event.model,
+              },
+            };
+            this._messages = updated;
+            this._flushTtsBuffer();
+            this._scrollToBottom();
+            unsub();
+          } else if (event.type === "error") {
+            this._streaming = false;
+            this._loading = false;
+            const updated = [...this._messages];
+            updated[msgIdx] = {
+              ...updated[msgIdx],
+              content: `Error: ${event.error}`,
+            };
+            this._messages = updated;
+            this._scrollToBottom();
+            unsub();
+          }
         },
-      ];
-
-      // Auto TTS playback — per-segment voices (assistant only)
-      if (this._cardConfig?.auto_tts) {
-        this._speakSegments(result.response_text || "");
-      }
+        {
+          type: "proxlab/card/invoke_stream",
+          card_id: this._config!.card_id,
+          message: text,
+          conversation_id: `card_${this._config!.card_id}`,
+        },
+      );
     } catch (err: unknown) {
       const errMsg = err instanceof Error ? err.message : String(err);
-      this._messages = [
-        ...this._messages,
-        {
-          role: "assistant",
-          content: `Error: ${errMsg}`,
-          timestamp: Date.now(),
-        },
-      ];
-    } finally {
+      this._streaming = false;
       this._loading = false;
+      const updated = [...this._messages];
+      updated[msgIdx] = {
+        ...updated[msgIdx],
+        content: `Error: ${errMsg}`,
+      };
+      this._messages = updated;
       this._scrollToBottom();
     }
+  }
+
+  // ---- TTS Chunking (Streaming) ----
+
+  private _checkTtsChunk(): void {
+    if (!this._cardConfig?.auto_tts) return;
+
+    const breakIdx = this._findChunkBreak(this._ttsBuffer);
+    if (breakIdx > 0) {
+      const chunk = this._ttsBuffer.substring(0, breakIdx);
+      this._ttsBuffer = this._ttsBuffer.substring(breakIdx);
+      this._speakSegments(chunk);
+    }
+  }
+
+  private _flushTtsBuffer(): void {
+    if (this._ttsBuffer.trim() && this._cardConfig?.auto_tts) {
+      this._speakSegments(this._ttsBuffer);
+    }
+    this._ttsBuffer = "";
+  }
+
+  private _findChunkBreak(text: string): number {
+    if (text.length < 80) return -1;
+
+    // Prefer paragraph breaks
+    const paraIdx = text.indexOf("\n\n");
+    if (paraIdx > 0) return paraIdx + 2;
+
+    // Sentence endings after 80+ chars
+    const sentenceEnds = [". ", "! ", "? ", ".\n", "!\n", "?\n"];
+    for (let i = 80; i < text.length; i++) {
+      for (const end of sentenceEnds) {
+        if (text.substring(i, i + end.length) === end) {
+          return i + end.length;
+        }
+      }
+    }
+    return -1;
   }
 
   private _scrollToBottom(): void {
