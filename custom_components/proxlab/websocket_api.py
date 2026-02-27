@@ -3369,8 +3369,14 @@ async def ws_group_invoke(
             return
         responding_profiles = mentioned
 
-    async def _invoke_profile(profile: dict) -> dict:
-        """Invoke a single profile's agent and return response dict."""
+    async def _invoke_profile(profile: dict, prior_responses: list[dict] | None = None) -> dict:
+        """Invoke a single profile's agent and return response dict.
+
+        Args:
+            profile: The agent profile dict.
+            prior_responses: List of prior agent responses in this round
+                (for round-robin context injection).
+        """
         pid = profile["profile_id"]
         prompt_override = profile.get("prompt_override", "")
         personality_enabled = profile.get("personality_enabled", False)
@@ -3391,11 +3397,27 @@ async def ws_group_invoke(
             personality_enabled, personality, prompt_override
         )
 
+        # Build the message: include prior agent responses for round-robin context
+        effective_message = user_message
+        if prior_responses:
+            context_lines = []
+            for pr in prior_responses:
+                if pr.get("success") and pr.get("response_text"):
+                    context_lines.append(
+                        f"[{pr['profile_name']}]: {pr['response_text']}"
+                    )
+            if context_lines:
+                effective_message = (
+                    user_message
+                    + "\n\n[The following agents have already responded to this message in the group chat:]\n"
+                    + "\n".join(context_lines)
+                )
+
         start = _time.monotonic()
         try:
             result = await agent.invoke_agent(
                 agent_id=agent_id,
-                message=user_message,
+                message=effective_message,
                 conversation_id=f"group_{msg['card_id']}_{pid}",
                 include_history=True,
                 system_prompt_override=system_prompt,
@@ -3430,15 +3452,16 @@ async def ws_group_invoke(
 
     # Execute based on turn mode
     if turn_mode == "all_respond":
+        # Parallel: all agents respond simultaneously (no cross-context)
         responses = await asyncio.gather(
             *[_invoke_profile(p) for p in responding_profiles]
         )
         responses = list(responses)
     else:
-        # round_robin and at_mention: sequential in order
+        # round_robin and at_mention: sequential, each agent sees prior responses
         responses = []
         for p in responding_profiles:
-            resp = await _invoke_profile(p)
+            resp = await _invoke_profile(p, prior_responses=responses)
             responses.append(resp)
 
     connection.send_result(
