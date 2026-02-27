@@ -4,10 +4,10 @@ export default defineConfig({
   build: {
     outDir: "../custom_components/proxlab/card",
     emptyOutDir: true,
+    target: "es2020",
     lib: {
       entry: "src/card/proxlab-chat-card.ts",
-      formats: ["iife"],
-      name: "ProxLabChatCard",
+      formats: ["es"],
       fileName: () => "proxlab-chat-card.js",
     },
     rollupOptions: {
@@ -17,5 +17,8 @@ export default defineConfig({
     },
     minify: "esbuild",
     sourcemap: false,
+  },
+  esbuild: {
+    target: "es2020",
   },
 });

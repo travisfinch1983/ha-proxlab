@@ -1,5 +1,4 @@
 import { LitElement, html, nothing, PropertyValues } from "lit";
-import { customElement, property, state, query } from "lit/decorators.js";
 import { cardStyles } from "./styles";
 import type {
   HomeAssistant,
@@ -7,28 +6,38 @@ import type {
   ProxLabChatCardConfig,
   CardChatMessage,
   CardInvokeResponse,
-  DEFAULT_CARD_CONFIG,
 } from "./types";
+
+// Import editor so it's included in the bundle
+import "./proxlab-chat-card-editor";
 
 // SVG icons (inlined to avoid dependencies)
 const sendIcon = html`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`;
 const micIcon = html`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>`;
 const chatIcon = html`<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" opacity="0.4"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>`;
 
-@customElement("proxlab-chat-card")
 export class ProxLabChatCard extends LitElement {
   static styles = cardStyles;
 
-  @property({ attribute: false }) hass!: HomeAssistant;
-  @state() private _config?: ProxLabChatCardYamlConfig;
-  @state() private _cardConfig?: ProxLabChatCardConfig;
-  @state() private _messages: CardChatMessage[] = [];
-  @state() private _loading = false;
-  @state() private _inputValue = "";
-  @state() private _recording = false;
-  @state() private _configLoaded = false;
+  static properties = {
+    hass: { attribute: false },
+    _config: { state: true },
+    _cardConfig: { state: true },
+    _messages: { state: true },
+    _loading: { state: true },
+    _inputValue: { state: true },
+    _recording: { state: true },
+    _configLoaded: { state: true },
+  };
 
-  @query(".messages") private _messagesEl!: HTMLDivElement;
+  hass!: HomeAssistant;
+  _config?: ProxLabChatCardYamlConfig;
+  _cardConfig?: ProxLabChatCardConfig;
+  _messages: CardChatMessage[] = [];
+  _loading = false;
+  _inputValue = "";
+  _recording = false;
+  _configLoaded = false;
 
   private _mediaRecorder?: MediaRecorder;
   private _audioChunks: Blob[] = [];
@@ -288,8 +297,9 @@ export class ProxLabChatCard extends LitElement {
 
   private _scrollToBottom(): void {
     requestAnimationFrame(() => {
-      if (this._messagesEl) {
-        this._messagesEl.scrollTop = this._messagesEl.scrollHeight;
+      const el = this.renderRoot?.querySelector(".messages") as HTMLElement;
+      if (el) {
+        el.scrollTop = el.scrollHeight;
       }
     });
   }
@@ -362,6 +372,9 @@ export class ProxLabChatCard extends LitElement {
     }
   }
 }
+
+// Manual custom element registration (no decorators)
+customElements.define("proxlab-chat-card", ProxLabChatCard);
 
 // Register in window.customCards for HA card picker
 (window as any).customCards = (window as any).customCards || [];

@@ -1,5 +1,4 @@
 import { LitElement, html, nothing } from "lit";
-import { customElement, property, state } from "lit/decorators.js";
 import { editorStyles } from "./styles";
 import type {
   HomeAssistant,
@@ -13,17 +12,26 @@ import { parseCharacterCardPNG } from "./character-card-parser";
 
 type EditorTab = "basic" | "personality" | "appearance" | "voice" | "advanced";
 
-@customElement("proxlab-chat-card-editor")
 export class ProxLabChatCardEditor extends LitElement {
   static styles = editorStyles;
 
-  @property({ attribute: false }) hass!: HomeAssistant;
-  @state() private _config?: ProxLabChatCardYamlConfig;
-  @state() private _cardConfig: ProxLabChatCardConfig = { ...DEFAULT_CARD_CONFIG };
-  @state() private _tab: EditorTab = "basic";
-  @state() private _agents: AvailableAgent[] = [];
-  @state() private _voices: TtsVoice[] = [];
-  @state() private _loaded = false;
+  static properties = {
+    hass: { attribute: false },
+    _config: { state: true },
+    _cardConfig: { state: true },
+    _tab: { state: true },
+    _agents: { state: true },
+    _voices: { state: true },
+    _loaded: { state: true },
+  };
+
+  hass!: HomeAssistant;
+  _config?: ProxLabChatCardYamlConfig;
+  _cardConfig: ProxLabChatCardConfig = { ...DEFAULT_CARD_CONFIG };
+  _tab: EditorTab = "basic";
+  _agents: AvailableAgent[] = [];
+  _voices: TtsVoice[] = [];
+  _loaded = false;
 
   setConfig(config: ProxLabChatCardYamlConfig): void {
     this._config = config;
@@ -391,3 +399,6 @@ export class ProxLabChatCardEditor extends LitElement {
     }
   }
 }
+
+// Manual custom element registration (no decorators)
+customElements.define("proxlab-chat-card-editor", ProxLabChatCardEditor);
