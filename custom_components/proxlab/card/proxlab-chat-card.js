@@ -1676,7 +1676,7 @@ class B extends m {
               ${t.avatar ? o`<img src="${t.avatar}" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover;" />` : o`<div style="width: 48px; height: 48px; border-radius: 50%; background: var(--divider-color, #e5e7eb); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 18px;">${t.name.charAt(0).toUpperCase()}</div>`}
               <div style="flex: 1; min-width: 0;">
                 <div style="font-weight: 600; font-size: 14px;">${t.name}</div>
-                <div style="font-size: 12px; opacity: 0.6;">Agent: ${t.agent_id}</div>
+                <div style="font-size: 12px; opacity: 0.6;">${t.connection_id ? `Connection: ${t.connection_id}` : `Agent: ${t.agent_id}`}</div>
                 ${t.personality_enabled ? o`<div style="font-size: 11px; opacity: 0.5; margin-top: 2px;">Character: ${t.personality?.name || "Unnamed"}</div>` : d}
               </div>
             </div>

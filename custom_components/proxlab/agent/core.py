@@ -1155,6 +1155,7 @@ class ProxLabAgent(
         conversation_id: str | None = None,
         include_history: bool = False,
         system_prompt_override: str | None = None,
+        config_override: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Directly invoke a specific agent, bypassing orchestrator routing.
 
@@ -1189,11 +1190,14 @@ class ProxLabAgent(
         live_config = self._get_fresh_config()
 
         # Resolve agent's LLM config
-        flat_config = resolve_agent_to_flat_config(live_config, agent_id)
-        if flat_config is None:
-            flat_config = resolve_agent_to_flat_config(live_config, AGENT_CONVERSATION)
-        if flat_config is None:
-            flat_config = {}
+        if config_override:
+            flat_config = config_override
+        else:
+            flat_config = resolve_agent_to_flat_config(live_config, agent_id)
+            if flat_config is None:
+                flat_config = resolve_agent_to_flat_config(live_config, AGENT_CONVERSATION)
+            if flat_config is None:
+                flat_config = {}
 
         resolved_model = flat_config.get(CONF_LLM_MODEL) or live_config.get(CONF_LLM_MODEL, "unknown")
 

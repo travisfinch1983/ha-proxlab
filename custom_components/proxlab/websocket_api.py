@@ -3043,15 +3043,24 @@ async def ws_card_invoke(
     # If card is linked to a profile, load profile settings
     use_profile = card_config.get("use_profile", False)
     profile_id = card_config.get("profile_id", "")
+    flat_config_override = None
     if use_profile and profile_id:
         profiles_data, _ = _get_agent_profiles(hass)
         profile = profiles_data.get("profiles", {}).get(profile_id, {})
-        agent_id = profile.get("agent_id", "conversation")
+        # Direct connection linking: if profile has connection_id, resolve it
+        connection_id = profile.get("connection_id", "")
+        if connection_id:
+            from .connection_manager import resolve_connection_to_flat_config
+            config = dict(entry.data) | dict(entry.options)
+            flat_config_override = resolve_connection_to_flat_config(config, connection_id)
+            agent_id = "conversation_agent"
+        else:
+            agent_id = profile.get("agent_id", "conversation_agent")
         prompt_override = profile.get("prompt_override", "")
         personality_enabled = profile.get("personality_enabled", False)
         personality = profile.get("personality", {})
     else:
-        agent_id = card_config.get("agent_id", "conversation")
+        agent_id = card_config.get("agent_id", "conversation_agent")
         prompt_override = card_config.get("prompt_override", "")
         personality_enabled = card_config.get("personality_enabled", False)
         personality = card_config.get("personality", {})
@@ -3071,6 +3080,7 @@ async def ws_card_invoke(
             conversation_id=msg.get("conversation_id", f"card_{msg['card_id']}"),
             include_history=True,
             system_prompt_override=card_system_prompt,
+            config_override=flat_config_override,
         )
         # Attach first_mes if this was a new conversation
         result["first_mes"] = first_mes
@@ -3362,10 +3372,20 @@ async def ws_group_invoke(
     async def _invoke_profile(profile: dict) -> dict:
         """Invoke a single profile's agent and return response dict."""
         pid = profile["profile_id"]
-        agent_id = profile.get("agent_id", "conversation")
         prompt_override = profile.get("prompt_override", "")
         personality_enabled = profile.get("personality_enabled", False)
         personality = profile.get("personality", {})
+
+        # Direct connection linking: if profile has connection_id, resolve it
+        connection_id = profile.get("connection_id", "")
+        if connection_id:
+            from .connection_manager import resolve_connection_to_flat_config
+            config = dict(entry.data) | dict(entry.options)
+            profile_config_override = resolve_connection_to_flat_config(config, connection_id)
+            agent_id = "conversation_agent"
+        else:
+            profile_config_override = None
+            agent_id = profile.get("agent_id", "conversation_agent")
 
         system_prompt = _build_profile_system_prompt(
             personality_enabled, personality, prompt_override
@@ -3379,6 +3399,7 @@ async def ws_group_invoke(
                 conversation_id=f"group_{msg['card_id']}_{pid}",
                 include_history=True,
                 system_prompt_override=system_prompt,
+                config_override=profile_config_override,
             )
             duration_ms = int((_time.monotonic() - start) * 1000)
             return {

@@ -280,6 +280,7 @@ export interface AgentProfile {
   name: string;
   avatar: string;
   agent_id: string;
+  connection_id: string;
   prompt_override: string;
   personality_enabled: boolean;
   personality: {
@@ -298,6 +299,8 @@ export interface AgentProfile {
   tts_voices: { normal: string; narration: string; speech: string; thoughts: string };
   auto_tts: boolean;
   portrait_width: "auto" | number;
+  per_card_memory: boolean;
+  memory_universal_access: boolean;
 }
 
 // --- Group Chat Cards ---

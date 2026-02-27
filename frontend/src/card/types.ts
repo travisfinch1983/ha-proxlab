@@ -109,12 +109,15 @@ export interface AgentProfile {
   name: string;
   avatar: string;
   agent_id: string;
+  connection_id: string;
   prompt_override: string;
   personality_enabled: boolean;
   personality: CharacterCardV3;
   tts_voices: TtsVoices;
   auto_tts: boolean;
   portrait_width: "auto" | number;
+  per_card_memory: boolean;
+  memory_universal_access: boolean;
 }
 
 /** Group chat turn mode */

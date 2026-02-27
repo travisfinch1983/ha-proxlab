@@ -227,6 +227,41 @@ def resolve_agent_to_flat_config(
     }
 
 
+def resolve_connection_to_flat_config(
+    config: dict[str, Any], connection_id: str
+) -> dict[str, Any] | None:
+    """Resolve a connection ID directly to a flat CONF_LLM_* config dict.
+
+    Used by agent profiles that link directly to a connection rather than
+    going through agent→connection resolution.
+
+    Args:
+        config: The integration config dict (with connections).
+        connection_id: The connection ID to resolve.
+
+    Returns:
+        Dict with CONF_LLM_* keys, or None if connection not found.
+    """
+    from .config_flow import normalize_url
+
+    connections = config.get(CONF_CONNECTIONS, {})
+    conn = connections.get(connection_id)
+    if not conn:
+        return None
+    return {
+        CONF_LLM_BASE_URL: normalize_url(conn.get("base_url", "")),
+        CONF_LLM_API_KEY: conn.get("api_key", ""),
+        CONF_LLM_MODEL: conn.get("model", ""),
+        CONF_LLM_TEMPERATURE: conn.get("temperature", DEFAULT_TEMPERATURE),
+        CONF_LLM_MAX_TOKENS: conn.get("max_tokens", DEFAULT_MAX_TOKENS),
+        CONF_LLM_TOP_P: conn.get("top_p", DEFAULT_TOP_P),
+        CONF_LLM_KEEP_ALIVE: conn.get("keep_alive", DEFAULT_LLM_KEEP_ALIVE),
+        CONF_LLM_PROXY_HEADERS: conn.get("proxy_headers", {}),
+        CONF_THINKING_ENABLED: conn.get("thinking_enabled", DEFAULT_THINKING_ENABLED),
+        "connection_type": conn.get("connection_type", "local"),
+    }
+
+
 def resolve_connections_to_flat_config(config: dict[str, Any]) -> dict[str, Any]:
     """Resolution shim: populate flat CONF_* keys from connections+roles.
 

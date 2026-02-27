@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   faPlus,
   faArrowsRotate,
@@ -9,16 +9,14 @@ import {
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import NavBar from "../layout/NavBar";
 import ConfirmDialog from "../components/ConfirmDialog";
-import { listProfiles, saveProfile, deleteProfile, callWS } from "../api";
-import type { AgentProfile } from "../types";
-
-interface AvailableAgent {
-  id: string;
-  name: string;
-  description: string;
-  group: string;
-  has_connection: boolean;
-}
+import {
+  listProfiles,
+  saveProfile,
+  deleteProfile,
+  listConnections,
+  callWS,
+} from "../api";
+import type { AgentProfile, Connection, ConnectionHealth } from "../types";
 
 interface TtsVoice {
   id: string;
@@ -28,7 +26,7 @@ interface TtsVoice {
 
 interface FormData {
   name: string;
-  agent_id: string;
+  connection_id: string;
   avatar: string;
   prompt_override: string;
   personality_enabled: boolean;
@@ -45,11 +43,13 @@ interface FormData {
   tts_speech: string;
   tts_thoughts: string;
   auto_tts: boolean;
+  per_card_memory: boolean;
+  memory_universal_access: boolean;
 }
 
 const EMPTY_FORM: FormData = {
   name: "",
-  agent_id: "conversation_agent",
+  connection_id: "",
   avatar: "",
   prompt_override: "",
   personality_enabled: false,
@@ -66,12 +66,14 @@ const EMPTY_FORM: FormData = {
   tts_speech: "",
   tts_thoughts: "",
   auto_tts: false,
+  per_card_memory: false,
+  memory_universal_access: false,
 };
 
 function profileToForm(p: AgentProfile): FormData {
   return {
     name: p.name,
-    agent_id: p.agent_id,
+    connection_id: p.connection_id || "",
     avatar: p.avatar,
     prompt_override: p.prompt_override,
     personality_enabled: p.personality_enabled,
@@ -88,13 +90,16 @@ function profileToForm(p: AgentProfile): FormData {
     tts_speech: p.tts_voices?.speech ?? "",
     tts_thoughts: p.tts_voices?.thoughts ?? "",
     auto_tts: p.auto_tts,
+    per_card_memory: p.per_card_memory ?? false,
+    memory_universal_access: p.memory_universal_access ?? false,
   };
 }
 
 function formToProfile(form: FormData): Omit<AgentProfile, "profile_id"> {
   return {
     name: form.name,
-    agent_id: form.agent_id,
+    agent_id: "conversation_agent",
+    connection_id: form.connection_id,
     avatar: form.avatar,
     prompt_override: form.prompt_override,
     personality_enabled: form.personality_enabled,
@@ -119,12 +124,24 @@ function formToProfile(form: FormData): Omit<AgentProfile, "profile_id"> {
     },
     auto_tts: form.auto_tts,
     portrait_width: "auto",
+    per_card_memory: form.per_card_memory,
+    memory_universal_access: form.memory_universal_access,
   };
 }
 
+/** Auto-expand a textarea to fit its content */
+function autoExpand(el: HTMLTextAreaElement) {
+  el.style.height = "auto";
+  el.style.height = Math.max(el.scrollHeight, el.offsetHeight) + "px";
+}
+
+type ModalTab = "general" | "personality" | "voice" | "memory";
+
 export default function AgentProfilesPage() {
   const [items, setItems] = useState<AgentProfile[]>([]);
-  const [agents, setAgents] = useState<AvailableAgent[]>([]);
+  const [connections, setConnections] = useState<
+    Record<string, Connection & { health?: ConnectionHealth }>
+  >({});
   const [voices, setVoices] = useState<TtsVoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
@@ -132,20 +149,23 @@ export default function AgentProfilesPage() {
   const [form, setForm] = useState<FormData>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
-  const [modalTab, setModalTab] = useState<"general" | "personality" | "voice">(
-    "general"
-  );
+  const [modalTab, setModalTab] = useState<ModalTab>("general");
+  // Character card detection state
+  const [ccDetected, setCcDetected] = useState(false);
+  const [pendingCcData, setPendingCcData] = useState<Record<string, string> | null>(null);
+  // Track refs for auto-expand on tab switch
+  const textareaContainerRef = useRef<HTMLDivElement>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const [profs, agts, vcs] = await Promise.all([
+      const [profs, conns, vcs] = await Promise.all([
         listProfiles(),
-        callWS<AvailableAgent[]>("proxlab/agent/available"),
+        listConnections(),
         callWS<TtsVoice[]>("proxlab/card/voices"),
       ]);
       setItems(profs);
-      setAgents(agts);
+      setConnections(conns);
       setVoices(vcs);
     } catch (err) {
       console.error("Failed to load profiles:", err);
@@ -157,6 +177,18 @@ export default function AgentProfilesPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Auto-expand textareas when switching to a tab with content
+  useEffect(() => {
+    if (!modalOpen) return;
+    requestAnimationFrame(() => {
+      const container = textareaContainerRef.current;
+      if (!container) return;
+      container.querySelectorAll("textarea").forEach((ta) => {
+        if (ta.value) autoExpand(ta);
+      });
+    });
+  }, [modalTab, modalOpen]);
 
   const openCreate = () => {
     setEditingId(null);
@@ -190,7 +222,6 @@ export default function AgentProfilesPage() {
         `A profile named "${duplicate.name}" already exists.\n\nClick OK to overwrite it, or Cancel to go back and rename.`
       );
       if (!overwrite) return;
-      // Overwrite: use the existing profile's ID
       setSaving(true);
       try {
         const profile = formToProfile(form);
@@ -241,14 +272,24 @@ export default function AgentProfilesPage() {
     }
   };
 
-  const agentName = (id: string) =>
-    agents.find((a) => a.id === id)?.name ?? id;
+  const connectionName = (id: string) => {
+    if (!id) return "No connection";
+    const conn = connections[id];
+    return conn?.name ?? id;
+  };
+
+  /** LLM-capable connections (conversation or tool_use) */
+  const llmConnections = Object.entries(connections).filter(([, c]) =>
+    c.capabilities?.some((cap) => cap === "conversation" || cap === "tool_use")
+  );
 
   const handleAvatarUpload = async (
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    // Upload the image as avatar
     const reader = new FileReader();
     reader.onload = async () => {
       const base64 = (reader.result as string).split(",")[1];
@@ -263,7 +304,81 @@ export default function AgentProfilesPage() {
       }
     };
     reader.readAsDataURL(file);
+
+    // Issue #18: Auto-detect character card data in PNG uploads
+    if (file.name.toLowerCase().endsWith(".png")) {
+      try {
+        const { parseCharacterCardPNG } = await import(
+          "../card/character-card-parser"
+        );
+        const card = await parseCharacterCardPNG(file);
+        if (card && (card.name || card.description || card.personality)) {
+          // Store detected data and show confirmation
+          setPendingCcData({
+            name: card.name || "",
+            description: card.description || "",
+            personality: card.personality || "",
+            scenario: card.scenario || "",
+            first_mes: card.first_mes || "",
+            mes_example: card.mes_example || "",
+            system_prompt: card.system_prompt || "",
+            post_history_instructions: card.post_history_instructions || "",
+          });
+          setCcDetected(true);
+        }
+      } catch {
+        // Not a character card PNG, that's fine
+      }
+    }
   };
+
+  const handleAcceptCharacterCard = () => {
+    if (!pendingCcData) return;
+    setForm((f) => ({
+      ...f,
+      personality_enabled: true,
+      personality_name: pendingCcData.name || f.personality_name,
+      personality_description: pendingCcData.description || f.personality_description,
+      personality_personality: pendingCcData.personality || f.personality_personality,
+      personality_scenario: pendingCcData.scenario || f.personality_scenario,
+      personality_first_mes: pendingCcData.first_mes || f.personality_first_mes,
+      personality_mes_example: pendingCcData.mes_example || f.personality_mes_example,
+      personality_system_prompt: pendingCcData.system_prompt || f.personality_system_prompt,
+      personality_post_history: pendingCcData.post_history_instructions || f.personality_post_history,
+      name: f.name || pendingCcData.name || f.name,
+    }));
+    setCcDetected(false);
+    setPendingCcData(null);
+  };
+
+  const handleDeclineCharacterCard = () => {
+    setCcDetected(false);
+    setPendingCcData(null);
+  };
+
+  /** Render an auto-expanding textarea with label + description */
+  const renderTextarea = (
+    label: string,
+    description: string,
+    formKey: keyof FormData,
+    minRows: number = 4
+  ) => (
+    <div className="form-control">
+      <div className="label">
+        <span className="label-text font-medium">{label}</span>
+      </div>
+      <textarea
+        className="textarea textarea-bordered text-sm leading-relaxed"
+        style={{ minHeight: `${minRows * 1.75}rem` }}
+        value={form[formKey] as string}
+        onInput={(e) => autoExpand(e.currentTarget)}
+        onChange={(e) => setForm({ ...form, [formKey]: e.target.value })}
+      />
+      <div className="label pt-0.5">
+        <span className="label-text-alt text-base-content/40">{description}</span>
+      </div>
+    </div>
+  );
 
   return (
     <>
@@ -300,7 +415,7 @@ export default function AgentProfilesPage() {
             />
             <p className="text-base-content/50 mb-4">No profiles yet</p>
             <p className="text-base-content/40 text-sm mb-4">
-              Create reusable agent profiles for group chat cards
+              Create reusable agent profiles for chat and group chat cards
             </p>
             <button className="btn btn-primary btn-sm" onClick={openCreate}>
               <FontAwesomeIcon icon={faPlus} /> Create Profile
@@ -334,7 +449,7 @@ export default function AgentProfilesPage() {
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold truncate">{p.name}</h3>
                       <p className="text-sm text-base-content/60 truncate">
-                        {agentName(p.agent_id)}
+                        {connectionName(p.connection_id)}
                       </p>
                       {p.personality_enabled && p.personality?.name && (
                         <span className="badge badge-sm badge-ghost mt-1">
@@ -366,21 +481,22 @@ export default function AgentProfilesPage() {
         )}
       </div>
 
-      {/* Create/Edit Modal */}
+      {/* Create/Edit Modal — #13: wider (max-w-3xl) */}
       {modalOpen && (
         <dialog className="modal modal-open">
-          <div className="modal-box max-w-2xl max-h-[85vh] flex flex-col">
+          <div className="modal-box max-w-3xl max-h-[85vh] flex flex-col">
             <h3 className="font-bold text-lg mb-3">
               {editingId ? "Edit Profile" : "New Profile"}
             </h3>
 
-            {/* Modal tabs */}
+            {/* Modal tabs — #19: added Memory tab */}
             <div className="tabs tabs-bordered mb-4">
               {(
                 [
                   ["general", "General"],
                   ["personality", "Personality"],
                   ["voice", "Voice"],
+                  ["memory", "Memory"],
                 ] as const
               ).map(([id, label]) => (
                 <button
@@ -393,13 +509,17 @@ export default function AgentProfilesPage() {
               ))}
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-3">
-              {/* General tab */}
+            <div
+              className="flex-1 overflow-y-auto space-y-4 pr-1"
+              ref={textareaContainerRef}
+            >
+              {/* ═══════ General tab — #14, #17 ═══════ */}
               {modalTab === "general" && (
                 <>
-                  <label className="form-control">
+                  {/* Name */}
+                  <div className="form-control">
                     <div className="label">
-                      <span className="label-text">Name</span>
+                      <span className="label-text font-medium">Name</span>
                     </div>
                     <input
                       type="text"
@@ -410,40 +530,60 @@ export default function AgentProfilesPage() {
                       }
                       placeholder="e.g. Friendly Assistant"
                     />
-                  </label>
+                    <div className="label pt-0.5">
+                      <span className="label-text-alt text-base-content/40">
+                        Display name for this agent profile
+                      </span>
+                    </div>
+                  </div>
 
-                  <label className="form-control">
+                  {/* Connection — #14: replaced agent dropdown with connection dropdown */}
+                  <div className="form-control">
                     <div className="label">
-                      <span className="label-text">Agent</span>
+                      <span className="label-text font-medium">Connection</span>
                     </div>
                     <select
                       className="select select-bordered select-sm"
-                      value={form.agent_id}
+                      value={form.connection_id}
                       onChange={(e) =>
-                        setForm({ ...form, agent_id: e.target.value })
+                        setForm({ ...form, connection_id: e.target.value })
                       }
                     >
-                      {agents
-                        .filter((a) => a.has_connection)
-                        .map((a) => (
-                          <option key={a.id} value={a.id}>
-                            {a.name}
-                          </option>
-                        ))}
+                      <option value="">Select a connection...</option>
+                      {llmConnections.map(([id, c]) => (
+                        <option key={id} value={id}>
+                          {c.name}{c.model ? ` (${c.model})` : ""}
+                        </option>
+                      ))}
                     </select>
-                  </label>
+                    <div className="label pt-0.5">
+                      <span className="label-text-alt text-base-content/40">
+                        LLM connection this profile uses for responses
+                      </span>
+                    </div>
+                  </div>
 
-                  <label className="form-control">
+                  {/* Avatar — #17: "Select Profile Photo" label */}
+                  <div className="form-control">
                     <div className="label">
-                      <span className="label-text">Avatar</span>
+                      <span className="label-text font-medium">
+                        Select Profile Photo
+                      </span>
                     </div>
                     <div className="flex items-center gap-3">
-                      {form.avatar && (
+                      {form.avatar ? (
                         <img
                           src={form.avatar}
                           alt="avatar"
-                          className="w-12 h-12 rounded-full object-cover"
+                          className="w-14 h-14 rounded-full object-cover shrink-0"
                         />
+                      ) : (
+                        <div className="w-14 h-14 rounded-full bg-base-300 flex items-center justify-center shrink-0">
+                          <FontAwesomeIcon
+                            icon={faAddressCard}
+                            className="text-base-content/30"
+                          />
+                        </div>
                       )}
                       <input
                         type="file"
@@ -452,25 +592,39 @@ export default function AgentProfilesPage() {
                         onChange={handleAvatarUpload}
                       />
                     </div>
-                  </label>
+                    <div className="label pt-0.5">
+                      <span className="label-text-alt text-base-content/40">
+                        Upload a portrait image. PNG files with embedded character card data will be auto-detected.
+                      </span>
+                    </div>
+                  </div>
 
-                  <label className="form-control">
+                  {/* Prompt Override — #15: bigger, #16: description, #17: layout */}
+                  <div className="form-control">
                     <div className="label">
-                      <span className="label-text">Prompt Override</span>
+                      <span className="label-text font-medium">Prompt Override</span>
                     </div>
                     <textarea
-                      className="textarea textarea-bordered textarea-sm h-24"
+                      className="textarea textarea-bordered text-sm leading-relaxed"
+                      style={{ minHeight: "7rem" }}
                       value={form.prompt_override}
+                      onInput={(e) => autoExpand(e.currentTarget)}
                       onChange={(e) =>
                         setForm({ ...form, prompt_override: e.target.value })
                       }
                       placeholder="Additional instructions for this profile..."
                     />
-                  </label>
+                    <div className="label pt-0.5">
+                      <span className="label-text-alt text-base-content/40">
+                        Custom system prompt to instruct this agent on its basic
+                        functions. Replaces the default agent prompt when set.
+                      </span>
+                    </div>
+                  </div>
                 </>
               )}
 
-              {/* Personality tab */}
+              {/* ═══════ Personality tab — #15, #16 ═══════ */}
               {modalTab === "personality" && (
                 <>
                   <label className="flex items-center gap-3 cursor-pointer">
@@ -485,16 +639,23 @@ export default function AgentProfilesPage() {
                         })
                       }
                     />
-                    <span className="label-text">
-                      Enable Character Personality
-                    </span>
+                    <div>
+                      <span className="label-text font-medium">
+                        Enable Character Personality
+                      </span>
+                      <p className="text-xs text-base-content/40 mt-0.5">
+                        Adds SillyTavern-compatible character fields on top of
+                        the system prompt
+                      </p>
+                    </div>
                   </label>
 
                   {form.personality_enabled && (
                     <>
-                      <label className="form-control">
+                      {/* Character card PNG import */}
+                      <div className="form-control">
                         <div className="label">
-                          <span className="label-text">
+                          <span className="label-text font-medium">
                             Import Character Card PNG
                           </span>
                         </div>
@@ -514,23 +675,33 @@ export default function AgentProfilesPage() {
                                 setForm((f) => ({
                                   ...f,
                                   personality_name: card.name || f.personality_name,
-                                  personality_description: card.description || f.personality_description,
-                                  personality_personality: card.personality || f.personality_personality,
-                                  personality_scenario: card.scenario || f.personality_scenario,
-                                  personality_first_mes: card.first_mes || f.personality_first_mes,
-                                  personality_mes_example: card.mes_example || f.personality_mes_example,
-                                  personality_system_prompt: card.system_prompt || f.personality_system_prompt,
-                                  personality_post_history: card.post_history_instructions || f.personality_post_history,
+                                  personality_description:
+                                    card.description || f.personality_description,
+                                  personality_personality:
+                                    card.personality || f.personality_personality,
+                                  personality_scenario:
+                                    card.scenario || f.personality_scenario,
+                                  personality_first_mes:
+                                    card.first_mes || f.personality_first_mes,
+                                  personality_mes_example:
+                                    card.mes_example || f.personality_mes_example,
+                                  personality_system_prompt:
+                                    card.system_prompt || f.personality_system_prompt,
+                                  personality_post_history:
+                                    card.post_history_instructions ||
+                                    f.personality_post_history,
                                   name: f.name || card.name || f.name,
                                 }));
                               }
                             } catch (err) {
                               console.error("Failed to parse character card:", err);
                             }
-                            // Also upload the PNG as avatar
+                            // Also upload as avatar
                             const reader = new FileReader();
                             reader.onload = async () => {
-                              const base64 = (reader.result as string).split(",")[1];
+                              const base64 = (reader.result as string).split(
+                                ","
+                              )[1];
                               try {
                                 const result = await callWS<{ url: string }>(
                                   "proxlab/card/avatar/upload",
@@ -538,26 +709,26 @@ export default function AgentProfilesPage() {
                                 );
                                 setForm((f) => ({ ...f, avatar: result.url }));
                               } catch {
-                                // Avatar upload failed
+                                // Avatar upload failed silently
                               }
                             };
                             reader.readAsDataURL(file);
                           }}
                         />
-                        <div className="label">
+                        <div className="label pt-0.5">
                           <span className="label-text-alt text-base-content/40">
-                            SillyTavern-compatible PNG with embedded character data
+                            Loading a new character card will overwrite existing
+                            personality fields below
                           </span>
                         </div>
-                      </label>
-                    </>
-                  )}
+                      </div>
 
-                  {form.personality_enabled && (
-                    <>
-                      <label className="form-control">
+                      {/* Character Name */}
+                      <div className="form-control">
                         <div className="label">
-                          <span className="label-text">Character Name</span>
+                          <span className="label-text font-medium">
+                            Character Name
+                          </span>
                         </div>
                         <input
                           type="text"
@@ -570,145 +741,105 @@ export default function AgentProfilesPage() {
                             })
                           }
                         />
-                      </label>
-
-                      <label className="form-control">
-                        <div className="label">
-                          <span className="label-text">Description</span>
-                        </div>
-                        <textarea
-                          className="textarea textarea-bordered textarea-sm h-20"
-                          value={form.personality_description}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              personality_description: e.target.value,
-                            })
-                          }
-                        />
-                      </label>
-
-                      <label className="form-control">
-                        <div className="label">
-                          <span className="label-text">Personality</span>
-                        </div>
-                        <textarea
-                          className="textarea textarea-bordered textarea-sm h-20"
-                          value={form.personality_personality}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              personality_personality: e.target.value,
-                            })
-                          }
-                        />
-                      </label>
-
-                      <label className="form-control">
-                        <div className="label">
-                          <span className="label-text">Scenario</span>
-                        </div>
-                        <textarea
-                          className="textarea textarea-bordered textarea-sm h-16"
-                          value={form.personality_scenario}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              personality_scenario: e.target.value,
-                            })
-                          }
-                        />
-                      </label>
-
-                      <label className="form-control">
-                        <div className="label">
-                          <span className="label-text">System Prompt</span>
-                        </div>
-                        <textarea
-                          className="textarea textarea-bordered textarea-sm h-20"
-                          value={form.personality_system_prompt}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              personality_system_prompt: e.target.value,
-                            })
-                          }
-                        />
-                      </label>
-
-                      <label className="form-control">
-                        <div className="label">
-                          <span className="label-text">First Message</span>
-                        </div>
-                        <textarea
-                          className="textarea textarea-bordered textarea-sm h-16"
-                          value={form.personality_first_mes}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              personality_first_mes: e.target.value,
-                            })
-                          }
-                        />
-                      </label>
-
-                      <label className="form-control">
-                        <div className="label">
-                          <span className="label-text">
-                            Example Messages
+                        <div className="label pt-0.5">
+                          <span className="label-text-alt text-base-content/40">
+                            The character's display name used in conversation
                           </span>
                         </div>
-                        <textarea
-                          className="textarea textarea-bordered textarea-sm h-16"
-                          value={form.personality_mes_example}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              personality_mes_example: e.target.value,
-                            })
-                          }
-                        />
-                      </label>
+                      </div>
 
-                      <label className="form-control">
-                        <div className="label">
-                          <span className="label-text">
-                            Post-History Instructions
-                          </span>
-                        </div>
-                        <textarea
-                          className="textarea textarea-bordered textarea-sm h-16"
-                          value={form.personality_post_history}
-                          onChange={(e) =>
-                            setForm({
-                              ...form,
-                              personality_post_history: e.target.value,
-                            })
-                          }
-                        />
-                      </label>
+                      {/* #15: doubled textarea heights, #16: descriptions */}
+                      {renderTextarea(
+                        "Description",
+                        "Physical appearance, background, and key traits of the character",
+                        "personality_description",
+                        5
+                      )}
+
+                      {renderTextarea(
+                        "Personality",
+                        "Behavioral traits, mannerisms, speech patterns, and temperament",
+                        "personality_personality",
+                        5
+                      )}
+
+                      {renderTextarea(
+                        "Scenario",
+                        "The setting and situation for the conversation (location, time, circumstances)",
+                        "personality_scenario",
+                        4
+                      )}
+
+                      {renderTextarea(
+                        "System Prompt",
+                        "Core instructions that define how the character behaves and responds",
+                        "personality_system_prompt",
+                        5
+                      )}
+
+                      {renderTextarea(
+                        "First Message",
+                        "The opening message the character sends to start a new conversation",
+                        "personality_first_mes",
+                        4
+                      )}
+
+                      {renderTextarea(
+                        "Example Messages",
+                        "Sample dialogue exchanges showing the character's voice and style",
+                        "personality_mes_example",
+                        4
+                      )}
+
+                      {renderTextarea(
+                        "Post-History Instructions",
+                        "Additional instructions appended after conversation history (jailbreak/author's note)",
+                        "personality_post_history",
+                        4
+                      )}
                     </>
                   )}
                 </>
               )}
 
-              {/* Voice tab */}
+              {/* ═══════ Voice tab — #13: fixed alignment ═══════ */}
               {modalTab === "voice" && (
                 <>
+                  <p className="text-sm text-base-content/50 mb-2">
+                    Assign different TTS voices for different types of text in
+                    the agent's responses.
+                  </p>
+
                   {(
                     [
-                      ["tts_normal", "Normal Voice"],
-                      ["tts_narration", "Narration Voice"],
-                      ["tts_speech", "Speech Voice"],
-                      ["tts_thoughts", "Thoughts Voice"],
+                      [
+                        "tts_normal",
+                        "Normal Voice",
+                        "Default voice for regular response text",
+                      ],
+                      [
+                        "tts_narration",
+                        "Narration Voice",
+                        "Voice used for narration text (asterisk-wrapped *text*)",
+                      ],
+                      [
+                        "tts_speech",
+                        "Speech Voice",
+                        'Voice used for quoted speech ("dialogue")',
+                      ],
+                      [
+                        "tts_thoughts",
+                        "Thoughts Voice",
+                        "Voice used for internal thoughts",
+                      ],
                     ] as const
-                  ).map(([key, label]) => (
-                    <label key={key} className="form-control">
+                  ).map(([key, label, desc]) => (
+                    <div key={key} className="form-control">
                       <div className="label">
-                        <span className="label-text">{label}</span>
+                        <span className="label-text font-medium">{label}</span>
                       </div>
                       <select
-                        className="select select-bordered select-sm"
+                        className="select select-bordered select-sm w-full"
                         value={form[key]}
                         onChange={(e) =>
                           setForm({ ...form, [key]: e.target.value })
@@ -721,7 +852,12 @@ export default function AgentProfilesPage() {
                           </option>
                         ))}
                       </select>
-                    </label>
+                      <div className="label pt-0.5">
+                        <span className="label-text-alt text-base-content/40">
+                          {desc}
+                        </span>
+                      </div>
+                    </div>
                   ))}
 
                   <label className="flex items-center gap-3 cursor-pointer mt-2">
@@ -733,9 +869,69 @@ export default function AgentProfilesPage() {
                         setForm({ ...form, auto_tts: e.target.checked })
                       }
                     />
-                    <span className="label-text">
-                      Auto-play TTS on response
-                    </span>
+                    <div>
+                      <span className="label-text font-medium">
+                        Auto-play TTS on response
+                      </span>
+                      <p className="text-xs text-base-content/40 mt-0.5">
+                        Automatically speak the agent's response when received
+                      </p>
+                    </div>
+                  </label>
+                </>
+              )}
+
+              {/* ═══════ Memory tab — #19 ═══════ */}
+              {modalTab === "memory" && (
+                <>
+                  <p className="text-sm text-base-content/50 mb-3">
+                    Configure persistent memory for this agent profile.
+                  </p>
+
+                  <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg bg-base-200/50">
+                    <input
+                      type="checkbox"
+                      className="toggle toggle-primary toggle-sm mt-0.5"
+                      checked={form.per_card_memory}
+                      onChange={(e) =>
+                        setForm({ ...form, per_card_memory: e.target.checked })
+                      }
+                    />
+                    <div>
+                      <span className="label-text font-medium">
+                        Per-Profile Memory
+                      </span>
+                      <p className="text-xs text-base-content/40 mt-1">
+                        Gives this agent profile its own RAG collection,
+                        allowing persistent memory between conversations.
+                        Memories are extracted and embedded by the memory agent.
+                      </p>
+                    </div>
+                  </label>
+
+                  <label className="flex items-start gap-3 cursor-pointer p-3 rounded-lg bg-base-200/50">
+                    <input
+                      type="checkbox"
+                      className="toggle toggle-primary toggle-sm mt-0.5"
+                      checked={form.memory_universal_access}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          memory_universal_access: e.target.checked,
+                        })
+                      }
+                    />
+                    <div>
+                      <span className="label-text font-medium">
+                        Universal Memory Access
+                      </span>
+                      <p className="text-xs text-base-content/40 mt-1">
+                        Allow this agent to access memories from all users,
+                        regardless of which user is currently chatting. When
+                        disabled, the agent only sees memories from the current
+                        user's conversations.
+                      </p>
+                    </div>
                   </label>
                 </>
               )}
@@ -770,12 +966,26 @@ export default function AgentProfilesPage() {
         </dialog>
       )}
 
+      {/* Delete confirmation */}
       <ConfirmDialog
         open={!!deleteTarget}
         title="Delete Profile"
         message="Are you sure you want to delete this profile? This cannot be undone."
         onConfirm={handleDelete}
         onCancel={() => setDeleteTarget(null)}
+      />
+
+      {/* Character card auto-detection confirmation — #18 */}
+      <ConfirmDialog
+        open={ccDetected}
+        title="Character Card Detected"
+        message={`The uploaded image contains embedded character card data${
+          pendingCcData?.name ? ` for "${pendingCcData.name}"` : ""
+        }. Would you like to import the character data and enable the personality?`}
+        confirmLabel="Import"
+        confirmVariant="primary"
+        onConfirm={handleAcceptCharacterCard}
+        onCancel={handleDeclineCharacterCard}
       />
     </>
   );

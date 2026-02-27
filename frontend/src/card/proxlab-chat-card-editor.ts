@@ -201,7 +201,7 @@ export class ProxLabChatCardEditor extends LitElement {
                 : html`<div style="width: 48px; height: 48px; border-radius: 50%; background: var(--divider-color, #e5e7eb); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 18px;">${selectedProfile.name.charAt(0).toUpperCase()}</div>`}
               <div style="flex: 1; min-width: 0;">
                 <div style="font-weight: 600; font-size: 14px;">${selectedProfile.name}</div>
-                <div style="font-size: 12px; opacity: 0.6;">Agent: ${selectedProfile.agent_id}</div>
+                <div style="font-size: 12px; opacity: 0.6;">${selectedProfile.connection_id ? `Connection: ${selectedProfile.connection_id}` : `Agent: ${selectedProfile.agent_id}`}</div>
                 ${selectedProfile.personality_enabled
                   ? html`<div style="font-size: 11px; opacity: 0.5; margin-top: 2px;">Character: ${selectedProfile.personality?.name || "Unnamed"}</div>`
                   : nothing}

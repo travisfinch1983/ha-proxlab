@@ -3,6 +3,7 @@ interface Props {
   title: string;
   message: string;
   confirmLabel?: string;
+  confirmVariant?: "error" | "primary" | "success";
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -12,10 +13,18 @@ export default function ConfirmDialog({
   title,
   message,
   confirmLabel = "Delete",
+  confirmVariant = "error",
   onConfirm,
   onCancel,
 }: Props) {
   if (!open) return null;
+
+  const btnClass =
+    confirmVariant === "primary"
+      ? "btn btn-primary"
+      : confirmVariant === "success"
+        ? "btn btn-success"
+        : "btn btn-error";
 
   return (
     <dialog className="modal modal-open">
@@ -26,7 +35,7 @@ export default function ConfirmDialog({
           <button className="btn btn-ghost" onClick={onCancel}>
             Cancel
           </button>
-          <button className="btn btn-error" onClick={onConfirm}>
+          <button className={btnClass} onClick={onConfirm}>
             {confirmLabel}
           </button>
         </div>
