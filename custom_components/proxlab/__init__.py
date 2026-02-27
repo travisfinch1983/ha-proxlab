@@ -671,6 +671,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         hass.data[DOMAIN]["_chat_cards"] = chat_cards_data
         hass.data[DOMAIN]["_chat_cards_store"] = chat_cards_store
 
+        # -- Persistent agent profiles storage --
+        from .const import AGENT_PROFILES_STORAGE_KEY, AGENT_PROFILES_STORAGE_VERSION
+        profiles_store = Store(hass, AGENT_PROFILES_STORAGE_VERSION, AGENT_PROFILES_STORAGE_KEY)
+        profiles_data = await profiles_store.async_load() or {"profiles": {}}
+        hass.data[DOMAIN]["_agent_profiles"] = profiles_data
+        hass.data[DOMAIN]["_agent_profiles_store"] = profiles_store
+
+        # -- Persistent group chat cards storage --
+        from .const import GROUP_CHAT_CARDS_STORAGE_KEY, GROUP_CHAT_CARDS_STORAGE_VERSION
+        group_store = Store(hass, GROUP_CHAT_CARDS_STORAGE_VERSION, GROUP_CHAT_CARDS_STORAGE_KEY)
+        group_data = await group_store.async_load() or {"cards": {}}
+        hass.data[DOMAIN]["_group_chat_cards"] = group_data
+        hass.data[DOMAIN]["_group_chat_cards_store"] = group_store
+
         @callback
         def _on_conversation_finished(event):
             """Capture conversation trace and accumulate API usage."""

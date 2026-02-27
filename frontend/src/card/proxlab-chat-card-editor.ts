@@ -25,6 +25,8 @@ export class ProxLabChatCardEditor extends LitElement {
     _voices: { state: true },
     _loaded: { state: true },
     _defaultPrompt: { state: true },
+    _profileName: { state: true },
+    _profileSaved: { state: true },
   };
 
   hass!: HomeAssistant;
@@ -35,6 +37,8 @@ export class ProxLabChatCardEditor extends LitElement {
   _voices: TtsVoice[] = [];
   _loaded = false;
   _defaultPrompt = "";
+  _profileName = "";
+  _profileSaved = false;
 
   setConfig(config: ProxLabChatCardYamlConfig): void {
     this._config = config;
@@ -449,6 +453,27 @@ export class ProxLabChatCardEditor extends LitElement {
         <label>Card ID</label>
         <input type="text" .value=${this._cardConfig.card_id} disabled />
       </div>
+
+      <div style="border-top: 1px solid var(--divider, #e5e7eb); margin-top: 12px; padding-top: 12px;">
+        <label style="font-weight: 600; font-size: 13px;">Save as Profile</label>
+        <div class="sublabel" style="margin-bottom: 8px;">Create a reusable agent profile from this card's config</div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <input
+            type="text"
+            placeholder="Profile name"
+            .value=${this._profileName}
+            @input=${(e: Event) => { this._profileName = (e.target as HTMLInputElement).value; this._profileSaved = false; }}
+            style="flex: 1; padding: 6px 10px; border: 1px solid var(--divider, #ccc); border-radius: 6px; font-size: 13px;"
+          />
+          <button
+            style="padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; border: none; background: var(--primary-color, #7c3aed); color: white;"
+            @click=${this._saveAsProfile}
+            ?disabled=${!this._profileName.trim()}
+          >
+            ${this._profileSaved ? "Saved!" : "Save"}
+          </button>
+        </div>
+      </div>
     `;
   }
 
@@ -489,6 +514,33 @@ export class ProxLabChatCardEditor extends LitElement {
         composed: true,
       })
     );
+  }
+
+  private async _saveAsProfile(): Promise<void> {
+    if (!this.hass || !this._profileName.trim()) return;
+    const profileId = Math.random().toString(36).substring(2, 10);
+    const profile = {
+      name: this._profileName.trim(),
+      agent_id: this._cardConfig.agent_id,
+      avatar: this._cardConfig.avatar,
+      prompt_override: this._cardConfig.prompt_override,
+      personality_enabled: this._cardConfig.personality_enabled,
+      personality: { ...this._cardConfig.personality },
+      tts_voices: { ...this._cardConfig.tts_voices },
+      auto_tts: this._cardConfig.auto_tts,
+      portrait_width: this._cardConfig.portrait_width,
+    };
+    try {
+      await this.hass.callWS({
+        type: "proxlab/profile/save",
+        profile_id: profileId,
+        profile,
+      });
+      this._profileSaved = true;
+      setTimeout(() => { this._profileSaved = false; }, 2000);
+    } catch (err) {
+      console.error("Failed to save profile:", err);
+    }
   }
 
   private async _onAvatarUpload(e: Event): Promise<void> {

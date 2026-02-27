@@ -99,6 +99,80 @@ export interface TtsVoices {
   thoughts: string;
 }
 
+/** Agent Profile — reusable personality config for group chat */
+export interface AgentProfile {
+  profile_id: string;
+  name: string;
+  avatar: string;
+  agent_id: string;
+  prompt_override: string;
+  personality_enabled: boolean;
+  personality: CharacterCardV3;
+  tts_voices: TtsVoices;
+  auto_tts: boolean;
+  portrait_width: "auto" | number;
+}
+
+/** Group chat turn mode */
+export type GroupTurnMode = "round_robin" | "at_mention" | "all_respond";
+
+/** Lovelace YAML config for group chat card (minimal) */
+export interface GroupChatCardYamlConfig {
+  type: "custom:proxlab-group-chat-card";
+  card_id: string;
+}
+
+/** Full group chat card config — stored in HA Store */
+export interface GroupChatCardConfig {
+  card_id: string;
+  profile_ids: string[];
+  turn_mode: GroupTurnMode;
+  card_height: number;
+  show_metadata: boolean;
+  allowed_users: string[];
+}
+
+/** A single message in group chat */
+export interface GroupChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  timestamp: number;
+  profile_id?: string;
+  profile_name?: string;
+  avatar?: string;
+  metadata?: { tokens?: number; duration_ms?: number; model?: string };
+}
+
+/** Single agent response from group invoke */
+export interface GroupAgentResponse {
+  profile_id: string;
+  profile_name: string;
+  avatar: string;
+  success: boolean;
+  response_text: string;
+  agent_name: string;
+  tokens: number;
+  duration_ms: number;
+  model: string;
+}
+
+/** Response from proxlab/group/invoke */
+export interface GroupInvokeResponse {
+  success: boolean;
+  responses: GroupAgentResponse[];
+  turn_mode: GroupTurnMode;
+}
+
+/** Default config for new group chat cards */
+export const DEFAULT_GROUP_CARD_CONFIG: GroupChatCardConfig = {
+  card_id: "",
+  profile_ids: [],
+  turn_mode: "round_robin",
+  card_height: 600,
+  show_metadata: false,
+  allowed_users: [],
+};
+
 /** Default config for new cards */
 export const DEFAULT_CARD_CONFIG: ProxLabChatCardConfig = {
   card_id: "",

@@ -643,3 +643,325 @@ export const editorStyles = css`
     gap: 12px;
   }
 `;
+
+export const groupCardStyles = css`
+  :host {
+    --card-bg: var(--card-background-color, #fff);
+    --card-text: var(--primary-text-color, #212121);
+    --accent: var(--primary-color, #7c3aed);
+    --user-bubble: var(--accent);
+    --user-text: #fff;
+    --agent-bubble: var(--secondary-background-color, #f5f5f5);
+    --agent-text: var(--card-text);
+    --input-bg: var(--card-bg);
+    --divider: var(--divider-color, #e5e7eb);
+    --meta-color: var(--secondary-text-color, #999);
+    display: block;
+    font-family: var(--ha-card-font-family, inherit);
+  }
+
+  ha-card {
+    overflow: hidden;
+    background: var(--card-bg);
+    color: var(--card-text);
+  }
+
+  .card-container {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Participant strip */
+  .participant-strip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    border-bottom: 1px solid var(--divider);
+    overflow-x: auto;
+    flex-shrink: 0;
+  }
+
+  .participant {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+  }
+
+  .participant-avatar {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .participant-avatar.placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--divider);
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--meta-color);
+  }
+
+  .participant-name {
+    font-size: 11px;
+    font-weight: 500;
+    max-width: 60px;
+    text-align: center;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .participant-mode {
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+
+  .mode-badge {
+    font-size: 10px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 10px;
+    background: var(--accent);
+    color: white;
+    white-space: nowrap;
+  }
+
+  /* Messages area */
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    gap: 8px;
+    opacity: 0.5;
+    font-size: 13px;
+  }
+
+  .msg {
+    display: flex;
+    max-width: 85%;
+  }
+
+  .msg-user {
+    align-self: flex-end;
+  }
+
+  .agent-msg {
+    align-self: flex-start;
+    gap: 8px;
+  }
+
+  .msg-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+    margin-top: 18px;
+  }
+
+  .msg-avatar.placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--divider);
+    font-weight: 600;
+    font-size: 12px;
+    color: var(--meta-color);
+  }
+
+  .agent-body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+
+  .msg-name {
+    font-size: 11px;
+    font-weight: 600;
+    padding-left: 2px;
+  }
+
+  .bubble {
+    padding: 8px 12px;
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .user-bubble {
+    background: var(--user-bubble);
+    color: var(--user-text);
+    border-bottom-right-radius: 4px;
+  }
+
+  .agent-bubble {
+    background: var(--agent-bubble);
+    color: var(--agent-text);
+    border-bottom-left-radius: 4px;
+  }
+
+  .msg-meta {
+    display: flex;
+    gap: 8px;
+    font-size: 10px;
+    color: var(--meta-color);
+    padding-left: 4px;
+  }
+
+  /* Text formatting (SillyTavern-style) */
+  .text-narration { font-style: italic; opacity: 0.8; }
+  .text-speech { color: var(--speech-color, #f59e0b); }
+  .text-thoughts { font-style: italic; font-weight: 600; opacity: 0.7; }
+
+  /* Loading indicator */
+  .loading-row {
+    display: flex;
+    justify-content: center;
+    padding: 8px;
+  }
+
+  .typing-indicator {
+    display: flex;
+    gap: 4px;
+    padding: 8px 14px;
+    background: var(--agent-bubble);
+    border-radius: 12px;
+  }
+
+  .typing-indicator span {
+    width: 6px;
+    height: 6px;
+    background: var(--meta-color);
+    border-radius: 50%;
+    animation: typing 1.4s infinite;
+  }
+
+  .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes typing {
+    0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+    30% { opacity: 1; transform: translateY(-4px); }
+  }
+
+  /* Input bar */
+  .input-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--divider);
+    flex-shrink: 0;
+  }
+
+  .input-wrapper {
+    flex: 1;
+    position: relative;
+  }
+
+  .input-wrapper input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--divider);
+    border-radius: 20px;
+    background: var(--input-bg);
+    color: var(--card-text);
+    font-size: 14px;
+    outline: none;
+    box-sizing: border-box;
+  }
+
+  .input-wrapper input:focus {
+    border-color: var(--accent);
+  }
+
+  .send-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: none;
+    background: var(--accent);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: opacity 0.15s;
+  }
+
+  .send-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .send-btn:not(:disabled):hover {
+    opacity: 0.85;
+  }
+
+  /* @mention dropdown */
+  .mention-dropdown {
+    position: absolute;
+    bottom: 100%;
+    left: 0;
+    right: 0;
+    background: var(--card-bg);
+    border: 1px solid var(--divider);
+    border-radius: 8px;
+    box-shadow: 0 -2px 8px rgba(0,0,0,0.1);
+    max-height: 160px;
+    overflow-y: auto;
+    z-index: 10;
+    margin-bottom: 4px;
+  }
+
+  .mention-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+  }
+
+  .mention-item:hover {
+    background: var(--agent-bubble);
+  }
+
+  .mention-avatar {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    object-fit: cover;
+  }
+
+  .mention-avatar.placeholder {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--divider);
+    font-weight: 600;
+    font-size: 11px;
+  }
+`;

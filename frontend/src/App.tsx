@@ -4,6 +4,7 @@ import { useStore } from "./store";
 import { fetchConfig } from "./api";
 import AppLayout from "./layout/AppLayout";
 import AutomationsLayout from "./layout/AutomationsLayout";
+import AgentsLayout from "./layout/AgentsLayout";
 import KnowledgeLayout from "./layout/KnowledgeLayout";
 import DeveloperLayout from "./layout/DeveloperLayout";
 import DashboardPage from "./pages/DashboardPage";
@@ -26,6 +27,7 @@ import AgentBuilderPage from "./pages/AgentBuilderPage";
 import ToolsLayout from "./layout/ToolsLayout";
 import McpServersPage from "./pages/McpServersPage";
 import McpMarketplacePage from "./pages/McpMarketplacePage";
+import AgentProfilesPage from "./pages/AgentProfilesPage";
 
 export default function App() {
   const hass = useStore((s) => s.hass);
@@ -107,7 +109,11 @@ export default function App() {
           <Route index element={<DashboardPage />} />
           <Route path="chat" element={<ChatPage />} />
           <Route path="connections" element={<ConnectionsPage />} />
-          <Route path="agents" element={<AgentsPage />} />
+          {/* Agents group */}
+          <Route path="agents" element={<AgentsLayout />}>
+            <Route index element={<AgentsPage />} />
+            <Route path="profiles" element={<AgentProfilesPage />} />
+          </Route>
           <Route path="settings" element={<SettingsPage />} />
 
           {/* Automations group */}

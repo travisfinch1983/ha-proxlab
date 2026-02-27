@@ -273,6 +273,44 @@ export interface McpServer {
   error: string | null;
 }
 
+// --- Agent Profiles ---
+
+export interface AgentProfile {
+  profile_id: string;
+  name: string;
+  avatar: string;
+  agent_id: string;
+  prompt_override: string;
+  personality_enabled: boolean;
+  personality: {
+    name: string;
+    description: string;
+    personality: string;
+    scenario: string;
+    first_mes: string;
+    mes_example: string;
+    system_prompt: string;
+    post_history_instructions: string;
+    alternate_greetings: string[];
+    tags: string[];
+    creator_notes: string;
+  };
+  tts_voices: { normal: string; narration: string; speech: string; thoughts: string };
+  auto_tts: boolean;
+  portrait_width: "auto" | number;
+}
+
+// --- Group Chat Cards ---
+
+export interface GroupChatCardConfig {
+  card_id: string;
+  profile_ids: string[];
+  turn_mode: "round_robin" | "at_mention" | "all_respond";
+  card_height: number;
+  show_metadata: boolean;
+  allowed_users: string[];
+}
+
 export const CAPABILITY_LABELS: Record<string, string> = {
   conversation: "Conversational LLM",
   tool_use: "Tool Use (LLM)",

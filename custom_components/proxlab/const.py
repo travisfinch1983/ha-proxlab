@@ -742,6 +742,14 @@ API_USAGE_STORAGE_VERSION: Final = 1
 CHAT_CARDS_STORAGE_KEY: Final = f"{DOMAIN}.chat_cards"
 CHAT_CARDS_STORAGE_VERSION: Final = 1
 
+# Agent profiles storage
+AGENT_PROFILES_STORAGE_KEY: Final = f"{DOMAIN}.agent_profiles"
+AGENT_PROFILES_STORAGE_VERSION: Final = 1
+
+# Group chat cards storage
+GROUP_CHAT_CARDS_STORAGE_KEY: Final = f"{DOMAIN}.group_chat_cards"
+GROUP_CHAT_CARDS_STORAGE_VERSION: Final = 1
+
 # Custom tool handler types
 CUSTOM_TOOL_HANDLER_REST: Final = "rest"
 CUSTOM_TOOL_HANDLER_SERVICE: Final = "service"

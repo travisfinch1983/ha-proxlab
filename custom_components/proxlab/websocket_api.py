@@ -6,7 +6,9 @@ config, health data, connections, agents, and settings.
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import time as _time
 from typing import Any
 from uuid import uuid4
 
@@ -256,6 +258,19 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_card_agent_prompt)
     websocket_api.async_register_command(hass, ws_card_tts_speak)
     websocket_api.async_register_command(hass, ws_card_stt_transcribe)
+
+    # Agent profile commands
+    websocket_api.async_register_command(hass, ws_profile_list)
+    websocket_api.async_register_command(hass, ws_profile_get)
+    websocket_api.async_register_command(hass, ws_profile_save)
+    websocket_api.async_register_command(hass, ws_profile_delete)
+
+    # Group chat card commands
+    websocket_api.async_register_command(hass, ws_group_config_get)
+    websocket_api.async_register_command(hass, ws_group_config_save)
+    websocket_api.async_register_command(hass, ws_group_config_list)
+    websocket_api.async_register_command(hass, ws_group_config_delete)
+    websocket_api.async_register_command(hass, ws_group_invoke)
 
 
 # ---------------------------------------------------------------------------
@@ -2552,6 +2567,59 @@ def _get_chat_cards(hass: HomeAssistant) -> tuple[dict, Any]:
     return cards_data, store
 
 
+def _get_agent_profiles(hass: HomeAssistant) -> tuple[dict, Any]:
+    """Return (profiles_data dict, store) from hass.data."""
+    data = hass.data.get(DOMAIN, {})
+    profiles_data = data.get("_agent_profiles", {"profiles": {}})
+    store = data.get("_agent_profiles_store")
+    return profiles_data, store
+
+
+def _get_group_chat_cards(hass: HomeAssistant) -> tuple[dict, Any]:
+    """Return (group_cards_data dict, store) from hass.data."""
+    data = hass.data.get(DOMAIN, {})
+    cards_data = data.get("_group_chat_cards", {"cards": {}})
+    store = data.get("_group_chat_cards_store")
+    return cards_data, store
+
+
+def _build_profile_system_prompt(
+    personality_enabled: bool, personality: dict, prompt_override: str
+) -> str | None:
+    """Build a system prompt from CCv3 personality + optional prompt override.
+
+    Shared by ws_card_invoke and ws_group_invoke.
+    """
+    system_parts: list[str] = []
+
+    if personality_enabled and personality:
+        char_name = personality.get("name", "")
+        sys_prompt = personality.get("system_prompt", "")
+        desc = personality.get("description", "")
+        persona = personality.get("personality", "")
+        scenario = personality.get("scenario", "")
+        examples = personality.get("mes_example", "")
+        post_hist = personality.get("post_history_instructions", "")
+
+        if sys_prompt:
+            system_parts.append(sys_prompt.replace("{{char}}", char_name).replace("{{user}}", "User"))
+        if desc:
+            system_parts.append(f"Character: {desc}")
+        if persona:
+            system_parts.append(f"Personality: {persona}")
+        if scenario:
+            system_parts.append(f"Scenario: {scenario}")
+        if examples:
+            system_parts.append(f"Example dialogue:\n{examples}")
+        if post_hist:
+            system_parts.append(post_hist.replace("{{char}}", char_name).replace("{{user}}", "User"))
+
+    if prompt_override:
+        system_parts.append(f"Additional Instructions: {prompt_override}")
+
+    return "\n\n".join(system_parts) if system_parts else None
+
+
 @websocket_api.websocket_command(
     {
         vol.Required("type"): "proxlab/card/config/get",
@@ -2977,35 +3045,10 @@ async def ws_card_invoke(
     personality_enabled = card_config.get("personality_enabled", False)
     personality = card_config.get("personality", {})
 
-    # Build system prompt from card config
-    system_parts: list[str] = []
-
-    if personality_enabled and personality:
-        char_name = personality.get("name", "")
-        sys_prompt = personality.get("system_prompt", "")
-        desc = personality.get("description", "")
-        persona = personality.get("personality", "")
-        scenario = personality.get("scenario", "")
-        examples = personality.get("mes_example", "")
-        post_hist = personality.get("post_history_instructions", "")
-
-        if sys_prompt:
-            system_parts.append(sys_prompt.replace("{{char}}", char_name).replace("{{user}}", "User"))
-        if desc:
-            system_parts.append(f"Character: {desc}")
-        if persona:
-            system_parts.append(f"Personality: {persona}")
-        if scenario:
-            system_parts.append(f"Scenario: {scenario}")
-        if examples:
-            system_parts.append(f"Example dialogue:\n{examples}")
-        if post_hist:
-            system_parts.append(post_hist.replace("{{char}}", char_name).replace("{{user}}", "User"))
-
-    if prompt_override:
-        system_parts.append(f"Additional Instructions: {prompt_override}")
-
-    card_system_prompt = "\n\n".join(system_parts) if system_parts else None
+    # Build system prompt from card config (shared helper)
+    card_system_prompt = _build_profile_system_prompt(
+        personality_enabled, personality, prompt_override
+    )
 
     # Handle first_mes for new conversations
     first_mes = personality.get("first_mes", "") if personality_enabled else ""
@@ -3056,3 +3099,317 @@ def ws_card_agent_prompt(
     # Fall back to the built-in default prompt
     prompt = get_default_prompt(agent_id)
     connection.send_result(msg["id"], {"prompt": prompt})
+
+
+# ---------------------------------------------------------------------------
+# Agent Profiles API
+# ---------------------------------------------------------------------------
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/profile/list",
+        vol.Optional("entry_id"): str,
+    }
+)
+@callback
+def ws_profile_list(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """List all agent profiles."""
+    profiles_data, _ = _get_agent_profiles(hass)
+    profiles = list(profiles_data.get("profiles", {}).values())
+    connection.send_result(msg["id"], profiles)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/profile/get",
+        vol.Optional("entry_id"): str,
+        vol.Required("profile_id"): str,
+    }
+)
+@callback
+def ws_profile_get(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Get a single agent profile by ID."""
+    profiles_data, _ = _get_agent_profiles(hass)
+    profile = profiles_data.get("profiles", {}).get(msg["profile_id"])
+    connection.send_result(msg["id"], profile)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/profile/save",
+        vol.Optional("entry_id"): str,
+        vol.Required("profile_id"): str,
+        vol.Required("profile"): dict,
+    }
+)
+@websocket_api.async_response
+async def ws_profile_save(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Save or update an agent profile."""
+    profiles_data, store = _get_agent_profiles(hass)
+    if store is None:
+        connection.send_error(msg["id"], "not_ready", "Profiles store not initialized")
+        return
+
+    profile = msg["profile"]
+    profile["profile_id"] = msg["profile_id"]
+    profiles_data.setdefault("profiles", {})[msg["profile_id"]] = profile
+    await store.async_save(profiles_data)
+    connection.send_result(msg["id"], profile)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/profile/delete",
+        vol.Optional("entry_id"): str,
+        vol.Required("profile_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_profile_delete(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Delete an agent profile."""
+    profiles_data, store = _get_agent_profiles(hass)
+    if store is None:
+        connection.send_error(msg["id"], "not_ready", "Profiles store not initialized")
+        return
+
+    profiles = profiles_data.get("profiles", {})
+    removed = profiles.pop(msg["profile_id"], None)
+    if removed is not None:
+        await store.async_save(profiles_data)
+    connection.send_result(msg["id"], {"deleted": removed is not None})
+
+
+# ---------------------------------------------------------------------------
+# Group Chat Cards API
+# ---------------------------------------------------------------------------
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/group/config/list",
+        vol.Optional("entry_id"): str,
+    }
+)
+@callback
+def ws_group_config_list(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """List all group chat card configs."""
+    cards_data, _ = _get_group_chat_cards(hass)
+    cards = list(cards_data.get("cards", {}).values())
+    connection.send_result(msg["id"], cards)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/group/config/get",
+        vol.Optional("entry_id"): str,
+        vol.Required("card_id"): str,
+    }
+)
+@callback
+def ws_group_config_get(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Get a group chat card config by card_id."""
+    cards_data, _ = _get_group_chat_cards(hass)
+    card = cards_data.get("cards", {}).get(msg["card_id"])
+    connection.send_result(msg["id"], card)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/group/config/save",
+        vol.Optional("entry_id"): str,
+        vol.Required("card_id"): str,
+        vol.Required("config"): dict,
+    }
+)
+@websocket_api.async_response
+async def ws_group_config_save(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Save or update a group chat card config."""
+    cards_data, store = _get_group_chat_cards(hass)
+    if store is None:
+        connection.send_error(msg["id"], "not_ready", "Group cards store not initialized")
+        return
+
+    card_config = msg["config"]
+    card_config["card_id"] = msg["card_id"]
+    cards_data.setdefault("cards", {})[msg["card_id"]] = card_config
+    await store.async_save(cards_data)
+    connection.send_result(msg["id"], card_config)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/group/config/delete",
+        vol.Optional("entry_id"): str,
+        vol.Required("card_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_group_config_delete(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Delete a group chat card config."""
+    cards_data, store = _get_group_chat_cards(hass)
+    if store is None:
+        connection.send_error(msg["id"], "not_ready", "Group cards store not initialized")
+        return
+
+    cards = cards_data.get("cards", {})
+    removed = cards.pop(msg["card_id"], None)
+    if removed is not None:
+        await store.async_save(cards_data)
+    connection.send_result(msg["id"], {"deleted": removed is not None})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/group/invoke",
+        vol.Optional("entry_id"): str,
+        vol.Required("card_id"): str,
+        vol.Required("message"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_group_invoke(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Invoke multiple agents in a group chat.
+
+    Loads group card config to determine which profiles respond and how
+    (round_robin, all_respond, at_mention).
+    """
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    agent = entry_data.get("agent")
+    if agent is None:
+        connection.send_error(
+            msg["id"], "not_configured", "LLM not configured — agent unavailable"
+        )
+        return
+
+    # Load group card config
+    group_data, _ = _get_group_chat_cards(hass)
+    group_config = group_data.get("cards", {}).get(msg["card_id"])
+    if not group_config:
+        connection.send_error(msg["id"], "not_found", "Group card config not found")
+        return
+
+    profile_ids = group_config.get("profile_ids", [])
+    turn_mode = group_config.get("turn_mode", "round_robin")
+
+    # Load all profiles
+    profiles_data, _ = _get_agent_profiles(hass)
+    all_profiles = profiles_data.get("profiles", {})
+
+    # Resolve which profiles participate
+    responding_profiles = []
+    for pid in profile_ids:
+        profile = all_profiles.get(pid)
+        if profile:
+            responding_profiles.append(profile)
+
+    if not responding_profiles:
+        connection.send_result(msg["id"], {"success": True, "responses": [], "turn_mode": turn_mode})
+        return
+
+    # Filter by @mention if needed
+    user_message = msg["message"]
+    if turn_mode == "at_mention":
+        mentioned = []
+        lower_msg = user_message.lower()
+        for p in responding_profiles:
+            name = p.get("name", "")
+            if name and f"@{name.lower()}" in lower_msg:
+                mentioned.append(p)
+        if not mentioned:
+            # No @mentions found — no agents respond
+            connection.send_result(
+                msg["id"],
+                {"success": True, "responses": [], "turn_mode": turn_mode},
+            )
+            return
+        responding_profiles = mentioned
+
+    async def _invoke_profile(profile: dict) -> dict:
+        """Invoke a single profile's agent and return response dict."""
+        pid = profile["profile_id"]
+        agent_id = profile.get("agent_id", "conversation")
+        prompt_override = profile.get("prompt_override", "")
+        personality_enabled = profile.get("personality_enabled", False)
+        personality = profile.get("personality", {})
+
+        system_prompt = _build_profile_system_prompt(
+            personality_enabled, personality, prompt_override
+        )
+
+        start = _time.monotonic()
+        try:
+            result = await agent.invoke_agent(
+                agent_id=agent_id,
+                message=user_message,
+                conversation_id=f"group_{msg['card_id']}_{pid}",
+                include_history=True,
+                system_prompt_override=system_prompt,
+            )
+            duration_ms = int((_time.monotonic() - start) * 1000)
+            return {
+                "profile_id": pid,
+                "profile_name": profile.get("name", pid),
+                "avatar": profile.get("avatar", ""),
+                "success": True,
+                "response_text": result.get("response", ""),
+                "agent_name": result.get("agent_name", agent_id),
+                "tokens": result.get("total_tokens", 0),
+                "duration_ms": duration_ms,
+                "model": result.get("model", ""),
+            }
+        except Exception as err:
+            duration_ms = int((_time.monotonic() - start) * 1000)
+            _LOGGER.error("Group invoke failed for profile %s: %s", pid, err)
+            return {
+                "profile_id": pid,
+                "profile_name": profile.get("name", pid),
+                "avatar": profile.get("avatar", ""),
+                "success": False,
+                "response_text": str(err),
+                "agent_name": agent_id,
+                "tokens": 0,
+                "duration_ms": duration_ms,
+                "model": "",
+            }
+
+    # Execute based on turn mode
+    if turn_mode == "all_respond":
+        responses = await asyncio.gather(
+            *[_invoke_profile(p) for p in responding_profiles]
+        )
+        responses = list(responses)
+    else:
+        # round_robin and at_mention: sequential in order
+        responses = []
+        for p in responding_profiles:
+            resp = await _invoke_profile(p)
+            responses.append(resp)
+
+    connection.send_result(
+        msg["id"],
+        {"success": True, "responses": responses, "turn_mode": turn_mode},
+    )

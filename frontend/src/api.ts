@@ -572,3 +572,53 @@ export async function reconnectMcpServer(
 ): Promise<McpServer> {
   return callWS("proxlab/mcp/servers/reconnect", { server_id: serverId });
 }
+
+// --- Agent Profiles ---
+
+import type { AgentProfile, GroupChatCardConfig } from "./types";
+
+export async function listProfiles(): Promise<AgentProfile[]> {
+  return callWS("proxlab/profile/list");
+}
+
+export async function getProfile(profileId: string): Promise<AgentProfile | null> {
+  return callWS("proxlab/profile/get", { profile_id: profileId });
+}
+
+export async function saveProfile(
+  profileId: string,
+  profile: Omit<AgentProfile, "profile_id">
+): Promise<AgentProfile> {
+  return callWS("proxlab/profile/save", {
+    profile_id: profileId,
+    profile: profile as unknown as Record<string, unknown>,
+  });
+}
+
+export async function deleteProfile(profileId: string): Promise<{ deleted: boolean }> {
+  return callWS("proxlab/profile/delete", { profile_id: profileId });
+}
+
+// --- Group Chat Cards ---
+
+export async function listGroupCards(): Promise<GroupChatCardConfig[]> {
+  return callWS("proxlab/group/config/list");
+}
+
+export async function getGroupCard(cardId: string): Promise<GroupChatCardConfig | null> {
+  return callWS("proxlab/group/config/get", { card_id: cardId });
+}
+
+export async function saveGroupCard(
+  cardId: string,
+  config: Omit<GroupChatCardConfig, "card_id">
+): Promise<GroupChatCardConfig> {
+  return callWS("proxlab/group/config/save", {
+    card_id: cardId,
+    config: config as unknown as Record<string, unknown>,
+  });
+}
+
+export async function deleteGroupCard(cardId: string): Promise<{ deleted: boolean }> {
+  return callWS("proxlab/group/config/delete", { card_id: cardId });
+}
