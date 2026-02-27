@@ -34,6 +34,10 @@ export interface ProxLabChatCardConfig {
   status_override: string;
   hide_header: boolean;
   portrait_width: "auto" | number;
+  /** When true, card loads all settings from the linked profile instead of local config */
+  use_profile: boolean;
+  /** ID of the linked agent profile (only used when use_profile=true) */
+  profile_id: string;
 }
 
 /** Character Card V3 personality fields (SillyTavern-compatible) */
@@ -205,4 +209,6 @@ export const DEFAULT_CARD_CONFIG: ProxLabChatCardConfig = {
   status_override: "",
   hide_header: false,
   portrait_width: "auto",
+  use_profile: false,
+  profile_id: "",
 };

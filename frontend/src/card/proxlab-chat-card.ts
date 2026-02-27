@@ -6,6 +6,7 @@ import type {
   ProxLabChatCardConfig,
   CardChatMessage,
   CardInvokeResponse,
+  AgentProfile,
 } from "./types";
 import { parseFormattedText } from "./format-parser";
 
@@ -113,10 +114,44 @@ export class ProxLabChatCard extends LitElement {
         type: "proxlab/card/config/get",
         card_id: this._config.card_id,
       });
-      this._cardConfig = config ?? undefined;
+
+      if (!config) {
+        this._cardConfig = undefined;
+        return;
+      }
+
+      // If linked to a profile, merge profile display fields into config
+      if (config.use_profile && config.profile_id) {
+        try {
+          const profile = await this.hass.callWS<AgentProfile | null>({
+            type: "proxlab/profile/get",
+            profile_id: config.profile_id,
+          });
+          if (profile) {
+            config.avatar = profile.avatar || config.avatar;
+            config.personality_enabled = profile.personality_enabled;
+            config.personality = profile.personality;
+            config.prompt_override = profile.prompt_override;
+            config.agent_id = profile.agent_id;
+            config.tts_voices = profile.tts_voices;
+            config.auto_tts = profile.auto_tts;
+            config.portrait_width = profile.portrait_width;
+            // Use personality name as title if no title override set
+            if (!config.title_override && profile.personality?.name) {
+              config.title_override = profile.personality.name;
+            } else if (!config.title_override && profile.name) {
+              config.title_override = profile.name;
+            }
+          }
+        } catch {
+          // Profile not found — fall back to card config
+        }
+      }
+
+      this._cardConfig = config;
 
       // Measure avatar for portrait panel sizing
-      if (config?.avatar && config.avatar !== this._lastAvatarUrl) {
+      if (config.avatar && config.avatar !== this._lastAvatarUrl) {
         this._lastAvatarUrl = config.avatar;
         this._measureAvatar(config.avatar, config.card_height ?? 500);
       }
@@ -124,8 +159,8 @@ export class ProxLabChatCard extends LitElement {
       // Show first_mes if personality is enabled and no messages yet
       if (
         this._messages.length === 0 &&
-        config?.personality_enabled &&
-        config?.personality?.first_mes
+        config.personality_enabled &&
+        config.personality?.first_mes
       ) {
         this._messages = [
           {

@@ -3040,10 +3040,21 @@ async def ws_card_invoke(
     cards_data, _ = _get_chat_cards(hass)
     card_config = cards_data.get("cards", {}).get(msg["card_id"], {})
 
-    agent_id = card_config.get("agent_id", "conversation")
-    prompt_override = card_config.get("prompt_override", "")
-    personality_enabled = card_config.get("personality_enabled", False)
-    personality = card_config.get("personality", {})
+    # If card is linked to a profile, load profile settings
+    use_profile = card_config.get("use_profile", False)
+    profile_id = card_config.get("profile_id", "")
+    if use_profile and profile_id:
+        profiles_data, _ = _get_agent_profiles(hass)
+        profile = profiles_data.get("profiles", {}).get(profile_id, {})
+        agent_id = profile.get("agent_id", "conversation")
+        prompt_override = profile.get("prompt_override", "")
+        personality_enabled = profile.get("personality_enabled", False)
+        personality = profile.get("personality", {})
+    else:
+        agent_id = card_config.get("agent_id", "conversation")
+        prompt_override = card_config.get("prompt_override", "")
+        personality_enabled = card_config.get("personality_enabled", False)
+        personality = card_config.get("personality", {})
 
     # Build system prompt from card config (shared helper)
     card_system_prompt = _build_profile_system_prompt(
@@ -3375,9 +3386,9 @@ async def ws_group_invoke(
                 "profile_name": profile.get("name", pid),
                 "avatar": profile.get("avatar", ""),
                 "success": True,
-                "response_text": result.get("response", ""),
+                "response_text": result.get("response_text", ""),
                 "agent_name": result.get("agent_name", agent_id),
-                "tokens": result.get("total_tokens", 0),
+                "tokens": result.get("tokens", {}).get("total", 0),
                 "duration_ms": duration_ms,
                 "model": result.get("model", ""),
             }

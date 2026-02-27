@@ -7,11 +7,12 @@ import type {
   AvailableAgent,
   TtsVoice,
   TtsVoices,
+  AgentProfile,
 } from "./types";
 import { DEFAULT_CARD_CONFIG } from "./types";
 import { parseCharacterCardPNG } from "./character-card-parser";
 
-type EditorTab = "general" | "voice" | "personality" | "prompt" | "advanced";
+type EditorTab = "general" | "voice" | "advanced";
 
 export class ProxLabChatCardEditor extends LitElement {
   static styles = editorStyles;
@@ -23,10 +24,9 @@ export class ProxLabChatCardEditor extends LitElement {
     _tab: { state: true },
     _agents: { state: true },
     _voices: { state: true },
+    _profiles: { state: true },
     _loaded: { state: true },
     _defaultPrompt: { state: true },
-    _profileName: { state: true },
-    _profileSaved: { state: true },
   };
 
   hass!: HomeAssistant;
@@ -35,10 +35,9 @@ export class ProxLabChatCardEditor extends LitElement {
   _tab: EditorTab = "general";
   _agents: AvailableAgent[] = [];
   _voices: TtsVoice[] = [];
+  _profiles: AgentProfile[] = [];
   _loaded = false;
   _defaultPrompt = "";
-  _profileName = "";
-  _profileSaved = false;
 
   setConfig(config: ProxLabChatCardYamlConfig): void {
     this._config = config;
@@ -54,13 +53,14 @@ export class ProxLabChatCardEditor extends LitElement {
 
   private async _loadData(): Promise<void> {
     try {
-      const [config, agents, voices] = await Promise.all([
+      const [config, agents, voices, profiles] = await Promise.all([
         this.hass.callWS<ProxLabChatCardConfig | null>({
           type: "proxlab/card/config/get",
           card_id: this._config!.card_id,
         }),
         this.hass.callWS<AvailableAgent[]>({ type: "proxlab/agent/available" }),
         this.hass.callWS<TtsVoice[]>({ type: "proxlab/card/voices" }),
+        this.hass.callWS<AgentProfile[]>({ type: "proxlab/profile/list" }),
       ]);
 
       if (config) {
@@ -75,19 +75,24 @@ export class ProxLabChatCardEditor extends LitElement {
           };
           delete (config as any).tts_voice;
         }
-        // Ensure tts_voices exists even on older configs
         if (!config.tts_voices) {
           config.tts_voices = { normal: "", narration: "", speech: "", thoughts: "" };
         }
+        // Ensure new fields have defaults
+        if (config.use_profile === undefined) config.use_profile = false;
+        if (!config.profile_id) config.profile_id = "";
         this._cardConfig = config;
       } else {
         this._cardConfig = { ...DEFAULT_CARD_CONFIG, card_id: this._config!.card_id };
       }
       this._agents = agents || [];
       this._voices = voices || [];
+      this._profiles = profiles || [];
 
       // Load the agent's default prompt
-      this._loadAgentPrompt(this._cardConfig.agent_id);
+      if (!this._cardConfig.use_profile) {
+        this._loadAgentPrompt(this._cardConfig.agent_id);
+      }
     } catch {
       // First run, use defaults
     }
@@ -106,13 +111,10 @@ export class ProxLabChatCardEditor extends LitElement {
   }
 
   protected render() {
-    const customizeOn = this._cardConfig.customize_enabled;
-    const tabs: { id: EditorTab; label: string; disabled: boolean }[] = [
-      { id: "general", label: "General", disabled: false },
-      { id: "voice", label: "Voice", disabled: false },
-      { id: "personality", label: "Personality", disabled: !customizeOn },
-      { id: "prompt", label: "Prompt", disabled: !customizeOn },
-      { id: "advanced", label: "Advanced", disabled: false },
+    const tabs: { id: EditorTab; label: string }[] = [
+      { id: "general", label: "General" },
+      { id: "voice", label: "Voice" },
+      { id: "advanced", label: "Advanced" },
     ];
 
     return html`
@@ -121,8 +123,8 @@ export class ProxLabChatCardEditor extends LitElement {
           ${tabs.map(
             (t) => html`
               <button
-                class="tab ${this._tab === t.id ? "active" : ""} ${t.disabled ? "disabled" : ""}"
-                @click=${() => { if (!t.disabled) this._tab = t.id; }}
+                class="tab ${this._tab === t.id ? "active" : ""}"
+                @click=${() => { this._tab = t.id; }}
               >
                 ${t.label}
               </button>
@@ -132,8 +134,6 @@ export class ProxLabChatCardEditor extends LitElement {
         <div class="tab-content">
           ${this._tab === "general" ? this._renderGeneralTab() : nothing}
           ${this._tab === "voice" ? this._renderVoiceTab() : nothing}
-          ${this._tab === "personality" ? this._renderPersonalityTab() : nothing}
-          ${this._tab === "prompt" ? this._renderPromptTab() : nothing}
           ${this._tab === "advanced" ? this._renderAdvancedTab() : nothing}
         </div>
       </div>
@@ -143,6 +143,135 @@ export class ProxLabChatCardEditor extends LitElement {
   // ---- Tabs ----
 
   private _renderGeneralTab() {
+    const useProfile = this._cardConfig.use_profile;
+
+    return html`
+      <!-- Mode toggle -->
+      <div class="toggle-row" style="margin-bottom: 8px;">
+        <div>
+          <label>Use Agent Profile</label>
+          <div class="sublabel">Link this card to a saved agent profile from the Profiles tab</div>
+        </div>
+        <label class="switch">
+          <input
+            type="checkbox"
+            .checked=${useProfile}
+            @change=${(e: Event) => {
+              this._updateField("use_profile", (e.target as HTMLInputElement).checked);
+            }}
+          />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      ${useProfile ? this._renderProfileMode() : this._renderDefaultMode()}
+    `;
+  }
+
+  private _renderProfileMode() {
+    const selectedProfile = this._profiles.find(
+      (p) => p.profile_id === this._cardConfig.profile_id
+    );
+
+    return html`
+      <!-- Profile selector -->
+      <div class="field">
+        <label>Agent Profile</label>
+        <select
+          .value=${this._cardConfig.profile_id}
+          @change=${(e: Event) => {
+            this._updateField("profile_id", (e.target as HTMLSelectElement).value);
+          }}
+        >
+          <option value="">Select a profile...</option>
+          ${this._profiles.map(
+            (p) => html`<option value=${p.profile_id} ?selected=${this._cardConfig.profile_id === p.profile_id}>
+              ${p.name}${p.personality_enabled && p.personality?.name ? ` (${p.personality.name})` : ""}
+            </option>`
+          )}
+        </select>
+      </div>
+
+      ${selectedProfile
+        ? html`
+            <!-- Profile preview -->
+            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; background: var(--secondary-background-color, #f5f5f5); margin-top: 4px;">
+              ${selectedProfile.avatar
+                ? html`<img src="${selectedProfile.avatar}" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover;" />`
+                : html`<div style="width: 48px; height: 48px; border-radius: 50%; background: var(--divider-color, #e5e7eb); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 18px;">${selectedProfile.name.charAt(0).toUpperCase()}</div>`}
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-weight: 600; font-size: 14px;">${selectedProfile.name}</div>
+                <div style="font-size: 12px; opacity: 0.6;">Agent: ${selectedProfile.agent_id}</div>
+                ${selectedProfile.personality_enabled
+                  ? html`<div style="font-size: 11px; opacity: 0.5; margin-top: 2px;">Character: ${selectedProfile.personality?.name || "Unnamed"}</div>`
+                  : nothing}
+              </div>
+            </div>
+            <div style="font-size: 11px; opacity: 0.5; margin-top: 8px; padding: 0 2px;">
+              All agent settings are managed in the ProxLab panel under Agents → Profiles.
+              Changes made there will be reflected on all cards using this profile.
+            </div>
+          `
+        : nothing}
+
+      ${this._profiles.length === 0
+        ? html`
+            <div style="text-align: center; padding: 16px; opacity: 0.5; font-size: 13px;">
+              <p>No profiles found.</p>
+              <p style="margin-top: 4px;">Create profiles in the ProxLab panel under Agents → Profiles.</p>
+            </div>
+          `
+        : nothing}
+
+      <!-- Card-level display overrides (not profile fields) -->
+      <div style="border-top: 1px solid var(--divider-color, #e5e7eb); margin-top: 12px; padding-top: 12px;">
+        <div class="field">
+          <label>Title Override</label>
+          <input
+            type="text"
+            placeholder="Default: profile/character name"
+            .value=${this._cardConfig.title_override}
+            @input=${(e: Event) => this._updateField("title_override", (e.target as HTMLInputElement).value)}
+          />
+        </div>
+        <div class="field">
+          <label>Status Override</label>
+          <input
+            type="text"
+            placeholder="Default: Online"
+            .value=${this._cardConfig.status_override}
+            @input=${(e: Event) => this._updateField("status_override", (e.target as HTMLInputElement).value)}
+          />
+        </div>
+        <div class="field">
+          <label>Card Height (px)</label>
+          <input
+            type="number"
+            min="200"
+            max="1200"
+            .value=${String(this._cardConfig.card_height)}
+            @input=${(e: Event) => this._updateField("card_height", parseInt((e.target as HTMLInputElement).value) || 500)}
+          />
+        </div>
+        <div class="toggle-row">
+          <div>
+            <label>Hide Header</label>
+            <div class="sublabel">Hide the title bar</div>
+          </div>
+          <label class="switch">
+            <input
+              type="checkbox"
+              .checked=${this._cardConfig.hide_header}
+              @change=${(e: Event) => this._updateField("hide_header", (e.target as HTMLInputElement).checked)}
+            />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    `;
+  }
+
+  private _renderDefaultMode() {
     return html`
       <div class="field">
         <label>Agent</label>
@@ -239,26 +368,42 @@ export class ProxLabChatCardEditor extends LitElement {
           <span class="slider"></span>
         </label>
       </div>
-      <div class="toggle-row">
-        <div>
-          <label>Customize</label>
-          <div class="sublabel">Unlock Personality and Prompt tabs</div>
-        </div>
-        <label class="switch">
-          <input
-            type="checkbox"
-            .checked=${this._cardConfig.customize_enabled}
-            @change=${(e: Event) => {
-              this._updateField("customize_enabled", (e.target as HTMLInputElement).checked);
-            }}
-          />
-          <span class="slider"></span>
-        </label>
-      </div>
     `;
   }
 
   private _renderVoiceTab() {
+    // In profile mode, voice is managed by the profile — show read-only info
+    if (this._cardConfig.use_profile) {
+      const profile = this._profiles.find(
+        (p) => p.profile_id === this._cardConfig.profile_id
+      );
+      if (profile) {
+        const v = profile.tts_voices || { normal: "", narration: "", speech: "", thoughts: "" };
+        const voiceName = (id: string) => this._voices.find((vo) => vo.id === id)?.name ?? id ?? "None";
+        return html`
+          <div style="padding: 4px 0; opacity: 0.7; font-size: 13px;">
+            Voice settings are managed by the linked profile. Edit in Agents → Profiles.
+          </div>
+          <div class="field">
+            <label>Normal: <strong>${voiceName(v.normal)}</strong></label>
+          </div>
+          <div class="field">
+            <label>Narration: <strong>${voiceName(v.narration)}</strong></label>
+          </div>
+          <div class="field">
+            <label>Speech: <strong>${voiceName(v.speech)}</strong></label>
+          </div>
+          <div class="field">
+            <label>Thoughts: <strong>${voiceName(v.thoughts)}</strong></label>
+          </div>
+          <div class="field">
+            <label>Auto TTS: <strong>${profile.auto_tts ? "On" : "Off"}</strong></label>
+          </div>
+        `;
+      }
+      return html`<div style="opacity: 0.5; padding: 12px;">Select an agent profile first.</div>`;
+    }
+
     const voices = this._cardConfig.tts_voices ?? { normal: "", narration: "", speech: "", thoughts: "" };
     const voiceDropdown = (label: string, sublabel: string, field: keyof TtsVoices) => html`
       <div class="field">
@@ -303,122 +448,6 @@ export class ProxLabChatCardEditor extends LitElement {
     `;
   }
 
-  private _renderPersonalityTab() {
-    const p = this._cardConfig.personality;
-    return html`
-      <div class="toggle-row">
-        <div>
-          <label>Enable Personality</label>
-          <div class="sublabel">Use Character Card V3 personality fields</div>
-        </div>
-        <label class="switch">
-          <input
-            type="checkbox"
-            .checked=${this._cardConfig.personality_enabled}
-            @change=${(e: Event) => this._updateField("personality_enabled", (e.target as HTMLInputElement).checked)}
-          />
-          <span class="slider"></span>
-        </label>
-      </div>
-
-      ${this._cardConfig.personality_enabled
-        ? html`
-            <div class="field">
-              <label>Import Character Card PNG</label>
-              <input type="file" accept=".png" @change=${this._onPngUpload} />
-            </div>
-            <div class="field">
-              <label>Character Name</label>
-              <input
-                type="text"
-                .value=${p.name}
-                @input=${(e: Event) => this._updatePersonality("name", (e.target as HTMLInputElement).value)}
-              />
-            </div>
-            <div class="field">
-              <label>Description</label>
-              <textarea
-                .value=${p.description}
-                @input=${(e: Event) => this._updatePersonality("description", (e.target as HTMLTextAreaElement).value)}
-              ></textarea>
-            </div>
-            <div class="field">
-              <label>Personality</label>
-              <textarea
-                .value=${p.personality}
-                @input=${(e: Event) => this._updatePersonality("personality", (e.target as HTMLTextAreaElement).value)}
-              ></textarea>
-            </div>
-            <div class="field">
-              <label>Scenario</label>
-              <textarea
-                .value=${p.scenario}
-                @input=${(e: Event) => this._updatePersonality("scenario", (e.target as HTMLTextAreaElement).value)}
-              ></textarea>
-            </div>
-            <div class="field">
-              <label>System Prompt</label>
-              <textarea
-                .value=${p.system_prompt}
-                @input=${(e: Event) => this._updatePersonality("system_prompt", (e.target as HTMLTextAreaElement).value)}
-              ></textarea>
-            </div>
-            <div class="field">
-              <label>First Message</label>
-              <textarea
-                .value=${p.first_mes}
-                @input=${(e: Event) => this._updatePersonality("first_mes", (e.target as HTMLTextAreaElement).value)}
-              ></textarea>
-            </div>
-            <div class="field">
-              <label>Example Dialogue</label>
-              <textarea
-                .value=${p.mes_example}
-                @input=${(e: Event) => this._updatePersonality("mes_example", (e.target as HTMLTextAreaElement).value)}
-              ></textarea>
-            </div>
-            <div class="field">
-              <label>Post-History Instructions</label>
-              <textarea
-                .value=${p.post_history_instructions}
-                @input=${(e: Event) => this._updatePersonality("post_history_instructions", (e.target as HTMLTextAreaElement).value)}
-              ></textarea>
-            </div>
-          `
-        : nothing}
-    `;
-  }
-
-  private _renderPromptTab() {
-    // Show the card's custom prompt, pre-populated from the agent's default if empty
-    const currentPrompt = this._cardConfig.prompt_override;
-    return html`
-      <div class="field">
-        <label>System Prompt</label>
-        <div class="sublabel" style="margin-bottom:4px;font-size:12px;color:var(--card-secondary)">
-          Override the agent's default prompt. Leave empty to use the agent's built-in prompt.
-        </div>
-        <textarea
-          style="min-height:200px"
-          placeholder="${this._defaultPrompt || 'Loading agent default prompt...'}"
-          .value=${currentPrompt}
-          @input=${(e: Event) => this._updateField("prompt_override", (e.target as HTMLTextAreaElement).value)}
-        ></textarea>
-      </div>
-      ${this._defaultPrompt
-        ? html`
-            <button
-              class="tab"
-              style="align-self:flex-start;padding:6px 12px;border:1px solid var(--divider);border-radius:6px;cursor:pointer"
-              @click=${() => this._updateField("prompt_override", this._defaultPrompt)}
-            >
-              Copy Agent Default
-            </button>
-          `
-        : nothing}
-    `;
-  }
-
   private _renderAdvancedTab() {
     return html`
       <div class="toggle-row">
@@ -453,27 +482,6 @@ export class ProxLabChatCardEditor extends LitElement {
         <label>Card ID</label>
         <input type="text" .value=${this._cardConfig.card_id} disabled />
       </div>
-
-      <div style="border-top: 1px solid var(--divider, #e5e7eb); margin-top: 12px; padding-top: 12px;">
-        <label style="font-weight: 600; font-size: 13px;">Save as Profile</label>
-        <div class="sublabel" style="margin-bottom: 8px;">Create a reusable agent profile from this card's config</div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <input
-            type="text"
-            placeholder="Profile name"
-            .value=${this._profileName}
-            @input=${(e: Event) => { this._profileName = (e.target as HTMLInputElement).value; this._profileSaved = false; }}
-            style="flex: 1; padding: 6px 10px; border: 1px solid var(--divider, #ccc); border-radius: 6px; font-size: 13px;"
-          />
-          <button
-            style="padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; border: none; background: var(--primary-color, #7c3aed); color: white;"
-            @click=${this._saveAsProfile}
-            ?disabled=${!this._profileName.trim()}
-          >
-            ${this._profileSaved ? "Saved!" : "Save"}
-          </button>
-        </div>
-      </div>
     `;
   }
 
@@ -481,14 +489,6 @@ export class ProxLabChatCardEditor extends LitElement {
 
   private _updateField(field: string, value: unknown): void {
     this._cardConfig = { ...this._cardConfig, [field]: value };
-    this._saveAndFireEvent();
-  }
-
-  private _updatePersonality(field: string, value: string): void {
-    this._cardConfig = {
-      ...this._cardConfig,
-      personality: { ...this._cardConfig.personality, [field]: value },
-    };
     this._saveAndFireEvent();
   }
 
@@ -516,33 +516,6 @@ export class ProxLabChatCardEditor extends LitElement {
     );
   }
 
-  private async _saveAsProfile(): Promise<void> {
-    if (!this.hass || !this._profileName.trim()) return;
-    const profileId = Math.random().toString(36).substring(2, 10);
-    const profile = {
-      name: this._profileName.trim(),
-      agent_id: this._cardConfig.agent_id,
-      avatar: this._cardConfig.avatar,
-      prompt_override: this._cardConfig.prompt_override,
-      personality_enabled: this._cardConfig.personality_enabled,
-      personality: { ...this._cardConfig.personality },
-      tts_voices: { ...this._cardConfig.tts_voices },
-      auto_tts: this._cardConfig.auto_tts,
-      portrait_width: this._cardConfig.portrait_width,
-    };
-    try {
-      await this.hass.callWS({
-        type: "proxlab/profile/save",
-        profile_id: profileId,
-        profile,
-      });
-      this._profileSaved = true;
-      setTimeout(() => { this._profileSaved = false; }, 2000);
-    } catch (err) {
-      console.error("Failed to save profile:", err);
-    }
-  }
-
   private async _onAvatarUpload(e: Event): Promise<void> {
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file || !this.hass || !this._config?.card_id) return;
@@ -565,42 +538,6 @@ export class ProxLabChatCardEditor extends LitElement {
       }
     };
     reader.readAsDataURL(file);
-  }
-
-  private async _onPngUpload(e: Event): Promise<void> {
-    const file = (e.target as HTMLInputElement).files?.[0];
-    if (!file) return;
-
-    const card = await parseCharacterCardPNG(file);
-    if (card) {
-      this._cardConfig = {
-        ...this._cardConfig,
-        personality: card,
-        personality_enabled: true,
-      };
-      this._saveAndFireEvent();
-    }
-
-    // Also try to use the PNG as avatar
-    if (this.hass && this._config?.card_id) {
-      const reader = new FileReader();
-      reader.onloadend = async () => {
-        const base64 = (reader.result as string).split(",")[1];
-        try {
-          const result = await this.hass.callWS<{ url: string }>({
-            type: "proxlab/card/avatar/upload",
-            card_id: this._config!.card_id,
-            data: base64,
-            filename: file.name,
-          });
-          const bustUrl = result.url.split("?")[0] + "?v=" + Date.now();
-          this._updateField("avatar", bustUrl);
-        } catch {
-          // Avatar upload from PNG failed
-        }
-      };
-      reader.readAsDataURL(file);
-    }
   }
 }
 

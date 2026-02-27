@@ -177,6 +177,37 @@ export default function AgentProfilesPage() {
       alert("Profile name is required");
       return;
     }
+
+    // Check for duplicate name (only when creating new or renaming)
+    const trimmedName = form.name.trim();
+    const duplicate = items.find(
+      (p) =>
+        p.name.toLowerCase() === trimmedName.toLowerCase() &&
+        p.profile_id !== editingId
+    );
+    if (duplicate) {
+      const overwrite = confirm(
+        `A profile named "${duplicate.name}" already exists.\n\nClick OK to overwrite it, or Cancel to go back and rename.`
+      );
+      if (!overwrite) return;
+      // Overwrite: use the existing profile's ID
+      setSaving(true);
+      try {
+        const profile = formToProfile(form);
+        const saved = await saveProfile(duplicate.profile_id, profile);
+        setItems((prev) =>
+          prev.map((i) => (i.profile_id === duplicate.profile_id ? saved : i))
+        );
+        setModalOpen(false);
+      } catch (err) {
+        console.error("Failed to overwrite profile:", err);
+        load();
+      } finally {
+        setSaving(false);
+      }
+      return;
+    }
+
     setSaving(true);
     try {
       const id =
@@ -458,6 +489,69 @@ export default function AgentProfilesPage() {
                       Enable Character Personality
                     </span>
                   </label>
+
+                  {form.personality_enabled && (
+                    <>
+                      <label className="form-control">
+                        <div className="label">
+                          <span className="label-text">
+                            Import Character Card PNG
+                          </span>
+                        </div>
+                        <input
+                          type="file"
+                          className="file-input file-input-bordered file-input-sm"
+                          accept=".png"
+                          onChange={async (e) => {
+                            const file = e.target.files?.[0];
+                            if (!file) return;
+                            try {
+                              const { parseCharacterCardPNG } = await import(
+                                "../card/character-card-parser"
+                              );
+                              const card = await parseCharacterCardPNG(file);
+                              if (card) {
+                                setForm((f) => ({
+                                  ...f,
+                                  personality_name: card.name || f.personality_name,
+                                  personality_description: card.description || f.personality_description,
+                                  personality_personality: card.personality || f.personality_personality,
+                                  personality_scenario: card.scenario || f.personality_scenario,
+                                  personality_first_mes: card.first_mes || f.personality_first_mes,
+                                  personality_mes_example: card.mes_example || f.personality_mes_example,
+                                  personality_system_prompt: card.system_prompt || f.personality_system_prompt,
+                                  personality_post_history: card.post_history_instructions || f.personality_post_history,
+                                  name: f.name || card.name || f.name,
+                                }));
+                              }
+                            } catch (err) {
+                              console.error("Failed to parse character card:", err);
+                            }
+                            // Also upload the PNG as avatar
+                            const reader = new FileReader();
+                            reader.onload = async () => {
+                              const base64 = (reader.result as string).split(",")[1];
+                              try {
+                                const result = await callWS<{ url: string }>(
+                                  "proxlab/card/avatar/upload",
+                                  { data: base64, filename: file.name }
+                                );
+                                setForm((f) => ({ ...f, avatar: result.url }));
+                              } catch {
+                                // Avatar upload failed
+                              }
+                            };
+                            reader.readAsDataURL(file);
+                          }}
+                        />
+                        <div className="label">
+                          <span className="label-text-alt text-base-content/40">
+                            SillyTavern-compatible PNG with embedded character data
+                          </span>
+                        </div>
+                      </label>
+                    </>
+                  )}
 
                   {form.personality_enabled && (
                     <>

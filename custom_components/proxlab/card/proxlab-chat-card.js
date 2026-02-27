@@ -3,18 +3,18 @@
  * Copyright 2019 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const I = globalThis, F = I.ShadowRoot && (I.ShadyCSS === void 0 || I.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, j = Symbol(), X = /* @__PURE__ */ new WeakMap();
-let ct = class {
+const L = globalThis, V = L.ShadowRoot && (L.ShadyCSS === void 0 || L.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, N = Symbol(), G = /* @__PURE__ */ new WeakMap();
+let nt = class {
   constructor(t, e, i) {
-    if (this._$cssResult$ = !0, i !== j) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
+    if (this._$cssResult$ = !0, i !== N) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
     this.cssText = t, this.t = e;
   }
   get styleSheet() {
     let t = this.o;
     const e = this.t;
-    if (F && t === void 0) {
+    if (V && t === void 0) {
       const i = e !== void 0 && e.length === 1;
-      i && (t = X.get(e)), t === void 0 && ((this.o = t = new CSSStyleSheet()).replaceSync(this.cssText), i && X.set(e, t));
+      i && (t = G.get(e)), t === void 0 && ((this.o = t = new CSSStyleSheet()).replaceSync(this.cssText), i && G.set(e, t));
     }
     return t;
   }
@@ -22,58 +22,58 @@ let ct = class {
     return this.cssText;
   }
 };
-const vt = (s) => new ct(typeof s == "string" ? s : s + "", void 0, j), B = (s, ...t) => {
-  const e = s.length === 1 ? s[0] : t.reduce((i, a, r) => i + ((o) => {
-    if (o._$cssResult$ === !0) return o.cssText;
-    if (typeof o == "number") return o;
-    throw Error("Value passed to 'css' function must be a 'css' function result: " + o + ". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.");
-  })(a) + s[r + 1], s[0]);
-  return new ct(e, s, j);
-}, mt = (s, t) => {
-  if (F) s.adoptedStyleSheets = t.map((e) => e instanceof CSSStyleSheet ? e : e.styleSheet);
+const gt = (r) => new nt(typeof r == "string" ? r : r + "", void 0, N), F = (r, ...t) => {
+  const e = r.length === 1 ? r[0] : t.reduce((i, a, s) => i + ((n) => {
+    if (n._$cssResult$ === !0) return n.cssText;
+    if (typeof n == "number") return n;
+    throw Error("Value passed to 'css' function must be a 'css' function result: " + n + ". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.");
+  })(a) + r[s + 1], r[0]);
+  return new nt(e, r, N);
+}, ft = (r, t) => {
+  if (V) r.adoptedStyleSheets = t.map((e) => e instanceof CSSStyleSheet ? e : e.styleSheet);
   else for (const e of t) {
-    const i = document.createElement("style"), a = I.litNonce;
-    a !== void 0 && i.setAttribute("nonce", a), i.textContent = e.cssText, s.appendChild(i);
+    const i = document.createElement("style"), a = L.litNonce;
+    a !== void 0 && i.setAttribute("nonce", a), i.textContent = e.cssText, r.appendChild(i);
   }
-}, Y = F ? (s) => s : (s) => s instanceof CSSStyleSheet ? ((t) => {
+}, K = V ? (r) => r : (r) => r instanceof CSSStyleSheet ? ((t) => {
   let e = "";
   for (const i of t.cssRules) e += i.cssText;
-  return vt(e);
-})(s) : s;
+  return gt(e);
+})(r) : r;
 /**
  * @license
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const { is: bt, defineProperty: xt, getOwnPropertyDescriptor: yt, getOwnPropertyNames: $t, getOwnPropertySymbols: wt, getPrototypeOf: Ct } = Object, v = globalThis, J = v.trustedTypes, At = J ? J.emptyScript : "", kt = v.reactiveElementPolyfillSupport, k = (s, t) => s, H = { toAttribute(s, t) {
+const { is: _t, defineProperty: vt, getOwnPropertyDescriptor: mt, getOwnPropertyNames: bt, getOwnPropertySymbols: xt, getPrototypeOf: yt } = Object, v = globalThis, Y = v.trustedTypes, $t = Y ? Y.emptyScript : "", wt = v.reactiveElementPolyfillSupport, k = (r, t) => r, R = { toAttribute(r, t) {
   switch (t) {
     case Boolean:
-      s = s ? At : null;
+      r = r ? $t : null;
       break;
     case Object:
     case Array:
-      s = s == null ? s : JSON.stringify(s);
+      r = r == null ? r : JSON.stringify(r);
   }
-  return s;
-}, fromAttribute(s, t) {
-  let e = s;
+  return r;
+}, fromAttribute(r, t) {
+  let e = r;
   switch (t) {
     case Boolean:
-      e = s !== null;
+      e = r !== null;
       break;
     case Number:
-      e = s === null ? null : Number(s);
+      e = r === null ? null : Number(r);
       break;
     case Object:
     case Array:
       try {
-        e = JSON.parse(s);
+        e = JSON.parse(r);
       } catch {
         e = null;
       }
   }
   return e;
-} }, ht = (s, t) => !bt(s, t), Z = { attribute: !0, type: String, converter: H, reflect: !1, useDefault: !1, hasChanged: ht };
+} }, dt = (r, t) => !_t(r, t), Z = { attribute: !0, type: String, converter: R, reflect: !1, useDefault: !1, hasChanged: dt };
 Symbol.metadata ?? (Symbol.metadata = Symbol("metadata")), v.litPropertyMetadata ?? (v.litPropertyMetadata = /* @__PURE__ */ new WeakMap());
 let $ = class extends HTMLElement {
   static addInitializer(t) {
@@ -85,18 +85,18 @@ let $ = class extends HTMLElement {
   static createProperty(t, e = Z) {
     if (e.state && (e.attribute = !1), this._$Ei(), this.prototype.hasOwnProperty(t) && ((e = Object.create(e)).wrapped = !0), this.elementProperties.set(t, e), !e.noAccessor) {
       const i = Symbol(), a = this.getPropertyDescriptor(t, i, e);
-      a !== void 0 && xt(this.prototype, t, a);
+      a !== void 0 && vt(this.prototype, t, a);
     }
   }
   static getPropertyDescriptor(t, e, i) {
-    const { get: a, set: r } = yt(this.prototype, t) ?? { get() {
+    const { get: a, set: s } = mt(this.prototype, t) ?? { get() {
       return this[e];
-    }, set(o) {
-      this[e] = o;
+    }, set(n) {
+      this[e] = n;
     } };
-    return { get: a, set(o) {
+    return { get: a, set(n) {
       const c = a?.call(this);
-      r?.call(this, o), this.requestUpdate(t, c, i);
+      s?.call(this, n), this.requestUpdate(t, c, i);
     }, configurable: !0, enumerable: !0 };
   }
   static getPropertyOptions(t) {
@@ -104,13 +104,13 @@ let $ = class extends HTMLElement {
   }
   static _$Ei() {
     if (this.hasOwnProperty(k("elementProperties"))) return;
-    const t = Ct(this);
+    const t = yt(this);
     t.finalize(), t.l !== void 0 && (this.l = [...t.l]), this.elementProperties = new Map(t.elementProperties);
   }
   static finalize() {
     if (this.hasOwnProperty(k("finalized"))) return;
     if (this.finalized = !0, this._$Ei(), this.hasOwnProperty(k("properties"))) {
-      const e = this.properties, i = [...$t(e), ...wt(e)];
+      const e = this.properties, i = [...bt(e), ...xt(e)];
       for (const a of i) this.createProperty(a, e[a]);
     }
     const t = this[Symbol.metadata];
@@ -129,8 +129,8 @@ let $ = class extends HTMLElement {
     const e = [];
     if (Array.isArray(t)) {
       const i = new Set(t.flat(1 / 0).reverse());
-      for (const a of i) e.unshift(Y(a));
-    } else t !== void 0 && e.push(Y(t));
+      for (const a of i) e.unshift(K(a));
+    } else t !== void 0 && e.push(K(t));
     return e;
   }
   static _$Eu(t, e) {
@@ -156,7 +156,7 @@ let $ = class extends HTMLElement {
   }
   createRenderRoot() {
     const t = this.shadowRoot ?? this.attachShadow(this.constructor.shadowRootOptions);
-    return mt(t, this.constructor.elementStyles), t;
+    return ft(t, this.constructor.elementStyles), t;
   }
   connectedCallback() {
     this.renderRoot ?? (this.renderRoot = this.createRenderRoot()), this.enableUpdating(!0), this._$EO?.forEach((t) => t.hostConnected?.());
@@ -172,29 +172,29 @@ let $ = class extends HTMLElement {
   _$ET(t, e) {
     const i = this.constructor.elementProperties.get(t), a = this.constructor._$Eu(t, i);
     if (a !== void 0 && i.reflect === !0) {
-      const r = (i.converter?.toAttribute !== void 0 ? i.converter : H).toAttribute(e, i.type);
-      this._$Em = t, r == null ? this.removeAttribute(a) : this.setAttribute(a, r), this._$Em = null;
+      const s = (i.converter?.toAttribute !== void 0 ? i.converter : R).toAttribute(e, i.type);
+      this._$Em = t, s == null ? this.removeAttribute(a) : this.setAttribute(a, s), this._$Em = null;
     }
   }
   _$AK(t, e) {
     const i = this.constructor, a = i._$Eh.get(t);
     if (a !== void 0 && this._$Em !== a) {
-      const r = i.getPropertyOptions(a), o = typeof r.converter == "function" ? { fromAttribute: r.converter } : r.converter?.fromAttribute !== void 0 ? r.converter : H;
+      const s = i.getPropertyOptions(a), n = typeof s.converter == "function" ? { fromAttribute: s.converter } : s.converter?.fromAttribute !== void 0 ? s.converter : R;
       this._$Em = a;
-      const c = o.fromAttribute(e, r.type);
+      const c = n.fromAttribute(e, s.type);
       this[a] = c ?? this._$Ej?.get(a) ?? c, this._$Em = null;
     }
   }
-  requestUpdate(t, e, i, a = !1, r) {
+  requestUpdate(t, e, i, a = !1, s) {
     if (t !== void 0) {
-      const o = this.constructor;
-      if (a === !1 && (r = this[t]), i ?? (i = o.getPropertyOptions(t)), !((i.hasChanged ?? ht)(r, e) || i.useDefault && i.reflect && r === this._$Ej?.get(t) && !this.hasAttribute(o._$Eu(t, i)))) return;
+      const n = this.constructor;
+      if (a === !1 && (s = this[t]), i ?? (i = n.getPropertyOptions(t)), !((i.hasChanged ?? dt)(s, e) || i.useDefault && i.reflect && s === this._$Ej?.get(t) && !this.hasAttribute(n._$Eu(t, i)))) return;
       this.C(t, e, i);
     }
     this.isUpdatePending === !1 && (this._$ES = this._$EP());
   }
-  C(t, e, { useDefault: i, reflect: a, wrapped: r }, o) {
-    i && !(this._$Ej ?? (this._$Ej = /* @__PURE__ */ new Map())).has(t) && (this._$Ej.set(t, o ?? e ?? this[t]), r !== !0 || o !== void 0) || (this._$AL.has(t) || (this.hasUpdated || i || (e = void 0), this._$AL.set(t, e)), a === !0 && this._$Em !== t && (this._$Eq ?? (this._$Eq = /* @__PURE__ */ new Set())).add(t));
+  C(t, e, { useDefault: i, reflect: a, wrapped: s }, n) {
+    i && !(this._$Ej ?? (this._$Ej = /* @__PURE__ */ new Map())).has(t) && (this._$Ej.set(t, n ?? e ?? this[t]), s !== !0 || n !== void 0) || (this._$AL.has(t) || (this.hasUpdated || i || (e = void 0), this._$AL.set(t, e)), a === !0 && this._$Em !== t && (this._$Eq ?? (this._$Eq = /* @__PURE__ */ new Set())).add(t));
   }
   async _$EP() {
     this.isUpdatePending = !0;
@@ -213,13 +213,13 @@ let $ = class extends HTMLElement {
     if (!this.isUpdatePending) return;
     if (!this.hasUpdated) {
       if (this.renderRoot ?? (this.renderRoot = this.createRenderRoot()), this._$Ep) {
-        for (const [a, r] of this._$Ep) this[a] = r;
+        for (const [a, s] of this._$Ep) this[a] = s;
         this._$Ep = void 0;
       }
       const i = this.constructor.elementProperties;
-      if (i.size > 0) for (const [a, r] of i) {
-        const { wrapped: o } = r, c = this[a];
-        o !== !0 || this._$AL.has(a) || c === void 0 || this.C(a, void 0, r, c);
+      if (i.size > 0) for (const [a, s] of i) {
+        const { wrapped: n } = s, c = this[a];
+        n !== !0 || this._$AL.has(a) || c === void 0 || this.C(a, void 0, s, c);
       }
     }
     let t = !1;
@@ -256,61 +256,61 @@ let $ = class extends HTMLElement {
   firstUpdated(t) {
   }
 };
-$.elementStyles = [], $.shadowRootOptions = { mode: "open" }, $[k("elementProperties")] = /* @__PURE__ */ new Map(), $[k("finalized")] = /* @__PURE__ */ new Map(), kt?.({ ReactiveElement: $ }), (v.reactiveElementVersions ?? (v.reactiveElementVersions = [])).push("2.1.2");
+$.elementStyles = [], $.shadowRootOptions = { mode: "open" }, $[k("elementProperties")] = /* @__PURE__ */ new Map(), $[k("finalized")] = /* @__PURE__ */ new Map(), wt?.({ ReactiveElement: $ }), (v.reactiveElementVersions ?? (v.reactiveElementVersions = [])).push("2.1.2");
 /**
  * @license
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const S = globalThis, tt = (s) => s, L = S.trustedTypes, et = L ? L.createPolicy("lit-html", { createHTML: (s) => s }) : void 0, pt = "$lit$", f = `lit$${Math.random().toFixed(9).slice(2)}$`, ut = "?" + f, St = `<${ut}>`, y = document, P = () => y.createComment(""), M = (s) => s === null || typeof s != "object" && typeof s != "function", W = Array.isArray, Et = (s) => W(s) || typeof s?.[Symbol.iterator] == "function", D = `[ 	
-\f\r]`, A = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, it = /-->/g, at = />/g, b = RegExp(`>|${D}(?:([^\\s"'>=/]+)(${D}*=${D}*(?:[^ 	
-\f\r"'\`<>=]|("|')|))|$)`, "g"), st = /'/g, rt = /"/g, gt = /^(?:script|style|textarea|title)$/i, Pt = (s) => (t, ...e) => ({ _$litType$: s, strings: t, values: e }), n = Pt(1), w = Symbol.for("lit-noChange"), d = Symbol.for("lit-nothing"), ot = /* @__PURE__ */ new WeakMap(), x = y.createTreeWalker(y, 129);
-function _t(s, t) {
-  if (!W(s) || !s.hasOwnProperty("raw")) throw Error("invalid template strings array");
-  return et !== void 0 ? et.createHTML(t) : t;
+const S = globalThis, J = (r) => r, I = S.trustedTypes, X = I ? I.createPolicy("lit-html", { createHTML: (r) => r }) : void 0, lt = "$lit$", _ = `lit$${Math.random().toFixed(9).slice(2)}$`, ct = "?" + _, Ct = `<${ct}>`, y = document, P = () => y.createComment(""), M = (r) => r === null || typeof r != "object" && typeof r != "function", j = Array.isArray, At = (r) => j(r) || typeof r?.[Symbol.iterator] == "function", H = `[ 	
+\f\r]`, A = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, tt = /-->/g, et = />/g, b = RegExp(`>|${H}(?:([^\\s"'>=/]+)(${H}*=${H}*(?:[^ 	
+\f\r"'\`<>=]|("|')|))|$)`, "g"), it = /'/g, at = /"/g, ht = /^(?:script|style|textarea|title)$/i, kt = (r) => (t, ...e) => ({ _$litType$: r, strings: t, values: e }), o = kt(1), w = Symbol.for("lit-noChange"), d = Symbol.for("lit-nothing"), st = /* @__PURE__ */ new WeakMap(), x = y.createTreeWalker(y, 129);
+function pt(r, t) {
+  if (!j(r) || !r.hasOwnProperty("raw")) throw Error("invalid template strings array");
+  return X !== void 0 ? X.createHTML(t) : t;
 }
-const Mt = (s, t) => {
-  const e = s.length - 1, i = [];
-  let a, r = t === 2 ? "<svg>" : t === 3 ? "<math>" : "", o = A;
+const St = (r, t) => {
+  const e = r.length - 1, i = [];
+  let a, s = t === 2 ? "<svg>" : t === 3 ? "<math>" : "", n = A;
   for (let c = 0; c < e; c++) {
-    const l = s[c];
+    const l = r[c];
     let h, u, p = -1, g = 0;
-    for (; g < l.length && (o.lastIndex = g, u = o.exec(l), u !== null); ) g = o.lastIndex, o === A ? u[1] === "!--" ? o = it : u[1] !== void 0 ? o = at : u[2] !== void 0 ? (gt.test(u[2]) && (a = RegExp("</" + u[2], "g")), o = b) : u[3] !== void 0 && (o = b) : o === b ? u[0] === ">" ? (o = a ?? A, p = -1) : u[1] === void 0 ? p = -2 : (p = o.lastIndex - u[2].length, h = u[1], o = u[3] === void 0 ? b : u[3] === '"' ? rt : st) : o === rt || o === st ? o = b : o === it || o === at ? o = A : (o = b, a = void 0);
-    const _ = o === b && s[c + 1].startsWith("/>") ? " " : "";
-    r += o === A ? l + St : p >= 0 ? (i.push(h), l.slice(0, p) + pt + l.slice(p) + f + _) : l + f + (p === -2 ? c : _);
+    for (; g < l.length && (n.lastIndex = g, u = n.exec(l), u !== null); ) g = n.lastIndex, n === A ? u[1] === "!--" ? n = tt : u[1] !== void 0 ? n = et : u[2] !== void 0 ? (ht.test(u[2]) && (a = RegExp("</" + u[2], "g")), n = b) : u[3] !== void 0 && (n = b) : n === b ? u[0] === ">" ? (n = a ?? A, p = -1) : u[1] === void 0 ? p = -2 : (p = n.lastIndex - u[2].length, h = u[1], n = u[3] === void 0 ? b : u[3] === '"' ? at : it) : n === at || n === it ? n = b : n === tt || n === et ? n = A : (n = b, a = void 0);
+    const f = n === b && r[c + 1].startsWith("/>") ? " " : "";
+    s += n === A ? l + Ct : p >= 0 ? (i.push(h), l.slice(0, p) + lt + l.slice(p) + _ + f) : l + _ + (p === -2 ? c : f);
   }
-  return [_t(s, r + (s[e] || "<?>") + (t === 2 ? "</svg>" : t === 3 ? "</math>" : "")), i];
+  return [pt(r, s + (r[e] || "<?>") + (t === 2 ? "</svg>" : t === 3 ? "</math>" : "")), i];
 };
 class z {
   constructor({ strings: t, _$litType$: e }, i) {
     let a;
     this.parts = [];
-    let r = 0, o = 0;
-    const c = t.length - 1, l = this.parts, [h, u] = Mt(t, e);
+    let s = 0, n = 0;
+    const c = t.length - 1, l = this.parts, [h, u] = St(t, e);
     if (this.el = z.createElement(h, i), x.currentNode = this.el.content, e === 2 || e === 3) {
       const p = this.el.content.firstChild;
       p.replaceWith(...p.childNodes);
     }
     for (; (a = x.nextNode()) !== null && l.length < c; ) {
       if (a.nodeType === 1) {
-        if (a.hasAttributes()) for (const p of a.getAttributeNames()) if (p.endsWith(pt)) {
-          const g = u[o++], _ = a.getAttribute(p).split(f), U = /([.?@])?(.*)/.exec(g);
-          l.push({ type: 1, index: r, name: U[2], strings: _, ctor: U[1] === "." ? Tt : U[1] === "?" ? Ut : U[1] === "@" ? It : O }), a.removeAttribute(p);
-        } else p.startsWith(f) && (l.push({ type: 6, index: r }), a.removeAttribute(p));
-        if (gt.test(a.tagName)) {
-          const p = a.textContent.split(f), g = p.length - 1;
+        if (a.hasAttributes()) for (const p of a.getAttributeNames()) if (p.endsWith(lt)) {
+          const g = u[n++], f = a.getAttribute(p).split(_), U = /([.?@])?(.*)/.exec(g);
+          l.push({ type: 1, index: s, name: U[2], strings: f, ctor: U[1] === "." ? Pt : U[1] === "?" ? Mt : U[1] === "@" ? zt : O }), a.removeAttribute(p);
+        } else p.startsWith(_) && (l.push({ type: 6, index: s }), a.removeAttribute(p));
+        if (ht.test(a.tagName)) {
+          const p = a.textContent.split(_), g = p.length - 1;
           if (g > 0) {
-            a.textContent = L ? L.emptyScript : "";
-            for (let _ = 0; _ < g; _++) a.append(p[_], P()), x.nextNode(), l.push({ type: 2, index: ++r });
+            a.textContent = I ? I.emptyScript : "";
+            for (let f = 0; f < g; f++) a.append(p[f], P()), x.nextNode(), l.push({ type: 2, index: ++s });
             a.append(p[g], P());
           }
         }
-      } else if (a.nodeType === 8) if (a.data === ut) l.push({ type: 2, index: r });
+      } else if (a.nodeType === 8) if (a.data === ct) l.push({ type: 2, index: s });
       else {
         let p = -1;
-        for (; (p = a.data.indexOf(f, p + 1)) !== -1; ) l.push({ type: 7, index: r }), p += f.length - 1;
+        for (; (p = a.data.indexOf(_, p + 1)) !== -1; ) l.push({ type: 7, index: s }), p += _.length - 1;
       }
-      r++;
+      s++;
     }
   }
   static createElement(t, e) {
@@ -318,13 +318,13 @@ class z {
     return i.innerHTML = t, i;
   }
 }
-function C(s, t, e = s, i) {
+function C(r, t, e = r, i) {
   if (t === w) return t;
   let a = i !== void 0 ? e._$Co?.[i] : e._$Cl;
-  const r = M(t) ? void 0 : t._$litDirective$;
-  return a?.constructor !== r && (a?._$AO?.(!1), r === void 0 ? a = void 0 : (a = new r(s), a._$AT(s, e, i)), i !== void 0 ? (e._$Co ?? (e._$Co = []))[i] = a : e._$Cl = a), a !== void 0 && (t = C(s, a._$AS(s, t.values), a, i)), t;
+  const s = M(t) ? void 0 : t._$litDirective$;
+  return a?.constructor !== s && (a?._$AO?.(!1), s === void 0 ? a = void 0 : (a = new s(r), a._$AT(r, e, i)), i !== void 0 ? (e._$Co ?? (e._$Co = []))[i] = a : e._$Cl = a), a !== void 0 && (t = C(r, a._$AS(r, t.values), a, i)), t;
 }
-class zt {
+class Et {
   constructor(t, e) {
     this._$AV = [], this._$AN = void 0, this._$AD = t, this._$AM = e;
   }
@@ -337,13 +337,13 @@ class zt {
   u(t) {
     const { el: { content: e }, parts: i } = this._$AD, a = (t?.creationScope ?? y).importNode(e, !0);
     x.currentNode = a;
-    let r = x.nextNode(), o = 0, c = 0, l = i[0];
+    let s = x.nextNode(), n = 0, c = 0, l = i[0];
     for (; l !== void 0; ) {
-      if (o === l.index) {
+      if (n === l.index) {
         let h;
-        l.type === 2 ? h = new T(r, r.nextSibling, this, t) : l.type === 1 ? h = new l.ctor(r, l.name, l.strings, this, t) : l.type === 6 && (h = new Lt(r, this, t)), this._$AV.push(h), l = i[++c];
+        l.type === 2 ? h = new T(s, s.nextSibling, this, t) : l.type === 1 ? h = new l.ctor(s, l.name, l.strings, this, t) : l.type === 6 && (h = new Tt(s, this, t)), this._$AV.push(h), l = i[++c];
       }
-      o !== l?.index && (r = x.nextNode(), o++);
+      n !== l?.index && (s = x.nextNode(), n++);
     }
     return x.currentNode = y, a;
   }
@@ -371,7 +371,7 @@ class T {
     return this._$AB;
   }
   _$AI(t, e = this) {
-    t = C(this, t, e), M(t) ? t === d || t == null || t === "" ? (this._$AH !== d && this._$AR(), this._$AH = d) : t !== this._$AH && t !== w && this._(t) : t._$litType$ !== void 0 ? this.$(t) : t.nodeType !== void 0 ? this.T(t) : Et(t) ? this.k(t) : this._(t);
+    t = C(this, t, e), M(t) ? t === d || t == null || t === "" ? (this._$AH !== d && this._$AR(), this._$AH = d) : t !== this._$AH && t !== w && this._(t) : t._$litType$ !== void 0 ? this.$(t) : t.nodeType !== void 0 ? this.T(t) : At(t) ? this.k(t) : this._(t);
   }
   O(t) {
     return this._$AA.parentNode.insertBefore(t, this._$AB);
@@ -383,28 +383,28 @@ class T {
     this._$AH !== d && M(this._$AH) ? this._$AA.nextSibling.data = t : this.T(y.createTextNode(t)), this._$AH = t;
   }
   $(t) {
-    const { values: e, _$litType$: i } = t, a = typeof i == "number" ? this._$AC(t) : (i.el === void 0 && (i.el = z.createElement(_t(i.h, i.h[0]), this.options)), i);
+    const { values: e, _$litType$: i } = t, a = typeof i == "number" ? this._$AC(t) : (i.el === void 0 && (i.el = z.createElement(pt(i.h, i.h[0]), this.options)), i);
     if (this._$AH?._$AD === a) this._$AH.p(e);
     else {
-      const r = new zt(a, this), o = r.u(this.options);
-      r.p(e), this.T(o), this._$AH = r;
+      const s = new Et(a, this), n = s.u(this.options);
+      s.p(e), this.T(n), this._$AH = s;
     }
   }
   _$AC(t) {
-    let e = ot.get(t.strings);
-    return e === void 0 && ot.set(t.strings, e = new z(t)), e;
+    let e = st.get(t.strings);
+    return e === void 0 && st.set(t.strings, e = new z(t)), e;
   }
   k(t) {
-    W(this._$AH) || (this._$AH = [], this._$AR());
+    j(this._$AH) || (this._$AH = [], this._$AR());
     const e = this._$AH;
     let i, a = 0;
-    for (const r of t) a === e.length ? e.push(i = new T(this.O(P()), this.O(P()), this, this.options)) : i = e[a], i._$AI(r), a++;
+    for (const s of t) a === e.length ? e.push(i = new T(this.O(P()), this.O(P()), this, this.options)) : i = e[a], i._$AI(s), a++;
     a < e.length && (this._$AR(i && i._$AB.nextSibling, a), e.length = a);
   }
   _$AR(t = this._$AA.nextSibling, e) {
     for (this._$AP?.(!1, !0, e); t !== this._$AB; ) {
-      const i = tt(t).nextSibling;
-      tt(t).remove(), t = i;
+      const i = J(t).nextSibling;
+      J(t).remove(), t = i;
     }
   }
   setConnected(t) {
@@ -418,25 +418,25 @@ class O {
   get _$AU() {
     return this._$AM._$AU;
   }
-  constructor(t, e, i, a, r) {
-    this.type = 1, this._$AH = d, this._$AN = void 0, this.element = t, this.name = e, this._$AM = a, this.options = r, i.length > 2 || i[0] !== "" || i[1] !== "" ? (this._$AH = Array(i.length - 1).fill(new String()), this.strings = i) : this._$AH = d;
+  constructor(t, e, i, a, s) {
+    this.type = 1, this._$AH = d, this._$AN = void 0, this.element = t, this.name = e, this._$AM = a, this.options = s, i.length > 2 || i[0] !== "" || i[1] !== "" ? (this._$AH = Array(i.length - 1).fill(new String()), this.strings = i) : this._$AH = d;
   }
   _$AI(t, e = this, i, a) {
-    const r = this.strings;
-    let o = !1;
-    if (r === void 0) t = C(this, t, e, 0), o = !M(t) || t !== this._$AH && t !== w, o && (this._$AH = t);
+    const s = this.strings;
+    let n = !1;
+    if (s === void 0) t = C(this, t, e, 0), n = !M(t) || t !== this._$AH && t !== w, n && (this._$AH = t);
     else {
       const c = t;
       let l, h;
-      for (t = r[0], l = 0; l < r.length - 1; l++) h = C(this, c[i + l], e, l), h === w && (h = this._$AH[l]), o || (o = !M(h) || h !== this._$AH[l]), h === d ? t = d : t !== d && (t += (h ?? "") + r[l + 1]), this._$AH[l] = h;
+      for (t = s[0], l = 0; l < s.length - 1; l++) h = C(this, c[i + l], e, l), h === w && (h = this._$AH[l]), n || (n = !M(h) || h !== this._$AH[l]), h === d ? t = d : t !== d && (t += (h ?? "") + s[l + 1]), this._$AH[l] = h;
     }
-    o && !a && this.j(t);
+    n && !a && this.j(t);
   }
   j(t) {
     t === d ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, t ?? "");
   }
 }
-class Tt extends O {
+class Pt extends O {
   constructor() {
     super(...arguments), this.type = 3;
   }
@@ -444,7 +444,7 @@ class Tt extends O {
     this.element[this.name] = t === d ? void 0 : t;
   }
 }
-class Ut extends O {
+class Mt extends O {
   constructor() {
     super(...arguments), this.type = 4;
   }
@@ -452,20 +452,20 @@ class Ut extends O {
     this.element.toggleAttribute(this.name, !!t && t !== d);
   }
 }
-class It extends O {
-  constructor(t, e, i, a, r) {
-    super(t, e, i, a, r), this.type = 5;
+class zt extends O {
+  constructor(t, e, i, a, s) {
+    super(t, e, i, a, s), this.type = 5;
   }
   _$AI(t, e = this) {
     if ((t = C(this, t, e, 0) ?? d) === w) return;
-    const i = this._$AH, a = t === d && i !== d || t.capture !== i.capture || t.once !== i.once || t.passive !== i.passive, r = t !== d && (i === d || a);
-    a && this.element.removeEventListener(this.name, this, i), r && this.element.addEventListener(this.name, this, t), this._$AH = t;
+    const i = this._$AH, a = t === d && i !== d || t.capture !== i.capture || t.once !== i.once || t.passive !== i.passive, s = t !== d && (i === d || a);
+    a && this.element.removeEventListener(this.name, this, i), s && this.element.addEventListener(this.name, this, t), this._$AH = t;
   }
   handleEvent(t) {
     typeof this._$AH == "function" ? this._$AH.call(this.options?.host ?? this.element, t) : this._$AH.handleEvent(t);
   }
 }
-class Lt {
+class Tt {
   constructor(t, e, i) {
     this.element = t, this.type = 6, this._$AN = void 0, this._$AM = e, this.options = i;
   }
@@ -476,16 +476,16 @@ class Lt {
     C(this, t);
   }
 }
-const Ot = S.litHtmlPolyfillSupport;
-Ot?.(z, T), (S.litHtmlVersions ?? (S.litHtmlVersions = [])).push("3.3.2");
-const Dt = (s, t, e) => {
+const Ut = S.litHtmlPolyfillSupport;
+Ut?.(z, T), (S.litHtmlVersions ?? (S.litHtmlVersions = [])).push("3.3.2");
+const Lt = (r, t, e) => {
   const i = e?.renderBefore ?? t;
   let a = i._$litPart$;
   if (a === void 0) {
-    const r = e?.renderBefore ?? null;
-    i._$litPart$ = a = new T(t.insertBefore(P(), r), r, void 0, e ?? {});
+    const s = e?.renderBefore ?? null;
+    i._$litPart$ = a = new T(t.insertBefore(P(), s), s, void 0, e ?? {});
   }
-  return a._$AI(s), a;
+  return a._$AI(r), a;
 };
 /**
  * @license
@@ -504,7 +504,7 @@ class m extends $ {
   }
   update(t) {
     const e = this.render();
-    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(t), this._$Do = Dt(e, this.renderRoot, this.renderOptions);
+    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(t), this._$Do = Lt(e, this.renderRoot, this.renderOptions);
   }
   connectedCallback() {
     super.connectedCallback(), this._$Do?.setConnected(!0);
@@ -517,10 +517,10 @@ class m extends $ {
   }
 }
 m._$litElement$ = !0, m.finalized = !0, E.litElementHydrateSupport?.({ LitElement: m });
-const Rt = E.litElementPolyfillSupport;
-Rt?.({ LitElement: m });
+const It = E.litElementPolyfillSupport;
+It?.({ LitElement: m });
 (E.litElementVersions ?? (E.litElementVersions = [])).push("4.2.2");
-const Ht = B`
+const Ot = F`
   :host {
     --card-bg: var(--card-background-color, #fff);
     --card-text: var(--primary-text-color, #212121);
@@ -991,7 +991,7 @@ const Ht = B`
     font-size: 14px;
     text-align: center;
   }
-`, ft = B`
+`, ut = F`
   :host {
     --card-bg: var(--card-background-color, #fff);
     --card-text: var(--primary-text-color, #212121);
@@ -1160,7 +1160,7 @@ const Ht = B`
     align-items: center;
     gap: 12px;
   }
-`, Vt = B`
+`, Ht = F`
   :host {
     --card-bg: var(--card-background-color, #fff);
     --card-text: var(--primary-text-color, #212121);
@@ -1481,39 +1481,39 @@ const Ht = B`
     font-size: 11px;
   }
 `;
-function V(s) {
+function D(r) {
   const t = [];
   let e = 0, i = "";
   const a = () => {
     i && (t.push({ type: "normal", text: i }), i = "");
   };
-  for (; e < s.length; ) {
-    if (s[e] === "`" && s.slice(e, e + 3) === "```") {
-      const r = s.indexOf("```", e + 3);
-      if (r !== -1) {
-        a(), t.push({ type: "thoughts", text: s.slice(e + 3, r) }), e = r + 3;
+  for (; e < r.length; ) {
+    if (r[e] === "`" && r.slice(e, e + 3) === "```") {
+      const s = r.indexOf("```", e + 3);
+      if (s !== -1) {
+        a(), t.push({ type: "thoughts", text: r.slice(e + 3, s) }), e = s + 3;
         continue;
       }
     }
-    if (s[e] === "*") {
-      const r = s.indexOf("*", e + 1);
-      if (r !== -1) {
-        a(), t.push({ type: "narration", text: s.slice(e + 1, r) }), e = r + 1;
+    if (r[e] === "*") {
+      const s = r.indexOf("*", e + 1);
+      if (s !== -1) {
+        a(), t.push({ type: "narration", text: r.slice(e + 1, s) }), e = s + 1;
         continue;
       }
     }
-    if (s[e] === '"') {
-      const r = s.indexOf('"', e + 1);
-      if (r !== -1) {
-        a(), t.push({ type: "speech", text: s.slice(e + 1, r) }), e = r + 1;
+    if (r[e] === '"') {
+      const s = r.indexOf('"', e + 1);
+      if (s !== -1) {
+        a(), t.push({ type: "speech", text: r.slice(e + 1, s) }), e = s + 1;
         continue;
       }
     }
-    i += s[e], e++;
+    i += r[e], e++;
   }
   return a(), t;
 }
-const nt = {
+const rt = {
   card_id: "",
   agent_id: "conversation_agent",
   prompt_override: "",
@@ -1543,89 +1543,13 @@ const nt = {
   title_override: "",
   status_override: "",
   hide_header: !1,
-  portrait_width: "auto"
+  portrait_width: "auto",
+  use_profile: !1,
+  profile_id: ""
 };
-async function Nt(s) {
-  try {
-    const t = await s.arrayBuffer(), e = new Uint8Array(t), i = [137, 80, 78, 71, 13, 10, 26, 10];
-    for (let r = 0; r < 8; r++)
-      if (e[r] !== i[r]) return null;
-    let a = 8;
-    for (; a < e.length - 12; ) {
-      const r = jt(e, a), o = N(e, a + 4, 4);
-      if (o === "tEXt" || o === "iTXt") {
-        const c = e.slice(a + 8, a + 8 + r), l = Ft(c, o);
-        if (l) return l;
-      }
-      a += 12 + r;
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-function Ft(s, t) {
-  if (t === "tEXt") {
-    const e = s.indexOf(0);
-    if (e < 0) return null;
-    const i = N(s, 0, e).toLowerCase();
-    if (i !== "ccv3" && i !== "chara") return null;
-    const a = s.slice(e + 1), r = new TextDecoder().decode(a);
-    return lt(r);
-  }
-  if (t === "iTXt") {
-    const e = s.indexOf(0);
-    if (e < 0) return null;
-    const i = N(s, 0, e).toLowerCase();
-    if (i !== "ccv3" && i !== "chara") return null;
-    let a = e + 3;
-    for (; a < s.length && s[a] !== 0; ) a++;
-    for (a++; a < s.length && s[a] !== 0; ) a++;
-    a++;
-    const r = new TextDecoder().decode(s.slice(a));
-    return lt(r);
-  }
-  return null;
-}
-function lt(s, t) {
-  try {
-    let e;
-    try {
-      const a = atob(s.trim()), r = Uint8Array.from(a, (o) => o.charCodeAt(0));
-      e = new TextDecoder("utf-8").decode(r);
-    } catch {
-      e = s;
-    }
-    const i = JSON.parse(e);
-    return i.spec === "chara_card_v3" && i.data || i.spec === "chara_card_v2" && i.data ? R(i.data) : i.name || i.description || i.personality ? R(i) : null;
-  } catch {
-    return null;
-  }
-}
-function R(s) {
-  return {
-    name: String(s.name || ""),
-    description: String(s.description || ""),
-    personality: String(s.personality || ""),
-    scenario: String(s.scenario || ""),
-    first_mes: String(s.first_mes || ""),
-    mes_example: String(s.mes_example || ""),
-    system_prompt: String(s.system_prompt || ""),
-    post_history_instructions: String(s.post_history_instructions || ""),
-    alternate_greetings: Array.isArray(s.alternate_greetings) ? s.alternate_greetings.map(String) : [],
-    tags: Array.isArray(s.tags) ? s.tags.map(String) : [],
-    creator_notes: String(s.creator_notes || "")
-  };
-}
-function jt(s, t) {
-  return (s[t] << 24 | s[t + 1] << 16 | s[t + 2] << 8 | s[t + 3]) >>> 0;
-}
-function N(s, t, e) {
-  return String.fromCharCode(...s.slice(t, t + e));
-}
-class Q extends m {
+class B extends m {
   constructor() {
-    super(...arguments), this._cardConfig = { ...nt }, this._tab = "general", this._agents = [], this._voices = [], this._loaded = !1, this._defaultPrompt = "", this._profileName = "", this._profileSaved = !1;
+    super(...arguments), this._cardConfig = { ...rt }, this._tab = "general", this._agents = [], this._voices = [], this._profiles = [], this._loaded = !1, this._defaultPrompt = "";
   }
   setConfig(t) {
     this._config = t, this._loaded = !1;
@@ -1635,25 +1559,26 @@ class Q extends m {
   }
   async _loadData() {
     try {
-      const [t, e, i] = await Promise.all([
+      const [t, e, i, a] = await Promise.all([
         this.hass.callWS({
           type: "proxlab/card/config/get",
           card_id: this._config.card_id
         }),
         this.hass.callWS({ type: "proxlab/agent/available" }),
-        this.hass.callWS({ type: "proxlab/card/voices" })
+        this.hass.callWS({ type: "proxlab/card/voices" }),
+        this.hass.callWS({ type: "proxlab/profile/list" })
       ]);
       if (t) {
-        const a = t;
-        typeof a.tts_voice == "string" && !a.tts_voices && (t.tts_voices = {
-          normal: a.tts_voice,
+        const s = t;
+        typeof s.tts_voice == "string" && !s.tts_voices && (t.tts_voices = {
+          normal: s.tts_voice,
           narration: "",
           speech: "",
           thoughts: ""
-        }, delete t.tts_voice), t.tts_voices || (t.tts_voices = { normal: "", narration: "", speech: "", thoughts: "" }), this._cardConfig = t;
+        }, delete t.tts_voice), t.tts_voices || (t.tts_voices = { normal: "", narration: "", speech: "", thoughts: "" }), t.use_profile === void 0 && (t.use_profile = !1), t.profile_id || (t.profile_id = ""), this._cardConfig = t;
       } else
-        this._cardConfig = { ...nt, card_id: this._config.card_id };
-      this._agents = e || [], this._voices = i || [], this._loadAgentPrompt(this._cardConfig.agent_id);
+        this._cardConfig = { ...rt, card_id: this._config.card_id };
+      this._agents = e || [], this._voices = i || [], this._profiles = a || [], this._cardConfig.use_profile || this._loadAgentPrompt(this._cardConfig.agent_id);
     } catch {
     }
   }
@@ -1669,25 +1594,22 @@ class Q extends m {
     }
   }
   render() {
-    const t = this._cardConfig.customize_enabled;
-    return n`
+    return o`
       <div class="editor">
         <div class="tabs">
           ${[
-      { id: "general", label: "General", disabled: !1 },
-      { id: "voice", label: "Voice", disabled: !1 },
-      { id: "personality", label: "Personality", disabled: !t },
-      { id: "prompt", label: "Prompt", disabled: !t },
-      { id: "advanced", label: "Advanced", disabled: !1 }
+      { id: "general", label: "General" },
+      { id: "voice", label: "Voice" },
+      { id: "advanced", label: "Advanced" }
     ].map(
-      (i) => n`
+      (e) => o`
               <button
-                class="tab ${this._tab === i.id ? "active" : ""} ${i.disabled ? "disabled" : ""}"
+                class="tab ${this._tab === e.id ? "active" : ""}"
                 @click=${() => {
-        i.disabled || (this._tab = i.id);
+        this._tab = e.id;
       }}
               >
-                ${i.label}
+                ${e.label}
               </button>
             `
     )}
@@ -1695,8 +1617,6 @@ class Q extends m {
         <div class="tab-content">
           ${this._tab === "general" ? this._renderGeneralTab() : d}
           ${this._tab === "voice" ? this._renderVoiceTab() : d}
-          ${this._tab === "personality" ? this._renderPersonalityTab() : d}
-          ${this._tab === "prompt" ? this._renderPromptTab() : d}
           ${this._tab === "advanced" ? this._renderAdvancedTab() : d}
         </div>
       </div>
@@ -1704,7 +1624,124 @@ class Q extends m {
   }
   // ---- Tabs ----
   _renderGeneralTab() {
-    return n`
+    const t = this._cardConfig.use_profile;
+    return o`
+      <!-- Mode toggle -->
+      <div class="toggle-row" style="margin-bottom: 8px;">
+        <div>
+          <label>Use Agent Profile</label>
+          <div class="sublabel">Link this card to a saved agent profile from the Profiles tab</div>
+        </div>
+        <label class="switch">
+          <input
+            type="checkbox"
+            .checked=${t}
+            @change=${(e) => {
+      this._updateField("use_profile", e.target.checked);
+    }}
+          />
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      ${t ? this._renderProfileMode() : this._renderDefaultMode()}
+    `;
+  }
+  _renderProfileMode() {
+    const t = this._profiles.find(
+      (e) => e.profile_id === this._cardConfig.profile_id
+    );
+    return o`
+      <!-- Profile selector -->
+      <div class="field">
+        <label>Agent Profile</label>
+        <select
+          .value=${this._cardConfig.profile_id}
+          @change=${(e) => {
+      this._updateField("profile_id", e.target.value);
+    }}
+        >
+          <option value="">Select a profile...</option>
+          ${this._profiles.map(
+      (e) => o`<option value=${e.profile_id} ?selected=${this._cardConfig.profile_id === e.profile_id}>
+              ${e.name}${e.personality_enabled && e.personality?.name ? ` (${e.personality.name})` : ""}
+            </option>`
+    )}
+        </select>
+      </div>
+
+      ${t ? o`
+            <!-- Profile preview -->
+            <div style="display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 8px; background: var(--secondary-background-color, #f5f5f5); margin-top: 4px;">
+              ${t.avatar ? o`<img src="${t.avatar}" style="width: 48px; height: 48px; border-radius: 50%; object-fit: cover;" />` : o`<div style="width: 48px; height: 48px; border-radius: 50%; background: var(--divider-color, #e5e7eb); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 18px;">${t.name.charAt(0).toUpperCase()}</div>`}
+              <div style="flex: 1; min-width: 0;">
+                <div style="font-weight: 600; font-size: 14px;">${t.name}</div>
+                <div style="font-size: 12px; opacity: 0.6;">Agent: ${t.agent_id}</div>
+                ${t.personality_enabled ? o`<div style="font-size: 11px; opacity: 0.5; margin-top: 2px;">Character: ${t.personality?.name || "Unnamed"}</div>` : d}
+              </div>
+            </div>
+            <div style="font-size: 11px; opacity: 0.5; margin-top: 8px; padding: 0 2px;">
+              All agent settings are managed in the ProxLab panel under Agents → Profiles.
+              Changes made there will be reflected on all cards using this profile.
+            </div>
+          ` : d}
+
+      ${this._profiles.length === 0 ? o`
+            <div style="text-align: center; padding: 16px; opacity: 0.5; font-size: 13px;">
+              <p>No profiles found.</p>
+              <p style="margin-top: 4px;">Create profiles in the ProxLab panel under Agents → Profiles.</p>
+            </div>
+          ` : d}
+
+      <!-- Card-level display overrides (not profile fields) -->
+      <div style="border-top: 1px solid var(--divider-color, #e5e7eb); margin-top: 12px; padding-top: 12px;">
+        <div class="field">
+          <label>Title Override</label>
+          <input
+            type="text"
+            placeholder="Default: profile/character name"
+            .value=${this._cardConfig.title_override}
+            @input=${(e) => this._updateField("title_override", e.target.value)}
+          />
+        </div>
+        <div class="field">
+          <label>Status Override</label>
+          <input
+            type="text"
+            placeholder="Default: Online"
+            .value=${this._cardConfig.status_override}
+            @input=${(e) => this._updateField("status_override", e.target.value)}
+          />
+        </div>
+        <div class="field">
+          <label>Card Height (px)</label>
+          <input
+            type="number"
+            min="200"
+            max="1200"
+            .value=${String(this._cardConfig.card_height)}
+            @input=${(e) => this._updateField("card_height", parseInt(e.target.value) || 500)}
+          />
+        </div>
+        <div class="toggle-row">
+          <div>
+            <label>Hide Header</label>
+            <div class="sublabel">Hide the title bar</div>
+          </div>
+          <label class="switch">
+            <input
+              type="checkbox"
+              .checked=${this._cardConfig.hide_header}
+              @change=${(e) => this._updateField("hide_header", e.target.checked)}
+            />
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+    `;
+  }
+  _renderDefaultMode() {
+    return o`
       <div class="field">
         <label>Agent</label>
         <select
@@ -1721,7 +1758,7 @@ class Q extends m {
             Conversation Agent
           </option>
           ${this._agents.map(
-      (t) => n`<option value=${t.agent_id} ?selected=${this._cardConfig.agent_id === t.agent_id}>
+      (t) => o`<option value=${t.agent_id} ?selected=${this._cardConfig.agent_id === t.agent_id}>
               ${t.name}
             </option>`
     )}
@@ -1730,7 +1767,7 @@ class Q extends m {
       <div class="field">
         <label>Avatar</label>
         <div class="avatar-upload">
-          ${this._cardConfig.avatar ? n`<img class="avatar-preview" src="${this._cardConfig.avatar}" />` : n`<div class="avatar-preview" style="display:flex;align-items:center;justify-content:center;background:var(--divider)">?</div>`}
+          ${this._cardConfig.avatar ? o`<img class="avatar-preview" src="${this._cardConfig.avatar}" />` : o`<div class="avatar-preview" style="display:flex;align-items:center;justify-content:center;background:var(--divider)">?</div>`}
           <input type="file" accept="image/*" @change=${this._onAvatarUpload} />
         </div>
       </div>
@@ -1797,46 +1834,59 @@ class Q extends m {
           <span class="slider"></span>
         </label>
       </div>
-      <div class="toggle-row">
-        <div>
-          <label>Customize</label>
-          <div class="sublabel">Unlock Personality and Prompt tabs</div>
-        </div>
-        <label class="switch">
-          <input
-            type="checkbox"
-            .checked=${this._cardConfig.customize_enabled}
-            @change=${(t) => {
-      this._updateField("customize_enabled", t.target.checked);
-    }}
-          />
-          <span class="slider"></span>
-        </label>
-      </div>
     `;
   }
   _renderVoiceTab() {
-    const t = this._cardConfig.tts_voices ?? { normal: "", narration: "", speech: "", thoughts: "" }, e = (i, a, r) => n`
+    if (this._cardConfig.use_profile) {
+      const i = this._profiles.find(
+        (a) => a.profile_id === this._cardConfig.profile_id
+      );
+      if (i) {
+        const a = i.tts_voices || { normal: "", narration: "", speech: "", thoughts: "" }, s = (n) => this._voices.find((c) => c.id === n)?.name ?? n ?? "None";
+        return o`
+          <div style="padding: 4px 0; opacity: 0.7; font-size: 13px;">
+            Voice settings are managed by the linked profile. Edit in Agents → Profiles.
+          </div>
+          <div class="field">
+            <label>Normal: <strong>${s(a.normal)}</strong></label>
+          </div>
+          <div class="field">
+            <label>Narration: <strong>${s(a.narration)}</strong></label>
+          </div>
+          <div class="field">
+            <label>Speech: <strong>${s(a.speech)}</strong></label>
+          </div>
+          <div class="field">
+            <label>Thoughts: <strong>${s(a.thoughts)}</strong></label>
+          </div>
+          <div class="field">
+            <label>Auto TTS: <strong>${i.auto_tts ? "On" : "Off"}</strong></label>
+          </div>
+        `;
+      }
+      return o`<div style="opacity: 0.5; padding: 12px;">Select an agent profile first.</div>`;
+    }
+    const t = this._cardConfig.tts_voices ?? { normal: "", narration: "", speech: "", thoughts: "" }, e = (i, a, s) => o`
       <div class="field">
         <label>${i}</label>
         <div class="sublabel" style="font-size:11px;color:var(--card-secondary);margin-bottom:2px">${a}</div>
         <select
-          .value=${t[r]}
-          @change=${(o) => {
-      const c = o.target.value;
-      this._updateField("tts_voices", { ...t, [r]: c });
+          .value=${t[s]}
+          @change=${(n) => {
+      const c = n.target.value;
+      this._updateField("tts_voices", { ...t, [s]: c });
     }}
         >
           <option value="">Disabled</option>
           ${this._voices.map(
-      (o) => n`<option value=${o.id} ?selected=${t[r] === o.id}>
-              ${o.name}
+      (n) => o`<option value=${n.id} ?selected=${t[s] === n.id}>
+              ${n.name}
             </option>`
     )}
         </select>
       </div>
     `;
-    return n`
+    return o`
       <div class="toggle-row">
         <div>
           <label>Auto TTS</label>
@@ -1857,117 +1907,8 @@ class Q extends m {
       ${e("Thoughts", "Voice for ```thoughts``` text", "thoughts")}
     `;
   }
-  _renderPersonalityTab() {
-    const t = this._cardConfig.personality;
-    return n`
-      <div class="toggle-row">
-        <div>
-          <label>Enable Personality</label>
-          <div class="sublabel">Use Character Card V3 personality fields</div>
-        </div>
-        <label class="switch">
-          <input
-            type="checkbox"
-            .checked=${this._cardConfig.personality_enabled}
-            @change=${(e) => this._updateField("personality_enabled", e.target.checked)}
-          />
-          <span class="slider"></span>
-        </label>
-      </div>
-
-      ${this._cardConfig.personality_enabled ? n`
-            <div class="field">
-              <label>Import Character Card PNG</label>
-              <input type="file" accept=".png" @change=${this._onPngUpload} />
-            </div>
-            <div class="field">
-              <label>Character Name</label>
-              <input
-                type="text"
-                .value=${t.name}
-                @input=${(e) => this._updatePersonality("name", e.target.value)}
-              />
-            </div>
-            <div class="field">
-              <label>Description</label>
-              <textarea
-                .value=${t.description}
-                @input=${(e) => this._updatePersonality("description", e.target.value)}
-              ></textarea>
-            </div>
-            <div class="field">
-              <label>Personality</label>
-              <textarea
-                .value=${t.personality}
-                @input=${(e) => this._updatePersonality("personality", e.target.value)}
-              ></textarea>
-            </div>
-            <div class="field">
-              <label>Scenario</label>
-              <textarea
-                .value=${t.scenario}
-                @input=${(e) => this._updatePersonality("scenario", e.target.value)}
-              ></textarea>
-            </div>
-            <div class="field">
-              <label>System Prompt</label>
-              <textarea
-                .value=${t.system_prompt}
-                @input=${(e) => this._updatePersonality("system_prompt", e.target.value)}
-              ></textarea>
-            </div>
-            <div class="field">
-              <label>First Message</label>
-              <textarea
-                .value=${t.first_mes}
-                @input=${(e) => this._updatePersonality("first_mes", e.target.value)}
-              ></textarea>
-            </div>
-            <div class="field">
-              <label>Example Dialogue</label>
-              <textarea
-                .value=${t.mes_example}
-                @input=${(e) => this._updatePersonality("mes_example", e.target.value)}
-              ></textarea>
-            </div>
-            <div class="field">
-              <label>Post-History Instructions</label>
-              <textarea
-                .value=${t.post_history_instructions}
-                @input=${(e) => this._updatePersonality("post_history_instructions", e.target.value)}
-              ></textarea>
-            </div>
-          ` : d}
-    `;
-  }
-  _renderPromptTab() {
-    const t = this._cardConfig.prompt_override;
-    return n`
-      <div class="field">
-        <label>System Prompt</label>
-        <div class="sublabel" style="margin-bottom:4px;font-size:12px;color:var(--card-secondary)">
-          Override the agent's default prompt. Leave empty to use the agent's built-in prompt.
-        </div>
-        <textarea
-          style="min-height:200px"
-          placeholder="${this._defaultPrompt || "Loading agent default prompt..."}"
-          .value=${t}
-          @input=${(e) => this._updateField("prompt_override", e.target.value)}
-        ></textarea>
-      </div>
-      ${this._defaultPrompt ? n`
-            <button
-              class="tab"
-              style="align-self:flex-start;padding:6px 12px;border:1px solid var(--divider);border-radius:6px;cursor:pointer"
-              @click=${() => this._updateField("prompt_override", this._defaultPrompt)}
-            >
-              Copy Agent Default
-            </button>
-          ` : d}
-    `;
-  }
   _renderAdvancedTab() {
-    return n`
+    return o`
       <div class="toggle-row">
         <div>
           <label>Per-Card Memory</label>
@@ -2000,40 +1941,11 @@ class Q extends m {
         <label>Card ID</label>
         <input type="text" .value=${this._cardConfig.card_id} disabled />
       </div>
-
-      <div style="border-top: 1px solid var(--divider, #e5e7eb); margin-top: 12px; padding-top: 12px;">
-        <label style="font-weight: 600; font-size: 13px;">Save as Profile</label>
-        <div class="sublabel" style="margin-bottom: 8px;">Create a reusable agent profile from this card's config</div>
-        <div style="display: flex; gap: 8px; align-items: center;">
-          <input
-            type="text"
-            placeholder="Profile name"
-            .value=${this._profileName}
-            @input=${(t) => {
-      this._profileName = t.target.value, this._profileSaved = !1;
-    }}
-            style="flex: 1; padding: 6px 10px; border: 1px solid var(--divider, #ccc); border-radius: 6px; font-size: 13px;"
-          />
-          <button
-            style="padding: 6px 14px; border-radius: 6px; font-size: 13px; cursor: pointer; border: none; background: var(--primary-color, #7c3aed); color: white;"
-            @click=${this._saveAsProfile}
-            ?disabled=${!this._profileName.trim()}
-          >
-            ${this._profileSaved ? "Saved!" : "Save"}
-          </button>
-        </div>
-      </div>
     `;
   }
   // ---- Actions ----
   _updateField(t, e) {
     this._cardConfig = { ...this._cardConfig, [t]: e }, this._saveAndFireEvent();
-  }
-  _updatePersonality(t, e) {
-    this._cardConfig = {
-      ...this._cardConfig,
-      personality: { ...this._cardConfig.personality, [t]: e }
-    }, this._saveAndFireEvent();
   }
   async _saveAndFireEvent() {
     if (this.hass && this._config?.card_id)
@@ -2053,31 +1965,6 @@ class Q extends m {
       })
     );
   }
-  async _saveAsProfile() {
-    if (!this.hass || !this._profileName.trim()) return;
-    const t = Math.random().toString(36).substring(2, 10), e = {
-      name: this._profileName.trim(),
-      agent_id: this._cardConfig.agent_id,
-      avatar: this._cardConfig.avatar,
-      prompt_override: this._cardConfig.prompt_override,
-      personality_enabled: this._cardConfig.personality_enabled,
-      personality: { ...this._cardConfig.personality },
-      tts_voices: { ...this._cardConfig.tts_voices },
-      auto_tts: this._cardConfig.auto_tts,
-      portrait_width: this._cardConfig.portrait_width
-    };
-    try {
-      await this.hass.callWS({
-        type: "proxlab/profile/save",
-        profile_id: t,
-        profile: e
-      }), this._profileSaved = !0, setTimeout(() => {
-        this._profileSaved = !1;
-      }, 2e3);
-    } catch (i) {
-      console.error("Failed to save profile:", i);
-    }
-  }
   async _onAvatarUpload(t) {
     const e = t.target.files?.[0];
     if (!e || !this.hass || !this._config?.card_id) return;
@@ -2085,58 +1972,32 @@ class Q extends m {
     i.onloadend = async () => {
       const a = i.result.split(",")[1];
       try {
-        const o = (await this.hass.callWS({
+        const n = (await this.hass.callWS({
           type: "proxlab/card/avatar/upload",
           card_id: this._config.card_id,
           data: a,
           filename: e.name
         })).url.split("?")[0] + "?v=" + Date.now();
-        this._updateField("avatar", o);
+        this._updateField("avatar", n);
       } catch {
       }
     }, i.readAsDataURL(e);
   }
-  async _onPngUpload(t) {
-    const e = t.target.files?.[0];
-    if (!e) return;
-    const i = await Nt(e);
-    if (i && (this._cardConfig = {
-      ...this._cardConfig,
-      personality: i,
-      personality_enabled: !0
-    }, this._saveAndFireEvent()), this.hass && this._config?.card_id) {
-      const a = new FileReader();
-      a.onloadend = async () => {
-        const r = a.result.split(",")[1];
-        try {
-          const c = (await this.hass.callWS({
-            type: "proxlab/card/avatar/upload",
-            card_id: this._config.card_id,
-            data: r,
-            filename: e.name
-          })).url.split("?")[0] + "?v=" + Date.now();
-          this._updateField("avatar", c);
-        } catch {
-        }
-      }, a.readAsDataURL(e);
-    }
-  }
 }
-Q.styles = ft;
-Q.properties = {
+B.styles = ut;
+B.properties = {
   hass: { attribute: !1 },
   _config: { state: !0 },
   _cardConfig: { state: !0 },
   _tab: { state: !0 },
   _agents: { state: !0 },
   _voices: { state: !0 },
+  _profiles: { state: !0 },
   _loaded: { state: !0 },
-  _defaultPrompt: { state: !0 },
-  _profileName: { state: !0 },
-  _profileSaved: { state: !0 }
+  _defaultPrompt: { state: !0 }
 };
-customElements.define("proxlab-chat-card-editor", Q);
-class q extends m {
+customElements.define("proxlab-chat-card-editor", B);
+class W extends m {
   constructor() {
     super(...arguments), this._cardConfig = {
       card_id: "",
@@ -2172,14 +2033,14 @@ class q extends m {
     }
   }
   render() {
-    return n`
+    return o`
       <div class="editor">
         <div class="tabs">
           ${[
       ["participants", "Participants"],
       ["settings", "Settings"]
     ].map(
-      ([t, e]) => n`
+      ([t, e]) => o`
               <button
                 class="tab ${this._tab === t ? "active" : ""}"
                 @click=${() => {
@@ -2200,7 +2061,7 @@ class q extends m {
   }
   _renderParticipantsTab() {
     if (this._profiles.length === 0)
-      return n`
+      return o`
         <div style="padding: 16px; text-align: center; opacity: 0.6;">
           <p>No agent profiles found.</p>
           <p style="font-size: 12px; margin-top: 8px;">
@@ -2210,14 +2071,14 @@ class q extends m {
         </div>
       `;
     const t = new Set(this._cardConfig.profile_ids);
-    return n`
+    return o`
       <div style="display: flex; flex-direction: column; gap: 8px;">
         <div class="sublabel" style="margin-bottom: 4px;">
           Select agent profiles to participate in this group chat.
           Order determines turn sequence for Round Robin mode.
         </div>
         ${this._profiles.map(
-      (e) => n`
+      (e) => o`
             <label
               class="profile-row"
               style="display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 8px; cursor: pointer; border: 1px solid ${t.has(e.profile_id) ? "var(--primary-color, #7c3aed)" : "var(--divider, #e5e7eb)"}; background: ${t.has(e.profile_id) ? "var(--primary-color, #7c3aed)11" : "transparent"};"
@@ -2231,10 +2092,10 @@ class q extends m {
       )}
                 style="accent-color: var(--primary-color, #7c3aed);"
               />
-              ${e.avatar ? n`<img
+              ${e.avatar ? o`<img
                     src="${e.avatar}"
                     style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover;"
-                  />` : n`<div
+                  />` : o`<div
                     style="width: 32px; height: 32px; border-radius: 50%; background: var(--divider, #e5e7eb); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 14px;"
                   >
                     ${e.name.charAt(0).toUpperCase()}
@@ -2250,7 +2111,7 @@ class q extends m {
     `;
   }
   _renderSettingsTab() {
-    return n`
+    return o`
       <div class="field">
         <label>Turn Mode</label>
         <select
@@ -2330,8 +2191,8 @@ class q extends m {
     );
   }
 }
-q.styles = ft;
-q.properties = {
+W.styles = ut;
+W.properties = {
   hass: { attribute: !1 },
   _config: { state: !0 },
   _cardConfig: { state: !0 },
@@ -2341,10 +2202,10 @@ q.properties = {
 };
 customElements.define(
   "proxlab-group-chat-card-editor",
-  q
+  W
 );
-const Bt = n`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`, dt = [250, 160, 30, 340, 200, 80, 290, 120];
-class G extends m {
+const Rt = o`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`, ot = [250, 160, 30, 340, 200, 80, 290, 120];
+class Q extends m {
   constructor() {
     super(...arguments), this._profiles = [], this._messages = [], this._loading = !1, this._inputValue = "", this._configLoaded = !1, this._mentionOpen = !1, this._mentionFilter = "";
   }
@@ -2400,24 +2261,24 @@ class G extends m {
   }
   render() {
     if (!this._cardConfig)
-      return n`<ha-card>
+      return o`<ha-card>
         <div style="padding: 24px; text-align: center;">
           <span style="opacity: 0.5;">Loading group chat...</span>
         </div>
       </ha-card>`;
     const t = this._cardConfig.card_height ?? 600;
-    return n`
+    return o`
       <ha-card>
         <div class="card-container" style="height: ${t}px;">
           ${this._renderParticipantStrip()}
           <div class="messages" id="messages">
-            ${this._messages.length === 0 ? n`<div class="empty-state">
+            ${this._messages.length === 0 ? o`<div class="empty-state">
                   <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
                     <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
                   </svg>
                   <span>Start a group conversation</span>
                 </div>` : this._messages.map((e) => this._renderMessage(e))}
-            ${this._loading ? n`<div class="loading-row">
+            ${this._loading ? o`<div class="loading-row">
                   <div class="typing-indicator">
                     <span></span><span></span><span></span>
                   </div>
@@ -2442,7 +2303,7 @@ class G extends m {
               @click=${this._sendMessage}
               ?disabled=${this._loading || !this._inputValue.trim()}
             >
-              ${Bt}
+              ${Rt}
             </button>
           </div>
         </div>
@@ -2450,14 +2311,14 @@ class G extends m {
     `;
   }
   _renderParticipantStrip() {
-    return this._profiles.length === 0 ? n`<div class="participant-strip">
+    return this._profiles.length === 0 ? o`<div class="participant-strip">
         <span style="opacity: 0.5; font-size: 12px;">No participants — configure profiles in card editor</span>
-      </div>` : n`
+      </div>` : o`
       <div class="participant-strip">
         ${this._profiles.map(
-      (t) => n`
+      (t) => o`
             <div class="participant">
-              ${t.avatar ? n`<img class="participant-avatar" src="${t.avatar}" alt="${t.name}" />` : n`<div class="participant-avatar placeholder">${t.name.charAt(0).toUpperCase()}</div>`}
+              ${t.avatar ? o`<img class="participant-avatar" src="${t.avatar}" alt="${t.name}" />` : o`<div class="participant-avatar placeholder">${t.name.charAt(0).toUpperCase()}</div>`}
               <span class="participant-name">${t.name}</span>
             </div>
           `
@@ -2482,33 +2343,33 @@ class G extends m {
   }
   _renderMessage(t) {
     if (t.role === "user")
-      return n`
+      return o`
         <div class="msg msg-user">
           <div class="bubble user-bubble">${this._formatContent(t.content)}</div>
         </div>
       `;
     const e = this._profiles.findIndex(
       (a) => a.profile_id === t.profile_id
-    ), i = dt[e >= 0 ? e % dt.length : 0];
-    return n`
+    ), i = ot[e >= 0 ? e % ot.length : 0];
+    return o`
       <div class="msg agent-msg">
-        ${t.avatar ? n`<img class="msg-avatar" src="${t.avatar}" alt="${t.profile_name}" />` : n`<div class="msg-avatar placeholder">${(t.profile_name ?? "?").charAt(0).toUpperCase()}</div>`}
+        ${t.avatar ? o`<img class="msg-avatar" src="${t.avatar}" alt="${t.profile_name}" />` : o`<div class="msg-avatar placeholder">${(t.profile_name ?? "?").charAt(0).toUpperCase()}</div>`}
         <div class="agent-body">
           <span class="msg-name" style="color: hsl(${i}, 60%, 55%);">${t.profile_name}</span>
           <div class="bubble agent-bubble" style="border-left: 3px solid hsl(${i}, 60%, 55%);">
             ${this._formatContent(t.content)}
           </div>
-          ${this._cardConfig?.show_metadata && t.metadata ? n`<div class="msg-meta">
-                ${t.metadata.model ? n`<span>${t.metadata.model}</span>` : d}
-                ${t.metadata.tokens ? n`<span>${t.metadata.tokens} tok</span>` : d}
-                ${t.metadata.duration_ms ? n`<span>${(t.metadata.duration_ms / 1e3).toFixed(1)}s</span>` : d}
+          ${this._cardConfig?.show_metadata && t.metadata ? o`<div class="msg-meta">
+                ${t.metadata.model ? o`<span>${t.metadata.model}</span>` : d}
+                ${t.metadata.tokens ? o`<span>${t.metadata.tokens} tok</span>` : d}
+                ${t.metadata.duration_ms ? o`<span>${(t.metadata.duration_ms / 1e3).toFixed(1)}s</span>` : d}
               </div>` : d}
         </div>
       </div>
     `;
   }
   _formatContent(t) {
-    return V(t).map((i) => i.type === "normal" ? n`<span>${i.text}</span>` : n`<span class="text-${i.type}">${i.text}</span>`);
+    return D(t).map((i) => i.type === "normal" ? o`<span>${i.text}</span>` : o`<span class="text-${i.type}">${i.text}</span>`);
   }
   _onInput(t) {
     const e = t.target;
@@ -2528,15 +2389,15 @@ class G extends m {
     const t = this._profiles.filter(
       (e) => e.name.toLowerCase().includes(this._mentionFilter)
     );
-    return t.length === 0 ? d : n`
+    return t.length === 0 ? d : o`
       <div class="mention-dropdown">
         ${t.map(
-      (e) => n`
+      (e) => o`
             <div
               class="mention-item"
               @click=${() => this._completeMention(e.name)}
             >
-              ${e.avatar ? n`<img src="${e.avatar}" class="mention-avatar" />` : n`<span class="mention-avatar placeholder">${e.name.charAt(0)}</span>`}
+              ${e.avatar ? o`<img src="${e.avatar}" class="mention-avatar" />` : o`<span class="mention-avatar placeholder">${e.name.charAt(0)}</span>`}
               <span>${e.name}</span>
             </div>
           `
@@ -2578,10 +2439,10 @@ class G extends m {
           this._messages = [...this._messages, ...i];
           for (const a of e.responses) {
             if (!a.success) continue;
-            const r = this._profiles.find(
-              (o) => o.profile_id === a.profile_id
+            const s = this._profiles.find(
+              (n) => n.profile_id === a.profile_id
             );
-            r?.auto_tts && r.tts_voices?.normal && this._speakForProfile(a.response_text, r);
+            s?.auto_tts && s.tts_voices?.normal && this._speakForProfile(a.response_text, s);
           }
         }
       } catch (e) {
@@ -2618,8 +2479,8 @@ class G extends m {
     });
   }
 }
-G.styles = Vt;
-G.properties = {
+Q.styles = Ht;
+Q.properties = {
   hass: { attribute: !1 },
   _config: { state: !0 },
   _cardConfig: { state: !0 },
@@ -2631,7 +2492,7 @@ G.properties = {
   _mentionOpen: { state: !0 },
   _mentionFilter: { state: !0 }
 };
-customElements.define("proxlab-group-chat-card", G);
+customElements.define("proxlab-group-chat-card", Q);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "proxlab-group-chat-card",
@@ -2639,8 +2500,8 @@ window.customCards.push({
   description: "Multi-agent group chat card",
   preview: !1
 });
-const Wt = n`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`, Qt = n`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>`, qt = n`<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" opacity="0.4"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>`, Gt = n`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`, Kt = n`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`, Xt = n`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`, Yt = n`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>`, Jt = n`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`, Zt = n`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`;
-class K extends m {
+const Dt = o`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`, Vt = o`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>`, Nt = o`<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" opacity="0.4"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>`, Ft = o`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`, jt = o`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`, Bt = o`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`, Wt = o`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>`, Qt = o`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`, qt = o`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`;
+class q extends m {
   constructor() {
     super(...arguments), this._messages = [], this._loading = !1, this._inputValue = "", this._recording = !1, this._configLoaded = !1, this._portraitWidth = 0, this._editingIndex = -1, this._editValue = "", this._speakingIndex = -1, this._audioChunks = [], this._lastAvatarUrl = "", this._audioQueue = [], this._audioPlaying = !1, this._onAudioQueueDone = null;
   }
@@ -2682,7 +2543,20 @@ class K extends m {
           type: "proxlab/card/config/get",
           card_id: this._config.card_id
         });
-        this._cardConfig = t ?? void 0, t?.avatar && t.avatar !== this._lastAvatarUrl && (this._lastAvatarUrl = t.avatar, this._measureAvatar(t.avatar, t.card_height ?? 500)), this._messages.length === 0 && t?.personality_enabled && t?.personality?.first_mes && (this._messages = [
+        if (!t) {
+          this._cardConfig = void 0;
+          return;
+        }
+        if (t.use_profile && t.profile_id)
+          try {
+            const e = await this.hass.callWS({
+              type: "proxlab/profile/get",
+              profile_id: t.profile_id
+            });
+            e && (t.avatar = e.avatar || t.avatar, t.personality_enabled = e.personality_enabled, t.personality = e.personality, t.prompt_override = e.prompt_override, t.agent_id = e.agent_id, t.tts_voices = e.tts_voices, t.auto_tts = e.auto_tts, t.portrait_width = e.portrait_width, !t.title_override && e.personality?.name ? t.title_override = e.personality.name : !t.title_override && e.name && (t.title_override = e.name));
+          } catch {
+          }
+        this._cardConfig = t, t.avatar && t.avatar !== this._lastAvatarUrl && (this._lastAvatarUrl = t.avatar, this._measureAvatar(t.avatar, t.card_height ?? 500)), this._messages.length === 0 && t.personality_enabled && t.personality?.first_mes && (this._messages = [
           {
             role: "assistant",
             content: t.personality.first_mes,
@@ -2697,33 +2571,33 @@ class K extends m {
     const i = new Image();
     i.onload = () => {
       if (!i.naturalWidth || !i.naturalHeight) return;
-      const a = e - 56 - 52 - 16 - 36, r = i.naturalWidth / i.naturalHeight, o = Math.round(a * r);
-      this._portraitWidth = Math.max(80, Math.min(o, 600));
+      const a = e - 56 - 52 - 16 - 36, s = i.naturalWidth / i.naturalHeight, n = Math.round(a * s);
+      this._portraitWidth = Math.max(80, Math.min(n, 600));
     }, i.src = t;
   }
   // ---- Rendering ----
   render() {
     if (!this._config)
-      return n`<ha-card><div class="not-configured">No configuration</div></ha-card>`;
+      return o`<ha-card><div class="not-configured">No configuration</div></ha-card>`;
     if (this._cardConfig?.allowed_users?.length) {
       const c = this.hass?.user?.id;
       if (c && !this._cardConfig.allowed_users.includes(c))
-        return n``;
+        return o``;
     }
-    const t = this._cardConfig?.card_height ?? 500, e = this._cardConfig?.hide_header ?? !1, i = this._cardConfig?.avatar, a = !!i, r = this._resolveTitle(), o = this._resolveStatus();
-    return n`
+    const t = this._cardConfig?.card_height ?? 500, e = this._cardConfig?.hide_header ?? !1, i = this._cardConfig?.avatar, a = !!i, s = this._resolveTitle(), n = this._resolveStatus();
+    return o`
       <ha-card>
         <div class="card-container" style="height: ${t}px">
-          ${e ? d : this._renderHeader(r, o, i)}
-          ${a ? n`
+          ${e ? d : this._renderHeader(s, n, i)}
+          ${a ? o`
                 <div class="card-layout">
-                  ${this._renderPortraitPanel(i, r, o)}
+                  ${this._renderPortraitPanel(i, s, n)}
                   <div class="chat-area">
                     ${this._renderMessages()}
                     ${this._renderInputBar()}
                   </div>
                 </div>
-              ` : n`
+              ` : o`
                 ${this._renderMessages()}
                 ${this._renderInputBar()}
               `}
@@ -2742,10 +2616,10 @@ class K extends m {
     return t ? t === "orchestrator" ? "Orchestrator" : t === "conversation_agent" ? "Conversation Agent" : t.replace(/_/g, " ").replace(/\b\w/g, (e) => e.toUpperCase()) : "";
   }
   _renderHeader(t, e, i) {
-    return n`
+    return o`
       <div class="card-header">
         <div class="avatar">
-          ${i ? n`<img src="${i}" alt="${t}" />` : t.charAt(0).toUpperCase()}
+          ${i ? o`<img src="${i}" alt="${t}" />` : t.charAt(0).toUpperCase()}
         </div>
         <div class="header-info">
           <div class="header-name">${t}</div>
@@ -2755,54 +2629,54 @@ class K extends m {
     `;
   }
   _renderPortraitPanel(t, e, i) {
-    const a = this._cardConfig?.portrait_width ?? "auto", r = typeof a == "number" && a > 0, o = r ? a : this._portraitWidth, c = o ? `width: ${o}px; max-width: 50%;` : "width: 25%; max-width: 50%;", l = r ? "portrait-img-cover" : "portrait-img-contain", h = this._resolveAgentLabel();
-    return n`
+    const a = this._cardConfig?.portrait_width ?? "auto", s = typeof a == "number" && a > 0, n = s ? a : this._portraitWidth, c = n ? `width: ${n}px; max-width: 50%;` : "width: 25%; max-width: 50%;", l = s ? "portrait-img-cover" : "portrait-img-contain", h = this._resolveAgentLabel();
+    return o`
       <div class="portrait-panel" style="${c}">
         <img class="${l}" src="${t}" alt="${e}" />
         <div class="portrait-name">${e}</div>
         <div class="portrait-status">${i}</div>
-        ${h ? n`<div class="portrait-agent">${h}</div>` : d}
+        ${h ? o`<div class="portrait-agent">${h}</div>` : d}
       </div>
     `;
   }
   _renderMessages() {
     if (this._messages.length === 0 && !this._loading)
-      return n`
+      return o`
         <div class="messages" style="flex: 1">
           <div class="empty-state">
-            ${qt}
+            ${Nt}
             <span>Start a conversation</span>
           </div>
         </div>
       `;
     const t = this._findLastAssistantIndex();
-    return n`
+    return o`
       <div class="messages">
         ${this._messages.map(
-      (e, i) => n`
+      (e, i) => o`
             <div class="message ${e.role} ${this._editingIndex === i ? "editing" : ""}">
-              ${this._editingIndex === i ? this._renderEditBubble(i) : n`
+              ${this._editingIndex === i ? this._renderEditBubble(i) : o`
                     <div class="bubble">${this._formatContent(e.content)}</div>
                     <div class="msg-actions">
-                      ${this._cardConfig?.show_metadata !== !1 && e.metadata ? n`<span class="meta-inline">
+                      ${this._cardConfig?.show_metadata !== !1 && e.metadata ? o`<span class="meta-inline">
                             ${e.metadata.model ?? ""}${e.metadata.tokens ? ` | ${e.metadata.tokens} tok` : ""}${e.metadata.duration_ms ? ` | ${(e.metadata.duration_ms / 1e3).toFixed(1)}s` : ""}
                           </span>` : d}
-                      ${this._loading ? d : n`
+                      ${this._loading ? d : o`
                             <button class="msg-btn" title="Edit" @click=${() => this._startEdit(i)}>
-                              ${Gt}
+                              ${Ft}
                             </button>
                             <button class="msg-btn delete" title="Delete" @click=${() => this._deleteMessage(i)}>
-                              ${Jt}
+                              ${Qt}
                             </button>
-                            ${e.role === "assistant" ? n`<button
+                            ${e.role === "assistant" ? o`<button
                                   class="msg-btn speak ${this._speakingIndex === i ? "speaking" : ""}"
                                   title="Speak"
                                   @click=${() => this._speakMessage(i)}
                                 >
-                                  ${Zt}
+                                  ${qt}
                                 </button>` : d}
-                            ${e.role === "assistant" && i === t ? n`<button class="msg-btn" title="Regenerate" @click=${() => this._regenerate()}>
-                                  ${Kt}
+                            ${e.role === "assistant" && i === t ? o`<button class="msg-btn" title="Regenerate" @click=${() => this._regenerate()}>
+                                  ${jt}
                                 </button>` : d}
                           `}
                     </div>
@@ -2810,7 +2684,7 @@ class K extends m {
             </div>
           `
     )}
-        ${this._loading ? n`<div class="typing">
+        ${this._loading ? o`<div class="typing">
               <div class="typing-dot"></div>
               <div class="typing-dot"></div>
               <div class="typing-dot"></div>
@@ -2819,7 +2693,7 @@ class K extends m {
     `;
   }
   _renderEditBubble(t) {
-    return n`
+    return o`
       <div class="edit-bubble">
         <textarea
           class="edit-textarea"
@@ -2833,10 +2707,10 @@ class K extends m {
         ></textarea>
         <div class="edit-actions">
           <button class="msg-btn confirm" title="Save" @click=${() => this._confirmEdit(t)}>
-            ${Xt}
+            ${Bt}
           </button>
           <button class="msg-btn" title="Cancel" @click=${() => this._cancelEdit()}>
-            ${Yt}
+            ${Wt}
           </button>
         </div>
       </div>
@@ -2848,14 +2722,14 @@ class K extends m {
     return -1;
   }
   _renderInputBar() {
-    return n`
+    return o`
       <div class="input-bar">
         <button
           class="btn-icon btn-mic ${this._recording ? "recording" : ""}"
           @click=${this._toggleRecording}
           title="Voice input"
         >
-          ${Qt}
+          ${Vt}
         </button>
         <input
           type="text"
@@ -2875,7 +2749,7 @@ class K extends m {
           ?disabled=${this._loading || !this._inputValue.trim()}
           title="Send"
         >
-          ${Wt}
+          ${Dt}
         </button>
       </div>
     `;
@@ -2996,7 +2870,7 @@ class K extends m {
     });
   }
   _formatContent(t) {
-    return V(t).map((i) => i.type === "normal" ? n`<span>${i.text}</span>` : n`<span class="text-${i.type}">${i.text}</span>`);
+    return D(t).map((i) => i.type === "normal" ? o`<span>${i.text}</span>` : o`<span class="text-${i.type}">${i.text}</span>`);
   }
   _deleteMessage(t) {
     const e = [...this._messages];
@@ -3018,8 +2892,8 @@ class K extends m {
       e?.();
       return;
     }
-    const o = V(t).filter((c) => c.text.trim()).map((c) => ({ text: c.text, voice: i[c.type] || "" })).filter((c) => c.voice);
-    if (o.length === 0) {
+    const n = D(t).filter((c) => c.text.trim()).map((c) => ({ text: c.text, voice: i[c.type] || "" })).filter((c) => c.voice);
+    if (n.length === 0) {
       e?.();
       return;
     }
@@ -3027,7 +2901,7 @@ class K extends m {
       const c = await this.hass.callWS({
         type: "proxlab/card/tts/speak",
         card_id: this._config.card_id,
-        segments: o
+        segments: n
       });
       if (c?.audio_segments?.length) {
         for (const l of c.audio_segments) {
@@ -3084,10 +2958,10 @@ class K extends m {
   }
   async _transcribeAudio(t) {
     try {
-      const e = new FileReader(), i = await new Promise((r) => {
+      const e = new FileReader(), i = await new Promise((s) => {
         e.onloadend = () => {
-          const o = e.result;
-          r(o.split(",")[1] || "");
+          const n = e.result;
+          s(n.split(",")[1] || "");
         }, e.readAsDataURL(t);
       }), a = await this.hass.callWS({
         type: "proxlab/card/stt/transcribe",
@@ -3098,8 +2972,8 @@ class K extends m {
     }
   }
 }
-K.styles = Ht;
-K.properties = {
+q.styles = Ot;
+q.properties = {
   hass: { attribute: !1 },
   _config: { state: !0 },
   _cardConfig: { state: !0 },
@@ -3113,7 +2987,7 @@ K.properties = {
   _editValue: { state: !0 },
   _speakingIndex: { state: !0 }
 };
-customElements.define("proxlab-chat-card", K);
+customElements.define("proxlab-chat-card", q);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "proxlab-chat-card",
@@ -3123,5 +2997,5 @@ window.customCards.push({
   documentationURL: "https://github.com/travisfinch1983/ha-proxlab"
 });
 export {
-  K as ProxLabChatCard
+  q as ProxLabChatCard
 };
