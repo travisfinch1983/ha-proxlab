@@ -135,7 +135,7 @@ export class ProxLabChatCardEditor extends LitElement {
           <option value="orchestrator" ?selected=${this._cardConfig.agent_id === "orchestrator"}>
             Orchestrator (Default Pipeline)
           </option>
-          <option value="conversation" ?selected=${this._cardConfig.agent_id === "conversation"}>
+          <option value="conversation_agent" ?selected=${this._cardConfig.agent_id === "conversation_agent"}>
             Conversation Agent
           </option>
           ${this._agents.map(

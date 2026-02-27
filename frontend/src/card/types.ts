@@ -92,7 +92,7 @@ export interface TtsVoice {
 /** Default config for new cards */
 export const DEFAULT_CARD_CONFIG: ProxLabChatCardConfig = {
   card_id: "",
-  agent_id: "conversation",
+  agent_id: "conversation_agent",
   prompt_override: "",
   avatar: "",
   tts_voice: "",

@@ -554,7 +554,7 @@ const Ot = nt`
   }
 
   .portrait-panel {
-    width: 140px;
+    width: 180px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
@@ -566,10 +566,11 @@ const Ot = nt`
   }
 
   .portrait-panel img {
-    width: 110px;
-    height: 110px;
+    width: 160px;
+    height: 220px;
     border-radius: 12px;
     object-fit: cover;
+    object-position: top;
     border: 2px solid var(--divider);
   }
 
@@ -1018,7 +1019,7 @@ const Ot = nt`
   }
 `, st = {
   card_id: "",
-  agent_id: "conversation",
+  agent_id: "conversation_agent",
   prompt_override: "",
   avatar: "",
   tts_voice: "",
@@ -1092,7 +1093,8 @@ function at(a, t) {
   try {
     let e;
     try {
-      e = atob(a.trim());
+      const s = atob(a.trim()), r = Uint8Array.from(s, (n) => n.charCodeAt(0));
+      e = new TextDecoder("utf-8").decode(r);
     } catch {
       e = a;
     }
@@ -1205,7 +1207,7 @@ class V extends x {
           <option value="orchestrator" ?selected=${this._cardConfig.agent_id === "orchestrator"}>
             Orchestrator (Default Pipeline)
           </option>
-          <option value="conversation" ?selected=${this._cardConfig.agent_id === "conversation"}>
+          <option value="conversation_agent" ?selected=${this._cardConfig.agent_id === "conversation_agent"}>
             Conversation Agent
           </option>
           ${this._agents.map(

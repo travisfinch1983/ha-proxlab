@@ -92,7 +92,11 @@ function decodeAndParse(
     // Try base64 decode first
     let json: string;
     try {
-      json = atob(value.trim());
+      // atob returns a binary string (one byte per char). For proper UTF-8
+      // decoding, convert to Uint8Array and use TextDecoder.
+      const binaryStr = atob(value.trim());
+      const bytes = Uint8Array.from(binaryStr, (c) => c.charCodeAt(0));
+      json = new TextDecoder("utf-8").decode(bytes);
     } catch {
       // Maybe it's already plain JSON
       json = value;

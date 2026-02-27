@@ -34,7 +34,7 @@ export const cardStyles = css`
   }
 
   .portrait-panel {
-    width: 140px;
+    width: 180px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
@@ -46,10 +46,11 @@ export const cardStyles = css`
   }
 
   .portrait-panel img {
-    width: 110px;
-    height: 110px;
+    width: 160px;
+    height: 220px;
     border-radius: 12px;
     object-fit: cover;
+    object-position: top;
     border: 2px solid var(--divider);
   }
 

@@ -2656,37 +2656,50 @@ async def ws_card_voices(
 
     voices: list[dict[str, str]] = []
     if tts_config:
-        base_url = tts_config.get("base_url", "")
+        base_url = tts_config.get("base_url", "").rstrip("/")
         api_key = tts_config.get("api_key", "")
-        # Try to list voices from the TTS endpoint
-        try:
-            import aiohttp
+        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
 
-            headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        # Try multiple common voice-listing endpoints
+        voice_urls = [
+            f"{base_url}/voices",           # F5-TTS, AllTalk, etc.
+            f"{base_url}/audio/voices",     # OpenAI-compatible
+            f"{base_url}/v1/audio/voices",  # Some wrappers add v1 prefix
+        ]
+
+        import aiohttp
+
+        try:
             async with aiohttp.ClientSession() as session:
-                # OpenAI-compatible voices endpoint
-                async with session.get(
-                    f"{base_url}/audio/voices",
-                    headers=headers,
-                    timeout=aiohttp.ClientTimeout(total=5),
-                ) as resp:
-                    if resp.status == 200:
-                        data = await resp.json()
-                        for v in data.get("voices", data.get("data", [])):
-                            if isinstance(v, dict):
-                                voices.append({
-                                    "id": v.get("voice_id", v.get("id", "")),
-                                    "name": v.get("name", v.get("voice_id", "")),
-                                })
-                            elif isinstance(v, str):
-                                voices.append({"id": v, "name": v})
+                for url in voice_urls:
+                    try:
+                        async with session.get(
+                            url,
+                            headers=headers,
+                            timeout=aiohttp.ClientTimeout(total=5),
+                        ) as resp:
+                            if resp.status == 200:
+                                data = await resp.json()
+                                for v in data.get("voices", data.get("data", [])):
+                                    if isinstance(v, dict):
+                                        voices.append({
+                                            "id": v.get("voice_id", v.get("id", "")),
+                                            "name": v.get("name", v.get("voice_id", v.get("id", ""))),
+                                        })
+                                    elif isinstance(v, str):
+                                        voices.append({"id": v, "name": v})
+                                if voices:
+                                    break
+                    except Exception:
+                        continue
         except Exception:
             pass
 
-    # If no endpoint voices found, provide common defaults
-    if not voices:
-        for name in ["alloy", "echo", "fable", "onyx", "nova", "shimmer"]:
-            voices.append({"id": name, "name": name.capitalize()})
+    # If endpoint query still failed, include voice from TTS connection config
+    if not voices and tts_config:
+        configured_voice = tts_config.get("voice", "")
+        if configured_voice:
+            voices.append({"id": configured_voice, "name": configured_voice})
 
     connection.send_result(msg["id"], voices)
 
