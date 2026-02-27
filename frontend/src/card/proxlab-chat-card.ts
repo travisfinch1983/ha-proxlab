@@ -613,7 +613,7 @@ export class ProxLabChatCard extends LitElement {
     if (reqSegments.length === 0) { onDone?.(); return; }
 
     try {
-      const result = await this.hass.callWS<{ audio_segments: { data_url: string }[] }>({
+      const result = await this.hass.callWS<{ audio_segments: { url?: string; data_url?: string }[] }>({
         type: "proxlab/card/tts/speak",
         card_id: this._config.card_id,
         segments: reqSegments,
@@ -621,7 +621,8 @@ export class ProxLabChatCard extends LitElement {
 
       if (result?.audio_segments?.length) {
         for (const seg of result.audio_segments) {
-          if (seg.data_url) this._audioQueue.push(seg.data_url);
+          const audioUrl = seg.url || seg.data_url;
+          if (audioUrl) this._audioQueue.push(audioUrl);
         }
         this._onAudioQueueDone = onDone ?? null;
         this._playAudioQueue();
@@ -700,7 +701,6 @@ export class ProxLabChatCard extends LitElement {
 
   private async _transcribeAudio(blob: Blob): Promise<void> {
     try {
-      // Convert to base64 and send to STT via HA
       const reader = new FileReader();
       const base64 = await new Promise<string>((resolve) => {
         reader.onloadend = () => {
@@ -710,16 +710,12 @@ export class ProxLabChatCard extends LitElement {
         reader.readAsDataURL(blob);
       });
 
-      // Use HA STT pipeline if available
-      if (this.hass.config.components.includes("stt")) {
-        const result = await this.hass.callWS<{ text: string }>({
-          type: "stt/stream",
-          audio_data: base64,
-          language: this.hass.language || "en",
-        });
-        if (result?.text) {
-          this._inputValue = result.text;
-        }
+      const result = await this.hass.callWS<{ text: string }>({
+        type: "proxlab/card/stt/transcribe",
+        audio_data: base64,
+      });
+      if (result?.text) {
+        this._inputValue = result.text;
       }
     } catch {
       // STT failed silently

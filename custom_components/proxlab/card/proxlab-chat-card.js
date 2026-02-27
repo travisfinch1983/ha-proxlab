@@ -274,10 +274,10 @@ const kt = (a, t) => {
   let s, r = t === 2 ? "<svg>" : t === 3 ? "<math>" : "", o = C;
   for (let d = 0; d < e; d++) {
     const l = a[d];
-    let p, u, h = -1, g = 0;
-    for (; g < l.length && (o.lastIndex = g, u = o.exec(l), u !== null); ) g = o.lastIndex, o === C ? u[1] === "!--" ? o = Z : u[1] !== void 0 ? o = Y : u[2] !== void 0 ? (ht.test(u[2]) && (s = RegExp("</" + u[2], "g")), o = m) : u[3] !== void 0 && (o = m) : o === m ? u[0] === ">" ? (o = s ?? C, h = -1) : u[1] === void 0 ? h = -2 : (h = o.lastIndex - u[2].length, p = u[1], o = u[3] === void 0 ? m : u[3] === '"' ? et : tt) : o === et || o === tt ? o = m : o === Z || o === Y ? o = C : (o = m, s = void 0);
+    let h, u, p = -1, g = 0;
+    for (; g < l.length && (o.lastIndex = g, u = o.exec(l), u !== null); ) g = o.lastIndex, o === C ? u[1] === "!--" ? o = Z : u[1] !== void 0 ? o = Y : u[2] !== void 0 ? (ht.test(u[2]) && (s = RegExp("</" + u[2], "g")), o = m) : u[3] !== void 0 && (o = m) : o === m ? u[0] === ">" ? (o = s ?? C, p = -1) : u[1] === void 0 ? p = -2 : (p = o.lastIndex - u[2].length, h = u[1], o = u[3] === void 0 ? m : u[3] === '"' ? et : tt) : o === et || o === tt ? o = m : o === Z || o === Y ? o = C : (o = m, s = void 0);
     const _ = o === m && a[d + 1].startsWith("/>") ? " " : "";
-    r += o === C ? l + wt : h >= 0 ? (i.push(p), l.slice(0, h) + dt + l.slice(h) + f + _) : l + f + (h === -2 ? d : _);
+    r += o === C ? l + wt : p >= 0 ? (i.push(h), l.slice(0, p) + dt + l.slice(p) + f + _) : l + f + (p === -2 ? d : _);
   }
   return [pt(a, r + (a[e] || "<?>") + (t === 2 ? "</svg>" : t === 3 ? "</math>" : "")), i];
 };
@@ -286,29 +286,29 @@ class T {
     let s;
     this.parts = [];
     let r = 0, o = 0;
-    const d = t.length - 1, l = this.parts, [p, u] = kt(t, e);
-    if (this.el = T.createElement(p, i), b.currentNode = this.el.content, e === 2 || e === 3) {
-      const h = this.el.content.firstChild;
-      h.replaceWith(...h.childNodes);
+    const d = t.length - 1, l = this.parts, [h, u] = kt(t, e);
+    if (this.el = T.createElement(h, i), b.currentNode = this.el.content, e === 2 || e === 3) {
+      const p = this.el.content.firstChild;
+      p.replaceWith(...p.childNodes);
     }
     for (; (s = b.nextNode()) !== null && l.length < d; ) {
       if (s.nodeType === 1) {
-        if (s.hasAttributes()) for (const h of s.getAttributeNames()) if (h.endsWith(dt)) {
-          const g = u[o++], _ = s.getAttribute(h).split(f), z = /([.?@])?(.*)/.exec(g);
-          l.push({ type: 1, index: r, name: z[2], strings: _, ctor: z[1] === "." ? Et : z[1] === "?" ? Pt : z[1] === "@" ? Mt : O }), s.removeAttribute(h);
-        } else h.startsWith(f) && (l.push({ type: 6, index: r }), s.removeAttribute(h));
+        if (s.hasAttributes()) for (const p of s.getAttributeNames()) if (p.endsWith(dt)) {
+          const g = u[o++], _ = s.getAttribute(p).split(f), z = /([.?@])?(.*)/.exec(g);
+          l.push({ type: 1, index: r, name: z[2], strings: _, ctor: z[1] === "." ? Et : z[1] === "?" ? Pt : z[1] === "@" ? Mt : O }), s.removeAttribute(p);
+        } else p.startsWith(f) && (l.push({ type: 6, index: r }), s.removeAttribute(p));
         if (ht.test(s.tagName)) {
-          const h = s.textContent.split(f), g = h.length - 1;
+          const p = s.textContent.split(f), g = p.length - 1;
           if (g > 0) {
             s.textContent = H ? H.emptyScript : "";
-            for (let _ = 0; _ < g; _++) s.append(h[_], P()), b.nextNode(), l.push({ type: 2, index: ++r });
-            s.append(h[g], P());
+            for (let _ = 0; _ < g; _++) s.append(p[_], P()), b.nextNode(), l.push({ type: 2, index: ++r });
+            s.append(p[g], P());
           }
         }
       } else if (s.nodeType === 8) if (s.data === ct) l.push({ type: 2, index: r });
       else {
-        let h = -1;
-        for (; (h = s.data.indexOf(f, h + 1)) !== -1; ) l.push({ type: 7, index: r }), h += f.length - 1;
+        let p = -1;
+        for (; (p = s.data.indexOf(f, p + 1)) !== -1; ) l.push({ type: 7, index: r }), p += f.length - 1;
       }
       r++;
     }
@@ -340,8 +340,8 @@ class St {
     let r = b.nextNode(), o = 0, d = 0, l = i[0];
     for (; l !== void 0; ) {
       if (o === l.index) {
-        let p;
-        l.type === 2 ? p = new U(r, r.nextSibling, this, t) : l.type === 1 ? p = new l.ctor(r, l.name, l.strings, this, t) : l.type === 6 && (p = new Tt(r, this, t)), this._$AV.push(p), l = i[++d];
+        let h;
+        l.type === 2 ? h = new U(r, r.nextSibling, this, t) : l.type === 1 ? h = new l.ctor(r, l.name, l.strings, this, t) : l.type === 6 && (h = new Tt(r, this, t)), this._$AV.push(h), l = i[++d];
       }
       o !== l?.index && (r = b.nextNode(), o++);
     }
@@ -427,8 +427,8 @@ class O {
     if (r === void 0) t = A(this, t, e, 0), o = !M(t) || t !== this._$AH && t !== w, o && (this._$AH = t);
     else {
       const d = t;
-      let l, p;
-      for (t = r[0], l = 0; l < r.length - 1; l++) p = A(this, d[i + l], e, l), p === w && (p = this._$AH[l]), o || (o = !M(p) || p !== this._$AH[l]), p === c ? t = c : t !== c && (t += (p ?? "") + r[l + 1]), this._$AH[l] = p;
+      let l, h;
+      for (t = r[0], l = 0; l < r.length - 1; l++) h = A(this, d[i + l], e, l), h === w && (h = this._$AH[l]), o || (o = !M(h) || h !== this._$AH[l]), h === c ? t = c : t !== c && (t += (h ?? "") + r[l + 1]), this._$AH[l] = h;
     }
     o && !s && this.j(t);
   }
@@ -1882,13 +1882,13 @@ class W extends $ {
     `;
   }
   _renderPortraitPanel(t, e, i) {
-    const s = this._cardConfig?.portrait_width ?? "auto", r = typeof s == "number" && s > 0, o = r ? s : this._portraitWidth, d = o ? `width: ${o}px; max-width: 50%;` : "width: 25%; max-width: 50%;", l = r ? "portrait-img-cover" : "portrait-img-contain", p = this._resolveAgentLabel();
+    const s = this._cardConfig?.portrait_width ?? "auto", r = typeof s == "number" && s > 0, o = r ? s : this._portraitWidth, d = o ? `width: ${o}px; max-width: 50%;` : "width: 25%; max-width: 50%;", l = r ? "portrait-img-cover" : "portrait-img-contain", h = this._resolveAgentLabel();
     return n`
       <div class="portrait-panel" style="${d}">
         <img class="${l}" src="${t}" alt="${e}" />
         <div class="portrait-name">${e}</div>
         <div class="portrait-status">${i}</div>
-        ${p ? n`<div class="portrait-agent">${p}</div>` : c}
+        ${h ? n`<div class="portrait-agent">${h}</div>` : c}
       </div>
     `;
   }
@@ -2157,8 +2157,10 @@ class W extends $ {
         segments: o
       });
       if (d?.audio_segments?.length) {
-        for (const l of d.audio_segments)
-          l.data_url && this._audioQueue.push(l.data_url);
+        for (const l of d.audio_segments) {
+          const h = l.url || l.data_url;
+          h && this._audioQueue.push(h);
+        }
         this._onAudioQueueDone = e ?? null, this._playAudioQueue();
       } else
         e?.();
@@ -2209,20 +2211,16 @@ class W extends $ {
   }
   async _transcribeAudio(t) {
     try {
-      const e = new FileReader(), i = await new Promise((s) => {
+      const e = new FileReader(), i = await new Promise((r) => {
         e.onloadend = () => {
-          const r = e.result;
-          s(r.split(",")[1] || "");
+          const o = e.result;
+          r(o.split(",")[1] || "");
         }, e.readAsDataURL(t);
+      }), s = await this.hass.callWS({
+        type: "proxlab/card/stt/transcribe",
+        audio_data: i
       });
-      if (this.hass.config.components.includes("stt")) {
-        const s = await this.hass.callWS({
-          type: "stt/stream",
-          audio_data: i,
-          language: this.hass.language || "en"
-        });
-        s?.text && (this._inputValue = s.text);
-      }
+      s?.text && (this._inputValue = s.text);
     } catch {
     }
   }
