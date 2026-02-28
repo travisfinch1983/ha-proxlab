@@ -64,6 +64,8 @@ export class ProxLabChatCard extends LitElement {
   private _audioQueue: string[] = [];
   private _audioPlaying = false;
   private _ttsBuffer = "";
+  private _ttsTextQueue: string[] = [];
+  private _ttsProcessing = false;
 
   // ---- Lovelace lifecycle ----
 
@@ -643,6 +645,8 @@ export class ProxLabChatCard extends LitElement {
   }
 
   // ---- TTS Chunking (Streaming) ----
+  // Text chunks are queued and processed sequentially to avoid overwhelming
+  // the TTS backend with concurrent requests (which causes dropped audio).
 
   private _checkTtsChunk(): void {
     if (!this._cardConfig?.auto_tts) return;
@@ -651,27 +655,44 @@ export class ProxLabChatCard extends LitElement {
     if (breakIdx > 0) {
       const chunk = this._ttsBuffer.substring(0, breakIdx);
       this._ttsBuffer = this._ttsBuffer.substring(breakIdx);
-      this._speakSegments(chunk);
+      this._enqueueTtsChunk(chunk);
     }
   }
 
   private _flushTtsBuffer(): void {
     if (this._ttsBuffer.trim() && this._cardConfig?.auto_tts) {
-      this._speakSegments(this._ttsBuffer);
+      this._enqueueTtsChunk(this._ttsBuffer);
     }
     this._ttsBuffer = "";
   }
 
-  private _findChunkBreak(text: string): number {
-    if (text.length < 80) return -1;
+  private _enqueueTtsChunk(text: string): void {
+    this._ttsTextQueue.push(text);
+    this._processTtsQueue();
+  }
 
-    // Prefer paragraph breaks
+  private async _processTtsQueue(): Promise<void> {
+    if (this._ttsProcessing) return;
+    this._ttsProcessing = true;
+
+    while (this._ttsTextQueue.length > 0) {
+      const chunk = this._ttsTextQueue.shift()!;
+      await this._speakSegments(chunk);
+    }
+
+    this._ttsProcessing = false;
+  }
+
+  private _findChunkBreak(text: string): number {
+    // Prefer paragraph breaks at any length
     const paraIdx = text.indexOf("\n\n");
     if (paraIdx > 0) return paraIdx + 2;
 
-    // Sentence endings after 80+ chars
+    // Only break on sentences after accumulating 200+ chars
+    if (text.length < 200) return -1;
+
     const sentenceEnds = [". ", "! ", "? ", ".\n", "!\n", "?\n"];
-    for (let i = 80; i < text.length; i++) {
+    for (let i = 200; i < text.length; i++) {
       for (const end of sentenceEnds) {
         if (text.substring(i, i + end.length) === end) {
           return i + end.length;

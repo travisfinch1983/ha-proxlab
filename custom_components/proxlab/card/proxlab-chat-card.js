@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-3-Clause
  */
 const B = globalThis, D = B.ShadowRoot && (B.ShadyCSS === void 0 || B.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, R = Symbol(), G = /* @__PURE__ */ new WeakMap();
-let lt = class {
+let dt = class {
   constructor(t, e, i) {
     if (this._$cssResult$ = !0, i !== R) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
     this.cssText = t, this.t = e;
@@ -22,13 +22,13 @@ let lt = class {
     return this.cssText;
   }
 };
-const _t = (n) => new lt(typeof n == "string" ? n : n + "", void 0, R), F = (n, ...t) => {
+const ft = (n) => new dt(typeof n == "string" ? n : n + "", void 0, R), F = (n, ...t) => {
   const e = n.length === 1 ? n[0] : t.reduce((i, s, a) => i + ((o) => {
     if (o._$cssResult$ === !0) return o.cssText;
     if (typeof o == "number") return o;
     throw Error("Value passed to 'css' function must be a 'css' function result: " + o + ". Use 'unsafeCSS' to pass non-literal values, but take care to ensure page security.");
   })(s) + n[a + 1], n[0]);
-  return new lt(e, n, R);
+  return new dt(e, n, R);
 }, mt = (n, t) => {
   if (D) n.adoptedStyleSheets = t.map((e) => e instanceof CSSStyleSheet ? e : e.styleSheet);
   else for (const e of t) {
@@ -38,7 +38,7 @@ const _t = (n) => new lt(typeof n == "string" ? n : n + "", void 0, R), F = (n, 
 }, K = D ? (n) => n : (n) => n instanceof CSSStyleSheet ? ((t) => {
   let e = "";
   for (const i of t.cssRules) e += i.cssText;
-  return _t(e);
+  return ft(e);
 })(n) : n;
 /**
  * @license
@@ -95,8 +95,8 @@ let $ = class extends HTMLElement {
       this[e] = o;
     } };
     return { get: s, set(o) {
-      const l = s?.call(this);
-      a?.call(this, o), this.requestUpdate(t, l, i);
+      const d = s?.call(this);
+      a?.call(this, o), this.requestUpdate(t, d, i);
     }, configurable: !0, enumerable: !0 };
   }
   static getPropertyOptions(t) {
@@ -181,8 +181,8 @@ let $ = class extends HTMLElement {
     if (s !== void 0 && this._$Em !== s) {
       const a = i.getPropertyOptions(s), o = typeof a.converter == "function" ? { fromAttribute: a.converter } : a.converter?.fromAttribute !== void 0 ? a.converter : O;
       this._$Em = s;
-      const l = o.fromAttribute(e, a.type);
-      this[s] = l ?? this._$Ej?.get(s) ?? l, this._$Em = null;
+      const d = o.fromAttribute(e, a.type);
+      this[s] = d ?? this._$Ej?.get(s) ?? d, this._$Em = null;
     }
   }
   requestUpdate(t, e, i, s = !1, a) {
@@ -218,8 +218,8 @@ let $ = class extends HTMLElement {
       }
       const i = this.constructor.elementProperties;
       if (i.size > 0) for (const [s, a] of i) {
-        const { wrapped: o } = a, l = this[s];
-        o !== !0 || this._$AL.has(s) || l === void 0 || this.C(s, void 0, a, l);
+        const { wrapped: o } = a, d = this[s];
+        o !== !0 || this._$AL.has(s) || d === void 0 || this.C(s, void 0, a, d);
       }
     }
     let t = !1;
@@ -262,7 +262,7 @@ $.elementStyles = [], $.shadowRootOptions = { mode: "open" }, $[A("elementProper
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const S = globalThis, J = (n) => n, L = S.trustedTypes, X = L ? L.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, ht = "$lit$", _ = `lit$${Math.random().toFixed(9).slice(2)}$`, pt = "?" + _, At = `<${pt}>`, y = document, P = () => y.createComment(""), M = (n) => n === null || typeof n != "object" && typeof n != "function", N = Array.isArray, St = (n) => N(n) || typeof n?.[Symbol.iterator] == "function", H = `[ 	
+const S = globalThis, J = (n) => n, L = S.trustedTypes, X = L ? L.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, ht = "$lit$", f = `lit$${Math.random().toFixed(9).slice(2)}$`, pt = "?" + f, At = `<${pt}>`, y = document, P = () => y.createComment(""), M = (n) => n === null || typeof n != "object" && typeof n != "function", N = Array.isArray, St = (n) => N(n) || typeof n?.[Symbol.iterator] == "function", H = `[ 	
 \f\r]`, C = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, tt = /-->/g, et = />/g, b = RegExp(`>|${H}(?:([^\\s"'>=/]+)(${H}*=${H}*(?:[^ 	
 \f\r"'\`<>=]|("|')|))|$)`, "g"), it = /'/g, st = /"/g, ut = /^(?:script|style|textarea|title)$/i, Et = (n) => (t, ...e) => ({ _$litType$: n, strings: t, values: e }), r = Et(1), w = Symbol.for("lit-noChange"), c = Symbol.for("lit-nothing"), at = /* @__PURE__ */ new WeakMap(), x = y.createTreeWalker(y, 129);
 function gt(n, t) {
@@ -272,43 +272,43 @@ function gt(n, t) {
 const Pt = (n, t) => {
   const e = n.length - 1, i = [];
   let s, a = t === 2 ? "<svg>" : t === 3 ? "<math>" : "", o = C;
-  for (let l = 0; l < e; l++) {
-    const d = n[l];
+  for (let d = 0; d < e; d++) {
+    const l = n[d];
     let h, u, p = -1, g = 0;
-    for (; g < d.length && (o.lastIndex = g, u = o.exec(d), u !== null); ) g = o.lastIndex, o === C ? u[1] === "!--" ? o = tt : u[1] !== void 0 ? o = et : u[2] !== void 0 ? (ut.test(u[2]) && (s = RegExp("</" + u[2], "g")), o = b) : u[3] !== void 0 && (o = b) : o === b ? u[0] === ">" ? (o = s ?? C, p = -1) : u[1] === void 0 ? p = -2 : (p = o.lastIndex - u[2].length, h = u[1], o = u[3] === void 0 ? b : u[3] === '"' ? st : it) : o === st || o === it ? o = b : o === tt || o === et ? o = C : (o = b, s = void 0);
-    const f = o === b && n[l + 1].startsWith("/>") ? " " : "";
-    a += o === C ? d + At : p >= 0 ? (i.push(h), d.slice(0, p) + ht + d.slice(p) + _ + f) : d + _ + (p === -2 ? l : f);
+    for (; g < l.length && (o.lastIndex = g, u = o.exec(l), u !== null); ) g = o.lastIndex, o === C ? u[1] === "!--" ? o = tt : u[1] !== void 0 ? o = et : u[2] !== void 0 ? (ut.test(u[2]) && (s = RegExp("</" + u[2], "g")), o = b) : u[3] !== void 0 && (o = b) : o === b ? u[0] === ">" ? (o = s ?? C, p = -1) : u[1] === void 0 ? p = -2 : (p = o.lastIndex - u[2].length, h = u[1], o = u[3] === void 0 ? b : u[3] === '"' ? st : it) : o === st || o === it ? o = b : o === tt || o === et ? o = C : (o = b, s = void 0);
+    const _ = o === b && n[d + 1].startsWith("/>") ? " " : "";
+    a += o === C ? l + At : p >= 0 ? (i.push(h), l.slice(0, p) + ht + l.slice(p) + f + _) : l + f + (p === -2 ? d : _);
   }
   return [gt(n, a + (n[e] || "<?>") + (t === 2 ? "</svg>" : t === 3 ? "</math>" : "")), i];
 };
-class z {
+class T {
   constructor({ strings: t, _$litType$: e }, i) {
     let s;
     this.parts = [];
     let a = 0, o = 0;
-    const l = t.length - 1, d = this.parts, [h, u] = Pt(t, e);
-    if (this.el = z.createElement(h, i), x.currentNode = this.el.content, e === 2 || e === 3) {
+    const d = t.length - 1, l = this.parts, [h, u] = Pt(t, e);
+    if (this.el = T.createElement(h, i), x.currentNode = this.el.content, e === 2 || e === 3) {
       const p = this.el.content.firstChild;
       p.replaceWith(...p.childNodes);
     }
-    for (; (s = x.nextNode()) !== null && d.length < l; ) {
+    for (; (s = x.nextNode()) !== null && l.length < d; ) {
       if (s.nodeType === 1) {
         if (s.hasAttributes()) for (const p of s.getAttributeNames()) if (p.endsWith(ht)) {
-          const g = u[o++], f = s.getAttribute(p).split(_), I = /([.?@])?(.*)/.exec(g);
-          d.push({ type: 1, index: a, name: I[2], strings: f, ctor: I[1] === "." ? zt : I[1] === "?" ? Tt : I[1] === "@" ? It : V }), s.removeAttribute(p);
-        } else p.startsWith(_) && (d.push({ type: 6, index: a }), s.removeAttribute(p));
+          const g = u[o++], _ = s.getAttribute(p).split(f), I = /([.?@])?(.*)/.exec(g);
+          l.push({ type: 1, index: a, name: I[2], strings: _, ctor: I[1] === "." ? Tt : I[1] === "?" ? zt : I[1] === "@" ? It : V }), s.removeAttribute(p);
+        } else p.startsWith(f) && (l.push({ type: 6, index: a }), s.removeAttribute(p));
         if (ut.test(s.tagName)) {
-          const p = s.textContent.split(_), g = p.length - 1;
+          const p = s.textContent.split(f), g = p.length - 1;
           if (g > 0) {
             s.textContent = L ? L.emptyScript : "";
-            for (let f = 0; f < g; f++) s.append(p[f], P()), x.nextNode(), d.push({ type: 2, index: ++a });
+            for (let _ = 0; _ < g; _++) s.append(p[_], P()), x.nextNode(), l.push({ type: 2, index: ++a });
             s.append(p[g], P());
           }
         }
-      } else if (s.nodeType === 8) if (s.data === pt) d.push({ type: 2, index: a });
+      } else if (s.nodeType === 8) if (s.data === pt) l.push({ type: 2, index: a });
       else {
         let p = -1;
-        for (; (p = s.data.indexOf(_, p + 1)) !== -1; ) d.push({ type: 7, index: a }), p += _.length - 1;
+        for (; (p = s.data.indexOf(f, p + 1)) !== -1; ) l.push({ type: 7, index: a }), p += f.length - 1;
       }
       a++;
     }
@@ -337,13 +337,13 @@ class Mt {
   u(t) {
     const { el: { content: e }, parts: i } = this._$AD, s = (t?.creationScope ?? y).importNode(e, !0);
     x.currentNode = s;
-    let a = x.nextNode(), o = 0, l = 0, d = i[0];
-    for (; d !== void 0; ) {
-      if (o === d.index) {
+    let a = x.nextNode(), o = 0, d = 0, l = i[0];
+    for (; l !== void 0; ) {
+      if (o === l.index) {
         let h;
-        d.type === 2 ? h = new T(a, a.nextSibling, this, t) : d.type === 1 ? h = new d.ctor(a, d.name, d.strings, this, t) : d.type === 6 && (h = new Bt(a, this, t)), this._$AV.push(h), d = i[++l];
+        l.type === 2 ? h = new z(a, a.nextSibling, this, t) : l.type === 1 ? h = new l.ctor(a, l.name, l.strings, this, t) : l.type === 6 && (h = new Bt(a, this, t)), this._$AV.push(h), l = i[++d];
       }
-      o !== d?.index && (a = x.nextNode(), o++);
+      o !== l?.index && (a = x.nextNode(), o++);
     }
     return x.currentNode = y, s;
   }
@@ -352,7 +352,7 @@ class Mt {
     for (const i of this._$AV) i !== void 0 && (i.strings !== void 0 ? (i._$AI(t, i, e), e += i.strings.length - 2) : i._$AI(t[e])), e++;
   }
 }
-class T {
+class z {
   get _$AU() {
     return this._$AM?._$AU ?? this._$Cv;
   }
@@ -383,7 +383,7 @@ class T {
     this._$AH !== c && M(this._$AH) ? this._$AA.nextSibling.data = t : this.T(y.createTextNode(t)), this._$AH = t;
   }
   $(t) {
-    const { values: e, _$litType$: i } = t, s = typeof i == "number" ? this._$AC(t) : (i.el === void 0 && (i.el = z.createElement(gt(i.h, i.h[0]), this.options)), i);
+    const { values: e, _$litType$: i } = t, s = typeof i == "number" ? this._$AC(t) : (i.el === void 0 && (i.el = T.createElement(gt(i.h, i.h[0]), this.options)), i);
     if (this._$AH?._$AD === s) this._$AH.p(e);
     else {
       const a = new Mt(s, this), o = a.u(this.options);
@@ -392,13 +392,13 @@ class T {
   }
   _$AC(t) {
     let e = at.get(t.strings);
-    return e === void 0 && at.set(t.strings, e = new z(t)), e;
+    return e === void 0 && at.set(t.strings, e = new T(t)), e;
   }
   k(t) {
     N(this._$AH) || (this._$AH = [], this._$AR());
     const e = this._$AH;
     let i, s = 0;
-    for (const a of t) s === e.length ? e.push(i = new T(this.O(P()), this.O(P()), this, this.options)) : i = e[s], i._$AI(a), s++;
+    for (const a of t) s === e.length ? e.push(i = new z(this.O(P()), this.O(P()), this, this.options)) : i = e[s], i._$AI(a), s++;
     s < e.length && (this._$AR(i && i._$AB.nextSibling, s), e.length = s);
   }
   _$AR(t = this._$AA.nextSibling, e) {
@@ -426,9 +426,9 @@ class V {
     let o = !1;
     if (a === void 0) t = k(this, t, e, 0), o = !M(t) || t !== this._$AH && t !== w, o && (this._$AH = t);
     else {
-      const l = t;
-      let d, h;
-      for (t = a[0], d = 0; d < a.length - 1; d++) h = k(this, l[i + d], e, d), h === w && (h = this._$AH[d]), o || (o = !M(h) || h !== this._$AH[d]), h === c ? t = c : t !== c && (t += (h ?? "") + a[d + 1]), this._$AH[d] = h;
+      const d = t;
+      let l, h;
+      for (t = a[0], l = 0; l < a.length - 1; l++) h = k(this, d[i + l], e, l), h === w && (h = this._$AH[l]), o || (o = !M(h) || h !== this._$AH[l]), h === c ? t = c : t !== c && (t += (h ?? "") + a[l + 1]), this._$AH[l] = h;
     }
     o && !s && this.j(t);
   }
@@ -436,7 +436,7 @@ class V {
     t === c ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, t ?? "");
   }
 }
-class zt extends V {
+class Tt extends V {
   constructor() {
     super(...arguments), this.type = 3;
   }
@@ -444,7 +444,7 @@ class zt extends V {
     this.element[this.name] = t === c ? void 0 : t;
   }
 }
-class Tt extends V {
+class zt extends V {
   constructor() {
     super(...arguments), this.type = 4;
   }
@@ -477,13 +477,13 @@ class Bt {
   }
 }
 const Lt = S.litHtmlPolyfillSupport;
-Lt?.(z, T), (S.litHtmlVersions ?? (S.litHtmlVersions = [])).push("3.3.2");
+Lt?.(T, z), (S.litHtmlVersions ?? (S.litHtmlVersions = [])).push("3.3.2");
 const Ut = (n, t, e) => {
   const i = e?.renderBefore ?? t;
   let s = i._$litPart$;
   if (s === void 0) {
     const a = e?.renderBefore ?? null;
-    i._$litPart$ = s = new T(t.insertBefore(P(), a), a, void 0, e ?? {});
+    i._$litPart$ = s = new z(t.insertBefore(P(), a), a, void 0, e ?? {});
   }
   return s._$AI(n), s;
 };
@@ -1002,7 +1002,7 @@ const Ht = F`
     0%, 100% { opacity: 1; }
     50% { opacity: 0; }
   }
-`, ft = F`
+`, _t = F`
   :host {
     --card-bg: var(--card-background-color, #fff);
     --card-text: var(--primary-text-color, #212121);
@@ -1995,7 +1995,7 @@ class j extends v {
         (a) => a.profile_id === this._cardConfig.profile_id
       );
       if (s) {
-        const a = s.tts_voices || { normal: "", narration: "", speech: "", thoughts: "" }, o = (l) => this._voices.find((d) => d.id === l)?.name ?? l ?? "None";
+        const a = s.tts_voices || { normal: "", narration: "", speech: "", thoughts: "" }, o = (d) => this._voices.find((l) => l.id === d)?.name ?? d ?? "None";
         return r`
           ${t}
           <div style="padding: 4px 0; opacity: 0.7; font-size: 13px; border-top: 1px solid var(--divider); margin-top: 8px; padding-top: 12px;">
@@ -2026,15 +2026,15 @@ class j extends v {
         <div class="sublabel" style="font-size:11px;color:var(--card-secondary);margin-bottom:2px">${a}</div>
         <select
           .value=${e[o]}
-          @change=${(l) => {
-      const d = l.target.value;
-      this._updateField("tts_voices", { ...e, [o]: d });
+          @change=${(d) => {
+      const l = d.target.value;
+      this._updateField("tts_voices", { ...e, [o]: l });
     }}
         >
           <option value="">Disabled</option>
           ${this._voices.map(
-      (l) => r`<option value=${l.id} ?selected=${e[o] === l.id}>
-              ${l.name}
+      (d) => r`<option value=${d.id} ?selected=${e[o] === d.id}>
+              ${d.name}
             </option>`
     )}
         </select>
@@ -2139,7 +2139,7 @@ class j extends v {
     }, i.readAsDataURL(e);
   }
 }
-j.styles = ft;
+j.styles = _t;
 j.properties = {
   hass: { attribute: !1 },
   _config: { state: !0 },
@@ -2152,7 +2152,7 @@ j.properties = {
   _defaultPrompt: { state: !0 }
 };
 customElements.define("proxlab-chat-card-editor", j);
-class W extends v {
+class Q extends v {
   constructor() {
     super(...arguments), this._cardConfig = {
       card_id: "",
@@ -2382,8 +2382,8 @@ class W extends v {
     );
   }
 }
-W.styles = ft;
-W.properties = {
+Q.styles = _t;
+Q.properties = {
   hass: { attribute: !1 },
   _config: { state: !0 },
   _cardConfig: { state: !0 },
@@ -2393,12 +2393,12 @@ W.properties = {
 };
 customElements.define(
   "proxlab-group-chat-card-editor",
-  W
+  Q
 );
-const Dt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`, nt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`, ot = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`, Rt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`, Ft = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`, Nt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`, jt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>`, dt = [250, 160, 30, 340, 200, 80, 290, 120];
-class Q extends v {
+const Dt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`, nt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`, ot = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`, Rt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`, Ft = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`, Nt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`, jt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>`, lt = [250, 160, 30, 340, 200, 80, 290, 120];
+class W extends v {
   constructor() {
-    super(...arguments), this._profiles = [], this._messages = [], this._loading = !1, this._inputValue = "", this._configLoaded = !1, this._mentionOpen = !1, this._mentionFilter = "", this._editingIndex = -1, this._editValue = "", this._speakingIndex = -1, this._streaming = !1, this._audioQueue = [], this._audioPlaying = !1, this._onAudioQueueDone = null, this._ttsBuffer = "", this._streamingProfileId = "";
+    super(...arguments), this._profiles = [], this._messages = [], this._loading = !1, this._inputValue = "", this._configLoaded = !1, this._mentionOpen = !1, this._mentionFilter = "", this._editingIndex = -1, this._editValue = "", this._speakingIndex = -1, this._streaming = !1, this._audioQueue = [], this._audioPlaying = !1, this._onAudioQueueDone = null, this._ttsBuffer = "", this._streamingProfileId = "", this._ttsTextQueue = [], this._ttsProcessing = !1;
   }
   setConfig(t) {
     if (!t.card_id)
@@ -2554,8 +2554,8 @@ class Q extends v {
         </div>
       `;
     const i = this._profiles.findIndex(
-      (l) => l.profile_id === t.profile_id
-    ), s = dt[i >= 0 ? i % dt.length : 0], a = e === this._findLastAgentIndex(), o = this._streaming && this._streamingProfileId === t.profile_id && e === this._messages.length - 1;
+      (d) => d.profile_id === t.profile_id
+    ), s = lt[i >= 0 ? i % lt.length : 0], a = e === this._findLastAgentIndex(), o = this._streaming && this._streamingProfileId === t.profile_id && e === this._messages.length - 1;
     return r`
       <div class="agent-msg ${this._editingIndex === e ? "editing" : ""}">
         ${t.avatar ? r`<img class="msg-avatar" src="${t.avatar}" alt="${t.profile_name}" />` : r`<div class="msg-avatar placeholder">${(t.profile_name ?? "?").charAt(0).toUpperCase()}</div>`}
@@ -2838,19 +2838,19 @@ class Q extends v {
       i?.();
       return;
     }
-    const l = U(t).filter((d) => d.text.trim()).map((d) => ({ text: d.text, voice: s[d.type] || "" })).filter((d) => d.voice);
-    if (l.length === 0) {
+    const d = U(t).filter((l) => l.text.trim()).map((l) => ({ text: l.text, voice: s[l.type] || "" })).filter((l) => l.voice);
+    if (d.length === 0) {
       i?.();
       return;
     }
     try {
-      const d = await this.hass.callWS({
+      const l = await this.hass.callWS({
         type: "proxlab/card/tts/speak",
         card_id: this._config.card_id,
-        segments: l
+        segments: d
       });
-      if (d?.audio_segments?.length) {
-        for (const h of d.audio_segments) {
+      if (l?.audio_segments?.length) {
+        for (const h of l.audio_segments) {
           const u = h.url || h.data_url;
           u && this._audioQueue.push(u);
         }
@@ -2885,6 +2885,8 @@ class Q extends v {
     }
   }
   // ---- TTS Chunking (Streaming) ----
+  // Text chunks are queued and processed sequentially to avoid overwhelming
+  // the TTS backend with concurrent requests (which causes dropped audio).
   _checkTtsChunk(t) {
     if (!this._cardConfig?.auto_tts) return;
     const e = this._profiles.find((s) => s.profile_id === t);
@@ -2892,7 +2894,7 @@ class Q extends v {
     const i = this._findChunkBreak(this._ttsBuffer);
     if (i > 0) {
       const s = this._ttsBuffer.substring(0, i);
-      this._ttsBuffer = this._ttsBuffer.substring(i), this._speakSegmentsForProfile(s, e);
+      this._ttsBuffer = this._ttsBuffer.substring(i), this._enqueueTtsChunk(s, e);
     }
   }
   _flushTtsBuffer(t) {
@@ -2902,19 +2904,31 @@ class Q extends v {
       return;
     }
     const e = this._profiles.find((i) => i.profile_id === t);
-    e && this._speakSegmentsForProfile(this._ttsBuffer, e), this._ttsBuffer = "";
+    e && this._enqueueTtsChunk(this._ttsBuffer, e), this._ttsBuffer = "";
+  }
+  _enqueueTtsChunk(t, e) {
+    this._ttsTextQueue.push({ text: t, profile: e }), this._processTtsQueue();
+  }
+  async _processTtsQueue() {
+    if (!this._ttsProcessing) {
+      for (this._ttsProcessing = !0; this._ttsTextQueue.length > 0; ) {
+        const { text: t, profile: e } = this._ttsTextQueue.shift();
+        await this._speakSegmentsForProfile(t, e);
+      }
+      this._ttsProcessing = !1;
+    }
   }
   _findChunkBreak(t) {
-    if (t.length < 80) return -1;
     const e = t.indexOf(`
 
 `);
     if (e > 0) return e + 2;
+    if (t.length < 200) return -1;
     const i = [". ", "! ", "? ", `.
 `, `!
 `, `?
 `];
-    for (let s = 80; s < t.length; s++)
+    for (let s = 200; s < t.length; s++)
       for (const a of i)
         if (t.substring(s, s + a.length) === a)
           return s + a.length;
@@ -2928,8 +2942,8 @@ class Q extends v {
     });
   }
 }
-Q.styles = Ot;
-Q.properties = {
+W.styles = Ot;
+W.properties = {
   hass: { attribute: !1 },
   _config: { state: !0 },
   _cardConfig: { state: !0 },
@@ -2945,7 +2959,7 @@ Q.properties = {
   _speakingIndex: { state: !0 },
   _streaming: { state: !0 }
 };
-customElements.define("proxlab-group-chat-card", Q);
+customElements.define("proxlab-group-chat-card", W);
 window.customCards = window.customCards || [];
 window.customCards.push({
   type: "proxlab-group-chat-card",
@@ -2953,10 +2967,10 @@ window.customCards.push({
   description: "Multi-agent group chat card",
   preview: !1
 });
-const Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`, Qt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>`, qt = r`<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" opacity="0.4"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>`, Gt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`, Kt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`, Yt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`, Zt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>`, Jt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`, Xt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`;
+const Qt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`, Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>`, qt = r`<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" opacity="0.4"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>`, Gt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`, Kt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`, Yt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`, Zt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>`, Jt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`, Xt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`;
 class q extends v {
   constructor() {
-    super(...arguments), this._messages = [], this._loading = !1, this._inputValue = "", this._recording = !1, this._configLoaded = !1, this._portraitWidth = 0, this._editingIndex = -1, this._editValue = "", this._speakingIndex = -1, this._streaming = !1, this._audioChunks = [], this._lastAvatarUrl = "", this._audioQueue = [], this._audioPlaying = !1, this._ttsBuffer = "", this._onAudioQueueDone = null;
+    super(...arguments), this._messages = [], this._loading = !1, this._inputValue = "", this._recording = !1, this._configLoaded = !1, this._portraitWidth = 0, this._editingIndex = -1, this._editValue = "", this._speakingIndex = -1, this._streaming = !1, this._audioChunks = [], this._lastAvatarUrl = "", this._audioQueue = [], this._audioPlaying = !1, this._ttsBuffer = "", this._ttsTextQueue = [], this._ttsProcessing = !1, this._onAudioQueueDone = null;
   }
   // ---- Lovelace lifecycle ----
   setConfig(t) {
@@ -3033,8 +3047,8 @@ class q extends v {
     if (!this._config)
       return r`<ha-card><div class="not-configured">No configuration</div></ha-card>`;
     if (this._cardConfig?.allowed_users?.length) {
-      const l = this.hass?.user?.id;
-      if (l && !this._cardConfig.allowed_users.includes(l))
+      const d = this.hass?.user?.id;
+      if (d && !this._cardConfig.allowed_users.includes(d))
         return r``;
     }
     const t = this._cardConfig?.card_height ?? 500, e = this._cardConfig?.hide_header ?? !1, i = this._cardConfig?.avatar, s = !!i, a = this._resolveTitle(), o = this._resolveStatus();
@@ -3082,10 +3096,10 @@ class q extends v {
     `;
   }
   _renderPortraitPanel(t, e, i) {
-    const s = this._cardConfig?.portrait_width ?? "auto", a = typeof s == "number" && s > 0, o = a ? s : this._portraitWidth, l = o ? `width: ${o}px; max-width: 50%;` : "width: 25%; max-width: 50%;", d = a ? "portrait-img-cover" : "portrait-img-contain", h = this._resolveAgentLabel();
+    const s = this._cardConfig?.portrait_width ?? "auto", a = typeof s == "number" && s > 0, o = a ? s : this._portraitWidth, d = o ? `width: ${o}px; max-width: 50%;` : "width: 25%; max-width: 50%;", l = a ? "portrait-img-cover" : "portrait-img-contain", h = this._resolveAgentLabel();
     return r`
-      <div class="portrait-panel" style="${l}">
-        <img class="${d}" src="${t}" alt="${e}" />
+      <div class="portrait-panel" style="${d}">
+        <img class="${l}" src="${t}" alt="${e}" />
         <div class="portrait-name">${e}</div>
         <div class="portrait-status">${i}</div>
         ${h ? r`<div class="portrait-agent">${h}</div>` : c}
@@ -3185,7 +3199,7 @@ class q extends v {
           @click=${this._toggleRecording}
           title="Voice input"
         >
-          ${Qt}
+          ${Wt}
         </button>
         <input
           type="text"
@@ -3205,7 +3219,7 @@ class q extends v {
           ?disabled=${this._loading || !this._inputValue.trim()}
           title="Send"
         >
-          ${Wt}
+          ${Qt}
         </button>
       </div>
     `;
@@ -3339,28 +3353,42 @@ class q extends v {
     }
   }
   // ---- TTS Chunking (Streaming) ----
+  // Text chunks are queued and processed sequentially to avoid overwhelming
+  // the TTS backend with concurrent requests (which causes dropped audio).
   _checkTtsChunk() {
     if (!this._cardConfig?.auto_tts) return;
     const t = this._findChunkBreak(this._ttsBuffer);
     if (t > 0) {
       const e = this._ttsBuffer.substring(0, t);
-      this._ttsBuffer = this._ttsBuffer.substring(t), this._speakSegments(e);
+      this._ttsBuffer = this._ttsBuffer.substring(t), this._enqueueTtsChunk(e);
     }
   }
   _flushTtsBuffer() {
-    this._ttsBuffer.trim() && this._cardConfig?.auto_tts && this._speakSegments(this._ttsBuffer), this._ttsBuffer = "";
+    this._ttsBuffer.trim() && this._cardConfig?.auto_tts && this._enqueueTtsChunk(this._ttsBuffer), this._ttsBuffer = "";
+  }
+  _enqueueTtsChunk(t) {
+    this._ttsTextQueue.push(t), this._processTtsQueue();
+  }
+  async _processTtsQueue() {
+    if (!this._ttsProcessing) {
+      for (this._ttsProcessing = !0; this._ttsTextQueue.length > 0; ) {
+        const t = this._ttsTextQueue.shift();
+        await this._speakSegments(t);
+      }
+      this._ttsProcessing = !1;
+    }
   }
   _findChunkBreak(t) {
-    if (t.length < 80) return -1;
     const e = t.indexOf(`
 
 `);
     if (e > 0) return e + 2;
+    if (t.length < 200) return -1;
     const i = [". ", "! ", "? ", `.
 `, `!
 `, `?
 `];
-    for (let s = 80; s < t.length; s++)
+    for (let s = 200; s < t.length; s++)
       for (const a of i)
         if (t.substring(s, s + a.length) === a)
           return s + a.length;
@@ -3395,20 +3423,20 @@ class q extends v {
       e?.();
       return;
     }
-    const o = U(t).filter((l) => l.text.trim()).map((l) => ({ text: l.text, voice: i[l.type] || "" })).filter((l) => l.voice);
+    const o = U(t).filter((d) => d.text.trim()).map((d) => ({ text: d.text, voice: i[d.type] || "" })).filter((d) => d.voice);
     if (o.length === 0) {
       e?.();
       return;
     }
     try {
-      const l = await this.hass.callWS({
+      const d = await this.hass.callWS({
         type: "proxlab/card/tts/speak",
         card_id: this._config.card_id,
         segments: o
       });
-      if (l?.audio_segments?.length) {
-        for (const d of l.audio_segments) {
-          const h = d.url || d.data_url;
+      if (d?.audio_segments?.length) {
+        for (const l of d.audio_segments) {
+          const h = l.url || l.data_url;
           h && this._audioQueue.push(h);
         }
         this._onAudioQueueDone = e ?? null, this._playAudioQueue();

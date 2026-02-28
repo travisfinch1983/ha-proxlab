@@ -64,6 +64,8 @@ export class ProxLabGroupChatCard extends LitElement {
   private _onAudioQueueDone: (() => void) | null = null;
   private _ttsBuffer = "";
   private _streamingProfileId = "";
+  private _ttsTextQueue: { text: string; profile: AgentProfile }[] = [];
+  private _ttsProcessing = false;
 
   setConfig(config: GroupChatCardYamlConfig): void {
     if (!config.card_id) {
@@ -747,6 +749,8 @@ export class ProxLabGroupChatCard extends LitElement {
   }
 
   // ---- TTS Chunking (Streaming) ----
+  // Text chunks are queued and processed sequentially to avoid overwhelming
+  // the TTS backend with concurrent requests (which causes dropped audio).
 
   private _checkTtsChunk(profileId: string): void {
     if (!this._cardConfig?.auto_tts) return;
@@ -757,7 +761,7 @@ export class ProxLabGroupChatCard extends LitElement {
     if (breakIdx > 0) {
       const chunk = this._ttsBuffer.substring(0, breakIdx);
       this._ttsBuffer = this._ttsBuffer.substring(breakIdx);
-      this._speakSegmentsForProfile(chunk, profile);
+      this._enqueueTtsChunk(chunk, profile);
     }
   }
 
@@ -766,21 +770,38 @@ export class ProxLabGroupChatCard extends LitElement {
     if (!this._cardConfig?.auto_tts) { this._ttsBuffer = ""; return; }
     const profile = this._profiles.find((p) => p.profile_id === profileId);
     if (profile) {
-      this._speakSegmentsForProfile(this._ttsBuffer, profile);
+      this._enqueueTtsChunk(this._ttsBuffer, profile);
     }
     this._ttsBuffer = "";
   }
 
-  private _findChunkBreak(text: string): number {
-    if (text.length < 80) return -1;
+  private _enqueueTtsChunk(text: string, profile: AgentProfile): void {
+    this._ttsTextQueue.push({ text, profile });
+    this._processTtsQueue();
+  }
 
-    // Prefer paragraph breaks
+  private async _processTtsQueue(): Promise<void> {
+    if (this._ttsProcessing) return;
+    this._ttsProcessing = true;
+
+    while (this._ttsTextQueue.length > 0) {
+      const { text, profile } = this._ttsTextQueue.shift()!;
+      await this._speakSegmentsForProfile(text, profile);
+    }
+
+    this._ttsProcessing = false;
+  }
+
+  private _findChunkBreak(text: string): number {
+    // Prefer paragraph breaks at any length
     const paraIdx = text.indexOf("\n\n");
     if (paraIdx > 0) return paraIdx + 2;
 
-    // Sentence endings after 80+ chars
+    // Only break on sentences after accumulating 200+ chars
+    if (text.length < 200) return -1;
+
     const sentenceEnds = [". ", "! ", "? ", ".\n", "!\n", "?\n"];
-    for (let i = 80; i < text.length; i++) {
+    for (let i = 200; i < text.length; i++) {
       for (const end of sentenceEnds) {
         if (text.substring(i, i + end.length) === end) {
           return i + end.length;
