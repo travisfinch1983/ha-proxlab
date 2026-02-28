@@ -78,6 +78,14 @@ export async function updateConnection(
   });
 }
 
+export async function discoverClaudeAddon(): Promise<{
+  connection_ids: string[];
+  base_url: string;
+  models: string[];
+}> {
+  return callWS("proxlab/connections/discover-claude-addon");
+}
+
 export async function deleteConnection(connectionId: string): Promise<void> {
   return callWS("proxlab/connections/delete", {
     connection_id: connectionId,

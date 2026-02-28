@@ -21,6 +21,7 @@ from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 from .const import (
     CONF_CONNECTIONS,
     CONNECTION_TYPE_CLAUDE,
+    CONNECTION_TYPE_CLAUDE_ADDON,
     CONNECTION_TYPE_OLLAMA,
     CONNECTION_TYPE_OPENAI,
     DOMAIN,
@@ -138,6 +139,8 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
         # Explicit connection_type takes priority over heuristics
         if connection_type == CONNECTION_TYPE_OPENAI:
             pass  # Fall through to OpenAI-compatible check below
+        elif connection_type == CONNECTION_TYPE_CLAUDE_ADDON:
+            pass  # Claude Code add-on proxy speaks OpenAI format
         elif connection_type == CONNECTION_TYPE_OLLAMA:
             return await self._check_ollama_connection(
                 session, conn, base_url, model_name, capabilities

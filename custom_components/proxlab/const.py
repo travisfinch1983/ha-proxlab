@@ -715,6 +715,7 @@ CONNECTION_TYPE_LOCAL: Final = "local"
 CONNECTION_TYPE_OPENAI: Final = "openai"
 CONNECTION_TYPE_OLLAMA: Final = "ollama"
 CONNECTION_TYPE_CLAUDE: Final = "claude_api"
+CONNECTION_TYPE_CLAUDE_ADDON: Final = "claude_addon"
 
 # Claude API models available for selection
 CLAUDE_MODELS: Final = [

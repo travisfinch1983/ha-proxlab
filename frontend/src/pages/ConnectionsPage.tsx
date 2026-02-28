@@ -11,6 +11,7 @@ import {
   updateConnection,
   deleteConnection,
   testConnection,
+  discoverClaudeAddon,
   fetchConfig,
   refreshHealth,
 } from "../api";
@@ -59,6 +60,7 @@ export default function ConnectionsPage() {
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<ConnectionHealth | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [discovering, setDiscovering] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
@@ -153,6 +155,24 @@ export default function ConnectionsPage() {
     }
   };
 
+  const handleDiscoverAddon = async () => {
+    setDiscovering(true);
+    try {
+      const { connection_ids, base_url } = await discoverClaudeAddon();
+      await refreshHealth();
+      await reload();
+      setSelectedId(connection_ids[0] ?? null);
+      setIsNew(false);
+      showToast(
+        `Claude Code add-on discovered at ${base_url} — ${connection_ids.length} connections created`
+      );
+    } catch (err: unknown) {
+      showToast(`Discovery failed: ${(err as Error).message}`);
+    } finally {
+      setDiscovering(false);
+    }
+  };
+
   const toggleCapability = (cap: string) => {
     setForm((f) => ({
       ...f,
@@ -178,6 +198,14 @@ export default function ConnectionsPage() {
         <div className="w-80 shrink-0 flex flex-col gap-3 overflow-y-auto">
           <button className="btn btn-primary btn-sm" onClick={handleNew}>
             <FontAwesomeIcon icon={faPlus} /> Add Connection
+          </button>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={handleDiscoverAddon}
+            disabled={discovering}
+          >
+            <FontAwesomeIcon icon={faVial} />{" "}
+            {discovering ? "Discovering..." : "Discover Claude Code"}
           </button>
           {Object.entries(connections).map(([id, conn]) => (
             <ConnectionCard
@@ -250,6 +278,7 @@ export default function ConnectionsPage() {
                       <option value="openai">OpenAI Compatible</option>
                       <option value="ollama">Ollama</option>
                       <option value="claude_api">Claude API</option>
+                      <option value="claude_addon">Claude Code Add-on</option>
                     </select>
                   </label>
                   <label className="form-control">

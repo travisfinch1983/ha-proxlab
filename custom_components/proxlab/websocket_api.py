@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time as _time
 from typing import Any
 from uuid import uuid4
@@ -191,6 +192,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_connections_update)
     websocket_api.async_register_command(hass, ws_connections_delete)
     websocket_api.async_register_command(hass, ws_connections_test)
+    websocket_api.async_register_command(hass, ws_discover_claude_addon)
     websocket_api.async_register_command(hass, ws_agents_list)
     websocket_api.async_register_command(hass, ws_agents_update)
     websocket_api.async_register_command(hass, ws_agents_default_prompt)
@@ -707,6 +709,162 @@ async def ws_connections_test(
                     "model_name": None,
                 },
             )
+
+
+# ---------------------------------------------------------------------------
+# Claude Code Add-on Discovery
+# ---------------------------------------------------------------------------
+
+_CLAUDE_ADDON_SLUG = "local_claude_code_server"
+_CLAUDE_ADDON_MODELS = [
+    ("Claude Code - Sonnet", "claude-sonnet-4-6"),
+    ("Claude Code - Opus", "claude-opus-4-6"),
+    ("Claude Code - Haiku", "claude-haiku-4-5-20251001"),
+]
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/connections/discover-claude-addon",
+        vol.Optional("entry_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_discover_claude_addon(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Auto-discover Claude Code add-on and create connections for each model."""
+    import aiohttp
+
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+
+    supervisor_token = os.environ.get("SUPERVISOR_TOKEN")
+    if not supervisor_token:
+        connection.send_error(
+            msg["id"], "not_supported",
+            "Supervisor API not available — are you running Home Assistant OS?",
+        )
+        return
+
+    sup_headers = {"Authorization": f"Bearer {supervisor_token}"}
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=10)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            # 1. Check if the add-on is installed and running
+            async with session.get(
+                f"http://supervisor/addons/{_CLAUDE_ADDON_SLUG}/info",
+                headers=sup_headers,
+            ) as resp:
+                if resp.status != 200:
+                    connection.send_error(
+                        msg["id"], "not_found",
+                        "Claude Code add-on is not installed. Install it first from "
+                        "the add-on store.",
+                    )
+                    return
+                addon_info = (await resp.json()).get("data", {})
+
+            addon_state = addon_info.get("state")
+            if addon_state != "started":
+                connection.send_error(
+                    msg["id"], "not_running",
+                    f"Claude Code add-on is {addon_state}. Start it first.",
+                )
+                return
+
+            # 2. Get host network IP to reach the add-on (host_network: true)
+            async with session.get(
+                "http://supervisor/network/info", headers=sup_headers,
+            ) as resp:
+                net_info = (await resp.json()).get("data", {})
+
+            host_ip = None
+            for iface in net_info.get("interfaces", []):
+                for addr in iface.get("ipv4", {}).get("address", []):
+                    ip = addr.split("/")[0]
+                    if ip and not ip.startswith("172.") and not ip.startswith("127."):
+                        host_ip = ip
+                        break
+                if host_ip:
+                    break
+
+            if not host_ip:
+                connection.send_error(
+                    msg["id"], "network_error",
+                    "Could not determine host IP address.",
+                )
+                return
+
+            base_url = f"http://{host_ip}:3000/v1"
+
+            # 3. Verify the proxy is reachable and authenticated
+            try:
+                async with session.get(f"{base_url}/status") as resp:
+                    if resp.status != 200:
+                        connection.send_error(
+                            msg["id"], "proxy_error",
+                            f"Claude Code proxy not reachable at {base_url}/status "
+                            f"(HTTP {resp.status}). Is the add-on running?",
+                        )
+                        return
+                    status = await resp.json()
+            except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+                connection.send_error(
+                    msg["id"], "proxy_error",
+                    f"Cannot reach Claude Code proxy at {base_url}: {err}",
+                )
+                return
+
+            if not status.get("authenticated"):
+                connection.send_error(
+                    msg["id"], "auth_required",
+                    "Claude Code add-on is running but not authenticated. "
+                    "Open the add-on UI and log in first.",
+                )
+                return
+
+    except (aiohttp.ClientError, asyncio.TimeoutError) as err:
+        connection.send_error(
+            msg["id"], "supervisor_error",
+            f"Supervisor API error: {err}",
+        )
+        return
+
+    # 4. Create connections for each model
+    from .config_flow import normalize_url
+
+    new_data = dict(entry.data)
+    new_conns = dict(new_data.get(CONF_CONNECTIONS, {}))
+    created_ids = []
+
+    for name, model in _CLAUDE_ADDON_MODELS:
+        conn_id = uuid4().hex[:8]
+        new_conns[conn_id] = {
+            "name": name,
+            "base_url": normalize_url(base_url),
+            "api_key": "",
+            "model": model,
+            "capabilities": ["conversation", "tool_use"],
+            "connection_type": "claude_addon",
+        }
+        created_ids.append(conn_id)
+
+    new_data[CONF_CONNECTIONS] = new_conns
+    hass.config_entries.async_update_entry(entry, data=new_data)
+
+    _LOGGER.info(
+        "Claude Code add-on discovered at %s — created %d connections",
+        base_url, len(created_ids),
+    )
+    connection.send_result(msg["id"], {
+        "connection_ids": created_ids,
+        "base_url": base_url,
+        "models": [m for _, m in _CLAUDE_ADDON_MODELS],
+    })
 
 
 # ---------------------------------------------------------------------------
