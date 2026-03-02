@@ -189,6 +189,8 @@ export default function ConnectionsPage() {
   const hasTtsCaps = form.capabilities.includes("tts");
   const hasSttCaps = form.capabilities.includes("stt");
   const hasEmbeddingCaps = form.capabilities.includes("embeddings");
+  const isClaude = form.connection_type === "claude_api" || form.connection_type === "claude_addon";
+  const isOllama = form.connection_type === "ollama";
 
   return (
     <>
@@ -351,7 +353,7 @@ export default function ConnectionsPage() {
                 {hasLlmCaps && (
                   <div className="border border-base-300 rounded-lg p-4 space-y-3">
                     <h3 className="font-medium text-sm">LLM Settings</h3>
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    <div className="grid grid-cols-2 gap-3">
                       <label className="form-control">
                         <div className="label">
                           <span className="label-text text-xs">
@@ -389,56 +391,62 @@ export default function ConnectionsPage() {
                           }
                         />
                       </label>
-                      <label className="form-control">
-                        <div className="label">
-                          <span className="label-text text-xs">Top P</span>
-                        </div>
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="0"
-                          max="1"
-                          className="input input-bordered input-xs"
-                          value={form.top_p ?? 1.0}
-                          onChange={(e) =>
-                            setForm((f) => ({
-                              ...f,
-                              top_p: parseFloat(e.target.value),
-                            }))
-                          }
-                        />
-                      </label>
-                      <label className="form-control">
-                        <div className="label">
-                          <span className="label-text text-xs">Keep Alive</span>
-                        </div>
-                        <input
-                          type="text"
-                          className="input input-bordered input-xs"
-                          value={form.keep_alive ?? "5m"}
-                          onChange={(e) =>
-                            setForm((f) => ({
-                              ...f,
-                              keep_alive: e.target.value,
-                            }))
-                          }
-                        />
-                      </label>
+                      {!isClaude && (
+                        <label className="form-control">
+                          <div className="label">
+                            <span className="label-text text-xs">Top P</span>
+                          </div>
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0"
+                            max="1"
+                            className="input input-bordered input-xs"
+                            value={form.top_p ?? 1.0}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                top_p: parseFloat(e.target.value),
+                              }))
+                            }
+                          />
+                        </label>
+                      )}
+                      {isOllama && (
+                        <label className="form-control">
+                          <div className="label">
+                            <span className="label-text text-xs">Keep Alive</span>
+                          </div>
+                          <input
+                            type="text"
+                            className="input input-bordered input-xs"
+                            value={form.keep_alive ?? "5m"}
+                            onChange={(e) =>
+                              setForm((f) => ({
+                                ...f,
+                                keep_alive: e.target.value,
+                              }))
+                            }
+                          />
+                        </label>
+                      )}
                     </div>
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        className="toggle toggle-xs toggle-primary"
-                        checked={form.thinking_enabled ?? true}
-                        onChange={(e) =>
-                          setForm((f) => ({
-                            ...f,
-                            thinking_enabled: e.target.checked,
-                          }))
-                        }
-                      />
-                      <span className="text-xs">Enable Thinking</span>
-                    </label>
+                    {!isClaude && (
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          className="toggle toggle-xs toggle-primary"
+                          checked={form.thinking_enabled ?? true}
+                          onChange={(e) =>
+                            setForm((f) => ({
+                              ...f,
+                              thinking_enabled: e.target.checked,
+                            }))
+                          }
+                        />
+                        <span className="text-xs">Enable Thinking</span>
+                      </label>
+                    )}
                   </div>
                 )}
 
