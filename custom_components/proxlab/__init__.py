@@ -1566,6 +1566,38 @@ async def async_setup_services(
         )
         _LOGGER.debug("Registered service: run_agent_chain")
 
+    # --- KoboldCpp Hot-Swap service ---
+
+    async def handle_swap_model(call: ServiceCall) -> dict[str, Any]:
+        """Hot-swap model on a running KoboldCpp service."""
+        service_id = call.data["service_id"]
+        model_family = call.data["model_family"]
+        model_variant = call.data["model_variant"]
+        quant = call.data["quant"]
+        target_entry_id = call.data.get("entry_id", entry_id)
+
+        config_entry = hass.config_entries.async_get_entry(target_entry_id)
+        if not config_entry:
+            raise ValueError(f"Config entry {target_entry_id} not found")
+
+        proxlab_url = dict(config_entry.data).get(CONF_PROXLAB_URL, "")
+        if not proxlab_url:
+            raise ValueError("ProxLab URL not configured")
+
+        from .proxlab_api import swap_model
+        return await swap_model(
+            proxlab_url, service_id, model_family, model_variant, quant
+        )
+
+    if not hass.services.has_service(DOMAIN, "swap_model"):
+        hass.services.async_register(
+            DOMAIN,
+            "swap_model",
+            handle_swap_model,
+            supports_response=SupportsResponse.ONLY,
+        )
+        _LOGGER.debug("Registered service: swap_model")
+
 
 async def async_remove_services(hass: HomeAssistant) -> None:
     """Remove ProxLab services.
@@ -1592,6 +1624,7 @@ async def async_remove_services(hass: HomeAssistant) -> None:
         "create_agent_schedule",
         "remove_agent_schedule",
         "run_agent_chain",
+        "swap_model",
     ]
 
     for service in services:

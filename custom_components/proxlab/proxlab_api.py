@@ -160,6 +160,39 @@ def filter_services_by_type(
     return [s for s in services if s.service_type == service_type]
 
 
+async def swap_model(
+    proxlab_url: str,
+    service_id: str,
+    model_family: str,
+    model_variant: str,
+    quant: str,
+) -> dict[str, Any]:
+    """Hot-swap model on a running KoboldCpp service via ProxLab API.
+
+    Args:
+        proxlab_url: Base URL for ProxLab (e.g., http://10.0.0.233:7777).
+        service_id: The active-service ID.
+        model_family: Model family name (e.g., "Qwen3.5").
+        model_variant: Model variant (e.g., "4B").
+        quant: GGUF quantization level (e.g., "Q6_K_XL").
+
+    Returns:
+        Response dict from ProxLab API.
+    """
+    url = f"{proxlab_url.rstrip('/')}/api/ai/active-services/{service_id}/swap"
+    timeout = aiohttp.ClientTimeout(total=180)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.post(url, json={
+            "family": model_family,
+            "variant": model_variant,
+            "quant": quant,
+        }) as resp:
+            if resp.status != 200:
+                body = await resp.text()
+                raise ValueError(f"Swap failed ({resp.status}): {body}")
+            return await resp.json()
+
+
 def services_to_selector_options(
     services: list[ProxLabService],
 ) -> list[dict[str, str]]:

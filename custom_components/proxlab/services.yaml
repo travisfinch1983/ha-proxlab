@@ -583,3 +583,40 @@ run_agent_chain:
       advanced: true
       selector:
         text:
+
+swap_model:
+  name: Swap KoboldCpp model
+  description: >
+    Hot-swap the model on a running KoboldCpp service without restarting.
+    Requires admin mode enabled (default for ProxLab launches).
+  fields:
+    service_id:
+      name: Service ID
+      description: The active ProxLab service ID (e.g., "koboldcpp-5001-1772487085840")
+      required: true
+      selector:
+        text:
+    model_family:
+      name: Model Family
+      description: Model family name (e.g., "Qwen3.5")
+      required: true
+      selector:
+        text:
+    model_variant:
+      name: Model Variant
+      description: Model variant (e.g., "4B")
+      required: true
+      selector:
+        text:
+    quant:
+      name: Quantization
+      description: GGUF quantization level (e.g., "Q6_K_XL", "Q4_K_M")
+      required: true
+      selector:
+        text:
+    entry_id:
+      name: Entry ID
+      required: false
+      advanced: true
+      selector:
+        text:
