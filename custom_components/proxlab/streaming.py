@@ -15,8 +15,8 @@ from .helpers import strip_thinking_blocks
 _LOGGER = logging.getLogger(__name__)
 
 # Pattern for detecting incomplete thinking blocks in streaming content
-_THINK_START_PATTERN = re.compile(r"<think>")
-_THINK_END_PATTERN = re.compile(r"</think>")
+_THINK_START_PATTERN = re.compile(r"<think>", re.IGNORECASE)
+_THINK_END_PATTERN = re.compile(r"</think>", re.IGNORECASE)
 
 
 class OpenAIStreamingHandler:
@@ -89,7 +89,7 @@ class OpenAIStreamingHandler:
                     # Buffer content that might be start of <think>
                     for j in range(min(7, len(full_content)), 0, -1):
                         potential_start = full_content[-j:]
-                        if "<think>"[:j] == potential_start:
+                        if "<think>"[:j] == potential_start.lower():
                             result_parts.append(full_content[i:-j])
                             self._thinking_buffer = potential_start
                             break

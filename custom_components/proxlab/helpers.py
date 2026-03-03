@@ -24,9 +24,11 @@ _LOGGER = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
-# Pre-compiled regex pattern for stripping thinking blocks from reasoning models
+# Pre-compiled regex patterns for stripping thinking blocks from reasoning models
 # Matches <think>...</think> blocks including newlines (DOTALL flag)
-_THINKING_BLOCK_PATTERN = re.compile(r"<think>.*?</think>", re.DOTALL)
+_THINKING_BLOCK_PATTERN = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+# Matches unclosed <think> blocks (model hit max tokens mid-thinking)
+_THINKING_UNCLOSED_PATTERN = re.compile(r"<think>.*", re.DOTALL | re.IGNORECASE)
 
 
 def render_template_value(hass: HomeAssistant, value: str) -> str:
@@ -82,8 +84,11 @@ def strip_thinking_blocks(text: str | None) -> str | None:
     if not text:
         return ""
 
-    # Remove all <think>...</think> blocks
+    # Remove all <think>...</think> blocks (closed)
     result = _THINKING_BLOCK_PATTERN.sub("", text)
+
+    # Remove unclosed <think> blocks (model hit max tokens mid-thinking)
+    result = _THINKING_UNCLOSED_PATTERN.sub("", result)
 
     # Strip leading/trailing whitespace
     return result.strip()

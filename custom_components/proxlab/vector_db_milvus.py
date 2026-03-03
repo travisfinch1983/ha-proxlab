@@ -75,7 +75,12 @@ class MilvusVectorDB:
         self.hass = hass
         self.config = config
 
-        self.host = config.get(CONF_MILVUS_HOST, DEFAULT_MILVUS_HOST)
+        raw_host = config.get(CONF_MILVUS_HOST, DEFAULT_MILVUS_HOST)
+        # Strip scheme prefix — pymilvus expects bare hostname, not a URL
+        for prefix in ("http://", "https://"):
+            if raw_host.startswith(prefix):
+                raw_host = raw_host[len(prefix):]
+        self.host = raw_host.rstrip("/")
         self.port = config.get(CONF_MILVUS_PORT, DEFAULT_MILVUS_PORT)
         self.collection_name = config.get(
             CONF_MILVUS_COLLECTION, DEFAULT_MILVUS_COLLECTION

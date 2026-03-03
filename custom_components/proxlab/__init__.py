@@ -55,6 +55,8 @@ from .const import (
     CONF_LLM_TEMPERATURE,
     CONF_LLM_TOP_P,
     CONF_MEMORY_ENABLED,
+    CONF_MILVUS_HOST,
+    CONF_MILVUS_PORT,
     CONF_OPENAI_API_KEY,
     CONF_PROXLAB_URL,
     CONF_ROLES,
@@ -88,6 +90,8 @@ from .const import (
     DEFAULT_LLM_MODEL,
     DEFAULT_MAX_TOKENS,
     DEFAULT_MEMORY_ENABLED,
+    DEFAULT_MILVUS_HOST,
+    DEFAULT_MILVUS_PORT,
     DEFAULT_ROLES,
     DEFAULT_SESSION_PERSISTENCE_ENABLED,
     DEFAULT_SESSION_TIMEOUT,
@@ -462,25 +466,34 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     context_mode = config.get(CONF_CONTEXT_MODE)
     if context_mode == CONTEXT_MODE_VECTOR_DB:
         # Get configuration values
-        chromadb_host = config.get(CONF_VECTOR_DB_HOST, DEFAULT_VECTOR_DB_HOST)
-        chromadb_port = config.get(CONF_VECTOR_DB_PORT, DEFAULT_VECTOR_DB_PORT)
         embedding_provider = config.get(CONF_VECTOR_DB_EMBEDDING_PROVIDER)
         embedding_base_url = config.get(
             CONF_VECTOR_DB_EMBEDDING_BASE_URL, DEFAULT_VECTOR_DB_EMBEDDING_BASE_URL
         )
 
-        # Check ChromaDB health
-        chromadb_healthy, chromadb_msg = await check_chromadb_health(chromadb_host, chromadb_port)
-        if not chromadb_healthy:
-            _LOGGER.warning(
-                "ChromaDB health check failed at %s:%s - %s. "
-                "Vector DB features may not work until ChromaDB is available.",
-                chromadb_host,
-                chromadb_port,
-                chromadb_msg,
+        # Check vector DB backend health (only ChromaDB has a dedicated health check)
+        vector_backend = config.get(CONF_VECTOR_DB_BACKEND, DEFAULT_VECTOR_DB_BACKEND)
+        if vector_backend == VECTOR_DB_BACKEND_MILVUS:
+            milvus_host = config.get(CONF_MILVUS_HOST, DEFAULT_MILVUS_HOST)
+            milvus_port = config.get(CONF_MILVUS_PORT, DEFAULT_MILVUS_PORT)
+            _LOGGER.info(
+                "Vector DB backend: Milvus at %s:%s (health checked during setup)",
+                milvus_host, milvus_port,
             )
         else:
-            _LOGGER.info("ChromaDB health check passed: %s", chromadb_msg)
+            chromadb_host = config.get(CONF_VECTOR_DB_HOST, DEFAULT_VECTOR_DB_HOST)
+            chromadb_port = config.get(CONF_VECTOR_DB_PORT, DEFAULT_VECTOR_DB_PORT)
+            chromadb_healthy, chromadb_msg = await check_chromadb_health(chromadb_host, chromadb_port)
+            if not chromadb_healthy:
+                _LOGGER.warning(
+                    "ChromaDB health check failed at %s:%s - %s. "
+                    "Vector DB features may not work until ChromaDB is available.",
+                    chromadb_host,
+                    chromadb_port,
+                    chromadb_msg,
+                )
+            else:
+                _LOGGER.info("ChromaDB health check passed: %s", chromadb_msg)
 
         # Check Ollama health if using Ollama embeddings
         if embedding_provider == EMBEDDING_PROVIDER_OLLAMA:

@@ -388,6 +388,7 @@ class ProxLabAgent(
         except AuthenticationError as err:
             _LOGGER.error("Authentication error: %s", err, exc_info=True)
             message = "I'm having trouble connecting to the AI service. Please check your API key."
+            self._fire_error_trace(user_input, err, message)
 
             intent_response = intent.IntentResponse(language=user_input.language)
             intent_response.async_set_error(
@@ -403,6 +404,7 @@ class ProxLabAgent(
         except ServiceUnavailableError as err:
             _LOGGER.error("Service unavailable: %s", err, exc_info=True)
             message = "The AI service is temporarily unavailable. Please try again later."
+            self._fire_error_trace(user_input, err, message)
 
             intent_response = intent.IntentResponse(language=user_input.language)
             intent_response.async_set_error(
@@ -418,6 +420,7 @@ class ProxLabAgent(
         except TokenLimitExceeded as err:
             _LOGGER.error("Token limit exceeded: %s", err, exc_info=True)
             message = "Your request was too long. Please try a shorter message."
+            self._fire_error_trace(user_input, err, message)
 
             intent_response = intent.IntentResponse(language=user_input.language)
             intent_response.async_set_error(
@@ -433,6 +436,7 @@ class ProxLabAgent(
         except RateLimitExceeded as err:
             _LOGGER.error("Rate limit exceeded: %s", err, exc_info=True)
             message = "Too many requests. Please wait a moment and try again."
+            self._fire_error_trace(user_input, err, message)
 
             intent_response = intent.IntentResponse(language=user_input.language)
             intent_response.async_set_error(
@@ -448,6 +452,7 @@ class ProxLabAgent(
         except EntityNotFoundError as err:
             _LOGGER.error("Entity not found: %s", err, exc_info=True)
             message = "I couldn't find the device. Please check if it's available."
+            self._fire_error_trace(user_input, err, message)
 
             intent_response = intent.IntentResponse(language=user_input.language)
             intent_response.async_set_error(
@@ -463,6 +468,7 @@ class ProxLabAgent(
         except PermissionDenied as err:
             _LOGGER.error("Permission denied: %s", err, exc_info=True)
             message = "I don't have permission to control that device."
+            self._fire_error_trace(user_input, err, message)
 
             intent_response = intent.IntentResponse(language=user_input.language)
             intent_response.async_set_error(
@@ -478,6 +484,7 @@ class ProxLabAgent(
         except ContextInjectionError as err:
             _LOGGER.error("Context injection error: %s", err, exc_info=True)
             message = "I had trouble getting device information. Please try again."
+            self._fire_error_trace(user_input, err, message)
 
             intent_response = intent.IntentResponse(language=user_input.language)
             intent_response.async_set_error(
@@ -493,6 +500,7 @@ class ProxLabAgent(
         except Exception as err:
             _LOGGER.error("Unexpected error: %s", err, exc_info=True)
             message = "Something unexpected went wrong. Please check the logs."
+            self._fire_error_trace(user_input, err, message)
 
             intent_response = intent.IntentResponse(language=user_input.language)
             intent_response.async_set_error(
@@ -750,8 +758,19 @@ class ProxLabAgent(
         """Preprocess user message before sending to LLM.
 
         Appends /no_think if thinking mode is disabled and not already present.
+        Uses fresh config so runtime changes to thinking_enabled take effect
+        without requiring an integration reload.
         """
-        if not self.config.get(CONF_THINKING_ENABLED, DEFAULT_THINKING_ENABLED):
+        from ..connection_manager import resolve_connections_to_flat_config
+        from ..const import CONF_CONNECTIONS
+
+        # Read thinking_enabled from fresh config entry to pick up runtime changes
+        live_config = self._get_fresh_config()
+        if CONF_CONNECTIONS in live_config:
+            live_config = resolve_connections_to_flat_config(live_config)
+        thinking_enabled = live_config.get(CONF_THINKING_ENABLED, DEFAULT_THINKING_ENABLED)
+
+        if not thinking_enabled:
             # Only append /no_think if it's not already there (avoid duplicates)
             if "/no_think" not in text:
                 return text.strip() + "\n/no_think"
@@ -1073,7 +1092,7 @@ class ProxLabAgent(
                     "user_id": user_id,
                     "device_id": device_id,
                     "user_message": text,
-                    "model": self.config.get(CONF_LLM_MODEL, "unknown"),
+                    "model": self._get_current_model_name(),
                     "timestamp": time.time(),
                     "context_mode": self.config.get(CONF_CONTEXT_MODE),
                 },
@@ -1133,7 +1152,7 @@ class ProxLabAgent(
                         "user_id": user_id,
                         "user_message": text,
                         "response_text": response or "",
-                        "model": self.config.get(CONF_LLM_MODEL, "unknown"),
+                        "model": self._get_current_model_name(),
                         "duration_ms": duration_ms,
                         "tokens": metrics["tokens"],
                         "performance": metrics["performance"],
@@ -1182,6 +1201,55 @@ class ProxLabAgent(
 
             raise
 
+    def _fire_error_trace(
+        self,
+        user_input: ha_conversation.ConversationInput,
+        err: Exception,
+        response_message: str,
+    ) -> None:
+        """Fire a conversation finished event for error cases so the tracer captures them."""
+        if not self.config.get(CONF_EMIT_EVENTS, True):
+            return
+        try:
+            self.hass.bus.async_fire(
+                EVENT_CONVERSATION_FINISHED,
+                {
+                    "conversation_id": user_input.conversation_id or "unknown",
+                    "user_id": (
+                        user_input.context.user_id if user_input.context else None
+                    ),
+                    "user_message": user_input.text,
+                    "response_text": f"[Error: {response_message}]",
+                    "model": self._get_current_model_name(),
+                    "duration_ms": 0,
+                    "tokens": {"prompt": 0, "completion": 0, "total": 0},
+                    "performance": {
+                        "llm_latency_ms": 0,
+                        "tool_latency_ms": 0,
+                        "context_latency_ms": 0,
+                        "ttft_ms": 0,
+                    },
+                    "context": {},
+                    "tool_calls": 0,
+                    "tool_breakdown": {},
+                    "error": type(err).__name__,
+                    "error_detail": str(err),
+                    "steps": [
+                        {
+                            "agent_id": "conversation",
+                            "agent_name": "Conversation",
+                            "model": self._get_current_model_name(),
+                            "duration_ms": 0,
+                            "tokens": {"prompt": 0, "completion": 0, "total": 0},
+                            "tokens_per_sec": 0,
+                            "error": f"{type(err).__name__}: {err}",
+                        }
+                    ],
+                },
+            )
+        except Exception:
+            pass
+
     def _get_fresh_config(self) -> dict[str, Any]:
         """Fetch fresh config from the config entry, falling back to self.config."""
         if self._entry_id:
@@ -1189,6 +1257,16 @@ class ProxLabAgent(
             if entry:
                 return dict(entry.data) | dict(entry.options)
         return self.config
+
+    def _get_current_model_name(self) -> str:
+        """Get the current model name from fresh config (picks up runtime changes)."""
+        from ..connection_manager import resolve_connections_to_flat_config
+        from ..const import CONF_CONNECTIONS
+
+        live_config = self._get_fresh_config()
+        if CONF_CONNECTIONS in live_config:
+            live_config = resolve_connections_to_flat_config(live_config)
+        return live_config.get(CONF_LLM_MODEL, "unknown")
 
     async def invoke_agent(
         self,
@@ -2105,7 +2183,7 @@ class ProxLabAgent(
                     "user_id": user_id,
                     "user_message": user_message,
                     "response_text": final_response or "",
-                    "model": self.config.get(CONF_LLM_MODEL, "unknown"),
+                    "model": self._get_current_model_name(),
                     "duration_ms": duration_ms,
                     "tokens": metrics["tokens"],
                     "performance": metrics["performance"],

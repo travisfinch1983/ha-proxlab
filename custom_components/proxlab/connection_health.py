@@ -155,6 +155,15 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
         reachable = False
         try:
             async with session.get(f"{base_url}/models") as resp:
+                # 5xx means the server (or proxy) is up but the backend is down
+                if resp.status >= 500:
+                    return ConnectionCheckResult(
+                        reachable=True,
+                        api_valid=False,
+                        detail=f"Backend error (HTTP {resp.status})",
+                        error="Backend Down",
+                        model_name=model_name,
+                    )
                 reachable = True
                 # Try to extract the model name from response
                 if resp.status == 200:
