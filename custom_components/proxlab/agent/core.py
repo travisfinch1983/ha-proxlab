@@ -1520,6 +1520,18 @@ class ProxLabAgent(
         except Exception as trace_err:
             _LOGGER.debug("Failed to emit trace for invoke_agent: %s", trace_err)
 
+        # Extract and store memories if enabled (fire and forget)
+        if final_text and self.config.get(CONF_MEMORY_ENABLED, DEFAULT_MEMORY_ENABLED):
+            self.hass.async_create_task(
+                self._extract_and_store_memories(
+                    conversation_id=conversation_id or f"invoke_{agent_id}",
+                    user_message=message,
+                    assistant_response=final_text,
+                    full_messages=messages,
+                    user_id=user_id,
+                )
+            )
+
         return result
 
     async def invoke_agent_streaming(
@@ -1695,6 +1707,18 @@ class ProxLabAgent(
                 final_text = "Agent reached maximum tool call iterations without a final response."
 
         duration_ms = int((time.time() - start_time) * 1000)
+
+        # Extract and store memories if enabled (fire and forget)
+        if final_text and self.config.get(CONF_MEMORY_ENABLED, DEFAULT_MEMORY_ENABLED):
+            self.hass.async_create_task(
+                self._extract_and_store_memories(
+                    conversation_id=conversation_id or f"invoke_{agent_id}",
+                    user_message=message,
+                    assistant_response=final_text,
+                    full_messages=messages,
+                    user_id=user_id,
+                )
+            )
 
         defn = AGENT_DEFINITIONS[agent_id]
         yield {
