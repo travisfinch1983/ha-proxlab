@@ -239,6 +239,7 @@ class MemoryExtractionMixin:
         tools: list[dict[str, Any]] | None = None,
         temperature: float | None = None,
         max_tokens: int | None = None,
+        config_override: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """Call the LLM API (provided by LLMMixin)."""
         ...
@@ -403,10 +404,40 @@ Return ONLY valid JSON, no other text:
 
         return prompt
 
+    def _resolve_memory_llm_config(self) -> dict[str, Any] | None:
+        """Resolve the memory agent's dedicated LLM connection config.
+
+        Returns the flat CONF_LLM_* config for the memory agent's primary
+        connection, or None if not configured (falls back to conversation LLM).
+        """
+        from ..connection_manager import resolve_agent_to_flat_config
+        from ..const import AGENT_MEMORY
+
+        try:
+            # Get fresh config to pick up runtime connection changes
+            live_config = self._get_fresh_config()  # type: ignore[attr-defined]
+            flat = resolve_agent_to_flat_config(live_config, AGENT_MEMORY)
+            if flat:
+                _LOGGER.debug(
+                    "Memory extraction using dedicated memory agent LLM: %s",
+                    flat.get("llm_model", "unknown"),
+                )
+            return flat
+        except Exception as err:
+            _LOGGER.warning(
+                "Failed to resolve memory agent LLM config, "
+                "falling back to conversation LLM: %s",
+                err,
+            )
+            return None
+
     async def _call_primary_llm_for_extraction(
         self, extraction_prompt: str
     ) -> dict[str, Any]:
-        """Call primary/local LLM for memory extraction.
+        """Call the memory agent's LLM for memory extraction.
+
+        Uses the memory agent's dedicated connection if configured,
+        otherwise falls back to the conversation agent's LLM.
 
         Args:
             extraction_prompt: The extraction prompt
@@ -415,6 +446,9 @@ Return ONLY valid JSON, no other text:
             Dictionary with success, result, and error fields
         """
         try:
+            # Resolve the memory agent's dedicated LLM connection
+            memory_config = self._resolve_memory_llm_config()
+
             # Build simple message for extraction
             messages = [
                 {
@@ -432,10 +466,12 @@ Return ONLY valid JSON, no other text:
 
             # Call LLM without tool definitions
             # Use lower temperature (0.3) for more consistent extraction
+            # Route to memory agent's LLM if configured
             response = await self._call_llm(
                 messages,
                 tools=None,
                 temperature=0.3,
+                config_override=memory_config,
             )
 
             content = (
@@ -624,8 +660,8 @@ Return ONLY valid JSON, no other text:
                 full_messages=full_messages,
             )
 
-            # Use primary/memory agent LLM for extraction
-            _LOGGER.debug("Using memory agent LLM for memory extraction")
+            # Use memory agent's dedicated LLM for extraction
+            _LOGGER.debug("Starting memory extraction for conversation %s", conversation_id)
             result = await self._call_primary_llm_for_extraction(extraction_prompt)
 
             if not result.get("success"):
