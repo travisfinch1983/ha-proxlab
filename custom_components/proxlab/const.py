@@ -162,7 +162,7 @@ AGENT_DEFINITIONS: Final[dict[str, AgentDefinition]] = {
         name="Security Guard",
         description="Monitors camera feeds and sensors for anomalies.",
         mandatory=False,
-        required_capabilities=[[CAP_VISION, CAP_TOOL_USE]],
+        required_capabilities=[[CAP_VISION, CAP_TOOL_USE], [CAP_SPECIALIZED, CAP_TOOL_USE]],
     ),
     AGENT_CYBERSECURITY: AgentDefinition(
         id=AGENT_CYBERSECURITY,
