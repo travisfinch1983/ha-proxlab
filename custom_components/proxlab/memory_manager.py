@@ -57,7 +57,7 @@ try:
     import chromadb  # noqa: F401
 
     CHROMADB_AVAILABLE = True
-except ImportError:
+except Exception:  # noqa: BLE001 — chromadb can crash with pydantic errors on newer Python
     CHROMADB_AVAILABLE = False
 
 _LOGGER = logging.getLogger(__name__)

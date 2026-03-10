@@ -60,7 +60,7 @@ try:
     import chromadb
 
     CHROMADB_AVAILABLE = True
-except ImportError:
+except Exception:  # noqa: BLE001 — chromadb can crash with pydantic errors on newer Python
     CHROMADB_AVAILABLE = False
 
 # Conditional imports for OpenAI embeddings

@@ -121,7 +121,7 @@ from .const import (
     VECTOR_DB_BACKEND_MILVUS,
 )
 from .conversation_session import ConversationSessionManager
-from .helpers import check_chromadb_health, check_ollama_health
+from .helpers import check_ollama_health
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -483,6 +483,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         else:
             chromadb_host = config.get(CONF_VECTOR_DB_HOST, DEFAULT_VECTOR_DB_HOST)
             chromadb_port = config.get(CONF_VECTOR_DB_PORT, DEFAULT_VECTOR_DB_PORT)
+            from .helpers import check_chromadb_health  # noqa: F811
             chromadb_healthy, chromadb_msg = await check_chromadb_health(chromadb_host, chromadb_port)
             if not chromadb_healthy:
                 _LOGGER.warning(

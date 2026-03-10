@@ -123,18 +123,7 @@ class ProxLabSTTEntity(SpeechToTextEntity):
         metadata: SpeechMetadata,
         stream: AsyncIterable[bytes],
     ) -> SpeechResult:
-        """Process audio stream and return transcription.
-
-        Collects all audio chunks, then sends as a single multipart request
-        to the OpenAI-compatible /audio/transcriptions endpoint.
-
-        Args:
-            metadata: Audio stream metadata.
-            stream: Async iterable of audio bytes.
-
-        Returns:
-            SpeechResult with transcribed text or error state.
-        """
+        """Process audio stream and return transcription."""
         base_url = self._config.get(CONF_STT_BASE_URL, "").rstrip("/")
         if not base_url:
             _LOGGER.error("STT base URL not configured")
