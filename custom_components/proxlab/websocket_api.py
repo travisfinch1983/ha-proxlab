@@ -1375,6 +1375,7 @@ async def ws_discovery_services(
         vol.Optional("entry_id"): str,
         vol.Optional("limit", default=50): int,
         vol.Optional("offset", default=0): int,
+        vol.Optional("include_context", default=False): bool,
     }
 )
 @websocket_api.async_response
@@ -1386,6 +1387,7 @@ async def ws_debug_traces(
     total = len(all_traces)
     limit = msg.get("limit", 50)
     offset = msg.get("offset", 0)
+    include_context = msg.get("include_context", False)
     page = list(all_traces[offset : offset + limit] if limit > 0 else all_traces)
 
     def _trim(traces_page):
@@ -1393,17 +1395,18 @@ async def ws_debug_traces(
         for t in traces_page:
             entry = dict(t)
             rt = entry.get("response_text", "")
-            if isinstance(rt, str) and len(rt) > 300:
+            if not include_context and isinstance(rt, str) and len(rt) > 300:
                 entry["response_text"] = rt[:300] + "\u2026"
             entry.pop("context", None)
             if "steps" in entry:
                 trimmed = []
                 for s in entry["steps"]:
                     sc = dict(s)
-                    sc.pop("context_messages", None)
-                    srt = sc.get("response_text", "")
-                    if isinstance(srt, str) and len(srt) > 300:
-                        sc["response_text"] = srt[:300] + "\u2026"
+                    if not include_context:
+                        sc.pop("context_messages", None)
+                        srt = sc.get("response_text", "")
+                        if isinstance(srt, str) and len(srt) > 300:
+                            sc["response_text"] = srt[:300] + "\u2026"
                     trimmed.append(sc)
                 entry["steps"] = trimmed
             lite.append(entry)

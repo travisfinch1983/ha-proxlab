@@ -253,11 +253,12 @@ export interface ConversationTrace {
 
 export async function fetchDebugTraces(
   limit = 50,
-  offset = 0
+  offset = 0,
+  include_context = true
 ): Promise<{ traces: ConversationTrace[]; total: number }> {
   return callWS<{ traces: ConversationTrace[]; total: number }>(
     "proxlab/debug/traces",
-    { limit, offset }
+    { limit, offset, include_context }
   );
 }
 

@@ -691,8 +691,10 @@ ROADMAP_STORAGE_KEY: Final = f"{DOMAIN}.roadmap"
 ROADMAP_STORAGE_VERSION: Final = 1
 
 # HTTP timeouts (seconds)
-HTTP_TIMEOUT_DEFAULT: Final = 60
-HTTP_TIMEOUT: Final = 60  # Alias for default timeout
+HTTP_TIMEOUT_DEFAULT: Final = 120
+HTTP_TIMEOUT: Final = 120  # Sync LLM calls
+HTTP_TIMEOUT_STREAMING: Final = 300  # Streaming total (5 min for multi-turn tool calls)
+HTTP_TIMEOUT_STREAMING_SOCK_READ: Final = 120  # Max gap between streaming chunks
 HTTP_TIMEOUT_EXTERNAL_LLM: Final = 90
 
 # Token limits and warnings

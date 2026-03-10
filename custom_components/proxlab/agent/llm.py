@@ -127,6 +127,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+import asyncio
+
 import aiohttp
 
 from ..const import (
@@ -295,13 +297,18 @@ class LLMMixin:
                     result: dict[str, Any] = await response.json()
                     return result
 
+            except asyncio.TimeoutError as err:
+                raise ProxLabAgentError(
+                    f"LLM API timed out after {HTTP_TIMEOUT}s. "
+                    "The model may need more time for this request."
+                ) from err
             except aiohttp.ClientError as err:
                 raise ProxLabAgentError(f"Failed to connect to LLM API: {err}") from err
 
         return await retry_async(
             make_llm_request,
             max_retries=DEFAULT_RETRY_MAX_ATTEMPTS,
-            retryable_exceptions=(aiohttp.ClientError,),
+            retryable_exceptions=(aiohttp.ClientError, asyncio.TimeoutError),
             non_retryable_exceptions=(AuthenticationError,),
             initial_delay=DEFAULT_RETRY_INITIAL_DELAY,
             backoff_factor=DEFAULT_RETRY_BACKOFF_FACTOR,

@@ -133,6 +133,7 @@ Configuration Example:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import TYPE_CHECKING, Any, AsyncGenerator
 
@@ -152,6 +153,8 @@ from ..const import (
     CONF_STREAMING_ENABLED,
     DEFAULT_LLM_KEEP_ALIVE,
     DEFAULT_STREAMING_ENABLED,
+    HTTP_TIMEOUT_STREAMING,
+    HTTP_TIMEOUT_STREAMING_SOCK_READ,
 )
 from ..exceptions import AuthenticationError, ProxLabAgentError
 from ..helpers import build_api_url, build_auth_headers, is_anthropic_backend, is_ollama_backend, redact_sensitive_data, render_template_value
@@ -276,8 +279,13 @@ class StreamingMixin:
                 len(tool_definitions) if tool_definitions else 0,
             )
 
+        stream_timeout = aiohttp.ClientTimeout(
+            total=HTTP_TIMEOUT_STREAMING,
+            sock_read=HTTP_TIMEOUT_STREAMING_SOCK_READ,
+        )
+
         try:
-            async with session.post(url, headers=headers, json=payload, allow_redirects=False) as response:
+            async with session.post(url, headers=headers, json=payload, allow_redirects=False, timeout=stream_timeout) as response:
                 if response.status == 401:
                     raise AuthenticationError("LLM API authentication failed. Check your API key.")
 
@@ -290,5 +298,10 @@ class StreamingMixin:
                     if line:
                         yield line.decode("utf-8")
 
+        except asyncio.TimeoutError as err:
+            raise ProxLabAgentError(
+                f"LLM streaming timed out after {HTTP_TIMEOUT_STREAMING}s. "
+                "The model may need more time for this request."
+            ) from err
         except aiohttp.ClientError as err:
             raise ProxLabAgentError(f"Failed to connect to LLM API: {err}") from err

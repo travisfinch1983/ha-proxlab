@@ -806,12 +806,17 @@ async def check_ollama_health(base_url: str, timeout: int = 5) -> tuple[bool, st
         if not healthy:
             _LOGGER.warning("Ollama health check failed: %s", msg)
     """
+    # Strip /v1 suffix — connections store the OpenAI-compatible URL
+    # but health checks use Ollama's native API endpoints
+    clean_url = base_url.rstrip("/")
+    if clean_url.endswith("/v1"):
+        clean_url = clean_url[:-3]
     endpoints = ["/api/tags", "/api/version", ""]
 
     try:
         async with aiohttp.ClientSession() as session:
             for endpoint in endpoints:
-                url = f"{base_url.rstrip('/')}{endpoint}"
+                url = f"{clean_url}{endpoint}"
                 try:
                     async with session.get(
                         url,
