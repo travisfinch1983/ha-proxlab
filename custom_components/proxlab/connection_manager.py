@@ -193,6 +193,17 @@ def _get_agent_connection(
     return connections.get(conn_id)
 
 
+def _first_connection_for_capability(
+    config: dict[str, Any], capability: str
+) -> dict[str, Any] | None:
+    """Get the first connection with a given capability (fallback when role unassigned)."""
+    pairs = connections_for_capability(config, capability)
+    if pairs:
+        _LOGGER.debug("Auto-resolved capability %s to connection %s", capability, pairs[0][0])
+        return pairs[0][1]
+    return None
+
+
 def resolve_agent_to_flat_config(
     config: dict[str, Any], agent_id: str
 ) -> dict[str, Any] | None:
@@ -297,8 +308,10 @@ def resolve_connections_to_flat_config(config: dict[str, Any]) -> dict[str, Any]
         )
 
     # --- TTS ---
-    tts_conn = _get_agent_connection(config, AGENT_TTS) or get_connection_for_role(
-        config, ROLE_TTS
+    tts_conn = (
+        _get_agent_connection(config, AGENT_TTS)
+        or get_connection_for_role(config, ROLE_TTS)
+        or _first_connection_for_capability(config, CAP_TTS)
     )
     if tts_conn:
         config[CONF_TTS_BASE_URL] = normalize_url(tts_conn.get("base_url", ""))
@@ -308,8 +321,10 @@ def resolve_connections_to_flat_config(config: dict[str, Any]) -> dict[str, Any]
         config[CONF_TTS_FORMAT] = tts_conn.get("format", DEFAULT_TTS_FORMAT)
 
     # --- STT ---
-    stt_conn = _get_agent_connection(config, AGENT_STT) or get_connection_for_role(
-        config, ROLE_STT
+    stt_conn = (
+        _get_agent_connection(config, AGENT_STT)
+        or get_connection_for_role(config, ROLE_STT)
+        or _first_connection_for_capability(config, CAP_STT)
     )
     if stt_conn:
         config[CONF_STT_BASE_URL] = normalize_url(stt_conn.get("base_url", ""))
