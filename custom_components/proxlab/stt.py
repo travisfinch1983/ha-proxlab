@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import io
 import logging
+import wave
 from collections.abc import AsyncIterable
 from typing import Any
 
@@ -132,24 +133,40 @@ class ProxLabSTTEntity(SpeechToTextEntity):
         model = self._config.get(CONF_STT_MODEL, DEFAULT_STT_MODEL)
         language = self._config.get(CONF_STT_LANGUAGE, DEFAULT_STT_LANGUAGE)
 
-        # Collect audio chunks into buffer
-        audio_buffer = io.BytesIO()
+        # Collect raw audio chunks
+        raw_buffer = io.BytesIO()
         async for chunk in stream:
-            audio_buffer.write(chunk)
-        audio_buffer.seek(0)
+            raw_buffer.write(chunk)
+        raw_buffer.seek(0)
+        raw_data = raw_buffer.read()
 
-        audio_size = audio_buffer.getbuffer().nbytes
-        if audio_size == 0:
+        if len(raw_data) == 0:
             _LOGGER.warning("Received empty audio stream")
             return SpeechResult("", SpeechResultState.ERROR)
 
-        # Determine file extension from format
-        if metadata.format == AudioFormats.WAV:
+        # HA's assist pipeline sends raw PCM samples without file headers.
+        # Wrap in a proper WAV container so the STT backend can decode it.
+        if metadata.format == AudioFormats.WAV or metadata.codec == AudioCodecs.PCM:
+            sample_rate = int(metadata.sample_rate.value) if hasattr(metadata.sample_rate, 'value') else 16000
+            channels = int(metadata.channel.value) if hasattr(metadata.channel, 'value') else 1
+            sample_width = 2  # 16-bit PCM = 2 bytes per sample
+            audio_buffer = io.BytesIO()
+            with wave.open(audio_buffer, "wb") as wf:
+                wf.setnchannels(channels)
+                wf.setsampwidth(sample_width)
+                wf.setframerate(sample_rate)
+                wf.writeframes(raw_data)
+            audio_buffer.seek(0)
             filename = "audio.wav"
         elif metadata.format == AudioFormats.OGG:
+            # OGG/Opus already has container headers
+            audio_buffer = io.BytesIO(raw_data)
             filename = "audio.ogg"
         else:
+            audio_buffer = io.BytesIO(raw_data)
             filename = "audio.wav"
+
+        audio_size = audio_buffer.getbuffer().nbytes
 
         url = f"{base_url}/audio/transcriptions"
 
