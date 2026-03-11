@@ -67,6 +67,17 @@ export class ProxLabChatCard extends LitElement {
   private _ttsTextQueue: string[] = [];
   private _ttsProcessing = false;
 
+  // Voice activity detection state
+  private _audioContext?: AudioContext;
+  private _analyserNode?: AnalyserNode;
+  private _vadInterval?: ReturnType<typeof setInterval>;
+  private _speechDetected = false;
+  private _silenceStart = 0;
+  private static readonly VAD_SPEECH_THRESHOLD = 15;   // RMS level to count as speech
+  private static readonly VAD_SILENCE_DURATION = 1500;  // ms of silence before auto-stop
+  private static readonly VAD_MAX_DURATION = 30000;     // max recording time (30s)
+  private _recordingStart = 0;
+
   // ---- Lovelace lifecycle ----
 
   setConfig(config: ProxLabChatCardYamlConfig): void {
@@ -810,14 +821,17 @@ export class ProxLabChatCard extends LitElement {
 
   private async _toggleRecording(): Promise<void> {
     if (this._recording) {
-      this._mediaRecorder?.stop();
-      this._recording = false;
+      this._stopRecording();
       return;
     }
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       this._audioChunks = [];
+      this._speechDetected = false;
+      this._silenceStart = 0;
+      this._recordingStart = Date.now();
+
       this._mediaRecorder = new MediaRecorder(stream);
 
       this._mediaRecorder.ondataavailable = (e: BlobEvent) => {
@@ -825,16 +839,88 @@ export class ProxLabChatCard extends LitElement {
       };
 
       this._mediaRecorder.onstop = async () => {
+        this._stopVAD();
         stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(this._audioChunks, { type: "audio/webm" });
         await this._transcribeAudio(blob);
       };
+
+      // Set up voice activity detection
+      this._startVAD(stream);
 
       this._mediaRecorder.start();
       this._recording = true;
     } catch {
       // Mic access denied or unavailable
     }
+  }
+
+  private _stopRecording(): void {
+    this._stopVAD();
+    this._mediaRecorder?.stop();
+    this._recording = false;
+  }
+
+  private _startVAD(stream: MediaStream): void {
+    try {
+      this._audioContext = new AudioContext();
+      const source = this._audioContext.createMediaStreamSource(stream);
+      this._analyserNode = this._audioContext.createAnalyser();
+      this._analyserNode.fftSize = 512;
+      source.connect(this._analyserNode);
+
+      const dataArray = new Uint8Array(this._analyserNode.fftSize);
+
+      this._vadInterval = setInterval(() => {
+        if (!this._analyserNode || !this._recording) return;
+
+        this._analyserNode.getByteTimeDomainData(dataArray);
+
+        // Calculate RMS level
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          const val = (dataArray[i] - 128) / 128;
+          sum += val * val;
+        }
+        const rms = Math.sqrt(sum / dataArray.length) * 100;
+
+        const now = Date.now();
+
+        if (rms > ProxLabChatCard.VAD_SPEECH_THRESHOLD) {
+          // Speech detected
+          this._speechDetected = true;
+          this._silenceStart = 0;
+        } else if (this._speechDetected) {
+          // Silence after speech
+          if (this._silenceStart === 0) {
+            this._silenceStart = now;
+          } else if (now - this._silenceStart > ProxLabChatCard.VAD_SILENCE_DURATION) {
+            // Silence long enough — auto-stop
+            this._stopRecording();
+            return;
+          }
+        }
+
+        // Max duration safety
+        if (now - this._recordingStart > ProxLabChatCard.VAD_MAX_DURATION) {
+          this._stopRecording();
+        }
+      }, 100);
+    } catch {
+      // AudioContext not supported — fall back to manual stop
+    }
+  }
+
+  private _stopVAD(): void {
+    if (this._vadInterval) {
+      clearInterval(this._vadInterval);
+      this._vadInterval = undefined;
+    }
+    if (this._audioContext) {
+      this._audioContext.close().catch(() => {});
+      this._audioContext = undefined;
+    }
+    this._analyserNode = undefined;
   }
 
   private async _transcribeAudio(blob: Blob): Promise<void> {
@@ -854,6 +940,8 @@ export class ProxLabChatCard extends LitElement {
       });
       if (result?.text) {
         this._inputValue = result.text;
+        // Auto-send: behave like HA's voice pipeline
+        await this._sendMessage();
       }
     } catch {
       // STT failed silently
