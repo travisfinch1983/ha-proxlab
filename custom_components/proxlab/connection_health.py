@@ -49,6 +49,7 @@ class ConnectionCheckResult:
     detail: str
     error: str | None
     model_name: str | None
+    available_models: list[str] | None = None
 
 
 class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionCheckResult]]):
@@ -166,6 +167,7 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
                     )
                 reachable = True
                 # Try to extract the model name from response
+                available: list[str] = []
                 if resp.status == 200:
                     try:
                         body = await resp.json()
@@ -173,7 +175,8 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
                         if isinstance(body, dict) and "data" in body:
                             models = body["data"]
                             if models and isinstance(models, list):
-                                model_name = models[0].get("id", model_name)
+                                available = [m.get("id") for m in models if m.get("id")]
+                                model_name = available[0] if available else model_name
                         elif isinstance(body, dict) and "object" in body:
                             model_name = body.get("id", model_name)
                     except Exception:
@@ -198,6 +201,7 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
             detail=detail,
             error=error,
             model_name=model_name,
+            available_models=available or None,
         )
 
     async def _check_claude_connection(
@@ -286,16 +290,20 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
                         model_name=model_name,
                     )
                 # Try to extract model info from response
+                available: list[str] = []
                 try:
                     body = await resp.json()
                     if isinstance(body, dict) and "models" in body:
                         models = body["models"]
                         if models and isinstance(models, list):
+                            available = [
+                                m.get("name", m.get("model"))
+                                for m in models
+                                if m.get("name") or m.get("model")
+                            ]
                             # Use configured model name, or fall back to first
                             if not model_name:
-                                model_name = models[0].get(
-                                    "name", models[0].get("model")
-                                )
+                                model_name = available[0] if available else model_name
                 except Exception:
                     pass
         except (aiohttp.ClientError, asyncio.TimeoutError, OSError) as err:
@@ -360,6 +368,7 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
             detail="OK",
             error=None,
             model_name=model_name,
+            available_models=available or None,
         )
 
     async def _probe_api(

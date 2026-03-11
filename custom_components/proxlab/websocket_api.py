@@ -126,6 +126,7 @@ def _health_to_dict(result: ConnectionCheckResult) -> dict[str, Any]:
         "detail": result.detail,
         "error": result.error,
         "model_name": result.model_name,
+        "available_models": result.available_models,
     }
 
 
@@ -168,6 +169,7 @@ def _build_agent_info(
             "primary_connection": agent_cfg.get("primary_connection"),
             "secondary_connection": agent_cfg.get("secondary_connection"),
             "system_prompt": agent_cfg.get("system_prompt"),
+            "primary_model_override": agent_cfg.get("primary_model_override"),
         },
     }
 
@@ -193,6 +195,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_connections_delete)
     websocket_api.async_register_command(hass, ws_connections_test)
     websocket_api.async_register_command(hass, ws_discover_claude_addon)
+    websocket_api.async_register_command(hass, ws_connections_fetch_models)
     websocket_api.async_register_command(hass, ws_agents_list)
     websocket_api.async_register_command(hass, ws_agents_update)
     websocket_api.async_register_command(hass, ws_agents_default_prompt)
@@ -867,6 +870,44 @@ async def ws_discover_claude_addon(
     })
 
 
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/connections/fetch_models",
+        vol.Optional("entry_id"): str,
+        vol.Required("connection_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_connections_fetch_models(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Fetch available models from a connection's endpoint."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+
+    conn_id = msg["connection_id"]
+    connections_cfg = dict(entry.data).get(CONF_CONNECTIONS, {})
+    conn = connections_cfg.get(conn_id)
+    if not conn:
+        # Also check options
+        connections_cfg = dict(entry.options).get(CONF_CONNECTIONS, {})
+        conn = connections_cfg.get(conn_id)
+    if not conn:
+        connection.send_error(msg["id"], "not_found", "Connection not found")
+        return
+
+    coordinator = _get_coordinator(hass, entry)
+    if not coordinator:
+        connection.send_error(msg["id"], "not_ready", "Health coordinator not ready")
+        return
+
+    result = await coordinator._check_connection(conn_id, conn)
+    models = result.available_models or []
+    connection.send_result(msg["id"], {"models": models})
+
+
 # ---------------------------------------------------------------------------
 # Agents
 # ---------------------------------------------------------------------------
@@ -898,6 +939,7 @@ async def ws_agents_list(
         vol.Optional("primary_connection"): vol.Any(str, None),
         vol.Optional("secondary_connection"): vol.Any(str, None),
         vol.Optional("system_prompt"): vol.Any(str, None),
+        vol.Optional("primary_model_override"): vol.Any(str, None),
     }
 )
 @websocket_api.async_response
@@ -920,7 +962,7 @@ async def ws_agents_update(
     agent_cfg = dict(new_agents.get(agent_id, {}))
 
     # Apply updates
-    for key in ("enabled", "primary_connection", "secondary_connection", "system_prompt"):
+    for key in ("enabled", "primary_connection", "secondary_connection", "system_prompt", "primary_model_override"):
         if key in msg:
             agent_cfg[key] = msg[key]
 
@@ -3215,7 +3257,9 @@ async def ws_card_invoke(
         if connection_id:
             from .connection_manager import resolve_connection_to_flat_config
             config = dict(entry.data) | dict(entry.options)
-            flat_config_override = resolve_connection_to_flat_config(config, connection_id)
+            flat_config_override = resolve_connection_to_flat_config(
+                config, connection_id, model_override=profile.get("model_override")
+            )
             agent_id = "conversation_agent"
         else:
             agent_id = profile.get("agent_id", "conversation_agent")
@@ -3297,7 +3341,9 @@ async def ws_card_invoke_stream(
         if connection_id:
             from .connection_manager import resolve_connection_to_flat_config
             config = dict(entry.data) | dict(entry.options)
-            flat_config_override = resolve_connection_to_flat_config(config, connection_id)
+            flat_config_override = resolve_connection_to_flat_config(
+                config, connection_id, model_override=profile.get("model_override")
+            )
             agent_id = "conversation_agent"
         else:
             agent_id = profile.get("agent_id", "conversation_agent")
@@ -3420,7 +3466,9 @@ async def ws_group_invoke_stream(
         if connection_id:
             from .connection_manager import resolve_connection_to_flat_config
             config = dict(entry.data) | dict(entry.options)
-            profile_config_override = resolve_connection_to_flat_config(config, connection_id)
+            profile_config_override = resolve_connection_to_flat_config(
+                config, connection_id, model_override=profile.get("model_override")
+            )
             p_agent_id = "conversation_agent"
         else:
             profile_config_override = None
@@ -3822,7 +3870,9 @@ async def ws_group_invoke(
         if connection_id:
             from .connection_manager import resolve_connection_to_flat_config
             config = dict(entry.data) | dict(entry.options)
-            profile_config_override = resolve_connection_to_flat_config(config, connection_id)
+            profile_config_override = resolve_connection_to_flat_config(
+                config, connection_id, model_override=profile.get("model_override")
+            )
             agent_id = "conversation_agent"
         else:
             profile_config_override = None

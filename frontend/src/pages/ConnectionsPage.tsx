@@ -318,12 +318,26 @@ export default function ConnectionsPage() {
                     <input
                       type="text"
                       className="input input-bordered input-sm"
+                      list={`model-list-${selectedId ?? "new"}`}
                       value={form.model}
                       onChange={(e) =>
                         setForm((f) => ({ ...f, model: e.target.value }))
                       }
                       placeholder="gpt-4o-mini"
                     />
+                    {(() => {
+                      const models =
+                        (selectedId && config.health[selectedId]?.available_models) ||
+                        testResult?.available_models ||
+                        [];
+                      return models.length > 0 ? (
+                        <datalist id={`model-list-${selectedId ?? "new"}`}>
+                          {models.map((m) => (
+                            <option key={m} value={m} />
+                          ))}
+                        </datalist>
+                      ) : null;
+                    })()}
                   </label>
                 </div>
 

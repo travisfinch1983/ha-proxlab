@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faRotateLeft, faPlay } from "@fortawesome/free-solid-svg-icons";
 import NavBar from "../layout/NavBar";
@@ -10,6 +10,7 @@ import {
   fetchConfig,
   invokeAgent,
   type AgentInvokeResult,
+  fetchModels,
 } from "../api";
 import type { AgentInfo } from "../types";
 
@@ -26,8 +27,28 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
   const [secondaryConn, setSecondaryConn] = useState(
     agent.config?.secondary_connection || ""
   );
+  const [modelOverride, setModelOverride] = useState(
+    agent.config?.primary_model_override || ""
+  );
+  const [connModels, setConnModels] = useState<string[]>([]);
   const [prompt, setPrompt] = useState(agent.config?.system_prompt ?? "");
   const [showPrompt, setShowPrompt] = useState(false);
+
+  // Load available models from health data or fetch them
+  useEffect(() => {
+    if (!primaryConn) {
+      setConnModels([]);
+      return;
+    }
+    const healthModels = config.health[primaryConn]?.available_models;
+    if (healthModels && healthModels.length > 0) {
+      setConnModels(healthModels);
+    } else {
+      fetchModels(primaryConn)
+        .then((models) => setConnModels(models))
+        .catch(() => setConnModels([]));
+    }
+  }, [primaryConn, config.health]);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -59,6 +80,7 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
         primary_connection: primaryConn || null,
         secondary_connection: secondaryConn || null,
         system_prompt: prompt || null,
+        primary_model_override: modelOverride || null,
       });
       const cfg = await fetchConfig();
       useStore.getState().setConfig(cfg);
@@ -175,6 +197,25 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
                 ))}
               </select>
             </label>
+            {primaryConn && connModels.length > 0 && (
+              <label className="form-control">
+                <div className="label">
+                  <span className="label-text text-xs">Model Override</span>
+                </div>
+                <select
+                  className="select select-bordered select-xs"
+                  value={modelOverride}
+                  onChange={(e) => setModelOverride(e.target.value)}
+                >
+                  <option value="">Connection default</option>
+                  {connModels.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
           </div>
         )}
 

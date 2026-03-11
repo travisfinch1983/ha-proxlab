@@ -15,6 +15,7 @@ import {
   deleteProfile,
   listConnections,
   callWS,
+  fetchModels,
 } from "../api";
 import type { AgentProfile, Connection, ConnectionHealth } from "../types";
 
@@ -27,6 +28,7 @@ interface TtsVoice {
 interface FormData {
   name: string;
   connection_id: string;
+  model_override: string;
   avatar: string;
   prompt_override: string;
   personality_enabled: boolean;
@@ -49,6 +51,7 @@ interface FormData {
 const EMPTY_FORM: FormData = {
   name: "",
   connection_id: "",
+  model_override: "",
   avatar: "",
   prompt_override: "",
   personality_enabled: false,
@@ -72,6 +75,7 @@ function profileToForm(p: AgentProfile): FormData {
   return {
     name: p.name,
     connection_id: p.connection_id || "",
+    model_override: p.model_override || "",
     avatar: p.avatar,
     prompt_override: p.prompt_override,
     personality_enabled: p.personality_enabled,
@@ -97,6 +101,7 @@ function formToProfile(form: FormData): Omit<AgentProfile, "profile_id"> {
     name: form.name,
     agent_id: "conversation_agent",
     connection_id: form.connection_id,
+    model_override: form.model_override || undefined,
     avatar: form.avatar,
     prompt_override: form.prompt_override,
     personality_enabled: form.personality_enabled,
@@ -146,6 +151,9 @@ export default function AgentProfilesPage() {
   const [saving, setSaving] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [modalTab, setModalTab] = useState<ModalTab>("general");
+  // Model override state
+  const [connModels, setConnModels] = useState<string[]>([]);
+
   // Character card detection state
   const [ccDetected, setCcDetected] = useState(false);
   const [pendingCcData, setPendingCcData] = useState<Record<string, string> | null>(null);
@@ -173,6 +181,23 @@ export default function AgentProfilesPage() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Fetch available models when connection changes
+  useEffect(() => {
+    if (!form.connection_id) {
+      setConnModels([]);
+      return;
+    }
+    // Check health data first
+    const healthModels = connections[form.connection_id]?.health?.available_models;
+    if (healthModels && healthModels.length > 0) {
+      setConnModels(healthModels);
+    } else {
+      fetchModels(form.connection_id)
+        .then((models) => setConnModels(models))
+        .catch(() => setConnModels([]));
+    }
+  }, [form.connection_id, connections]);
 
   // Auto-expand textareas when switching to a tab with content
   useEffect(() => {
@@ -554,6 +579,34 @@ export default function AgentProfilesPage() {
                       </span>
                     </div>
                   </div>
+
+                  {/* Model Override */}
+                  {form.connection_id && connModels.length > 0 && (
+                    <div className="form-control">
+                      <div className="label">
+                        <span className="label-text font-medium">Model</span>
+                      </div>
+                      <select
+                        className="select select-bordered select-sm"
+                        value={form.model_override}
+                        onChange={(e) =>
+                          setForm({ ...form, model_override: e.target.value })
+                        }
+                      >
+                        <option value="">Connection default</option>
+                        {connModels.map((m) => (
+                          <option key={m} value={m}>
+                            {m}
+                          </option>
+                        ))}
+                      </select>
+                      <div className="label pt-0.5">
+                        <span className="label-text-alt text-base-content/40">
+                          Override the connection's default model for this profile
+                        </span>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Avatar — #17: "Select Profile Photo" label */}
                   <div className="form-control">

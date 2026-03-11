@@ -40,6 +40,7 @@ export interface ConnectionHealth {
   detail: string;
   error: string | null;
   model_name: string | null;
+  available_models?: string[] | null;
 }
 
 export interface AgentDefinition {
@@ -57,6 +58,7 @@ export interface AgentConfig {
   primary_connection: string | null;
   secondary_connection: string | null;
   system_prompt: string | null;
+  primary_model_override?: string | null;
 }
 
 export interface AgentInfo extends AgentDefinition {
@@ -281,6 +283,7 @@ export interface AgentProfile {
   avatar: string;
   agent_id: string;
   connection_id: string;
+  model_override?: string;
   prompt_override: string;
   personality_enabled: boolean;
   personality: {

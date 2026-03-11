@@ -113,9 +113,18 @@ export async function updateAgent(
     primary_connection: string | null;
     secondary_connection: string | null;
     system_prompt: string | null;
+    primary_model_override: string | null;
   }>
 ): Promise<void> {
   return callWS("proxlab/agents/update", { agent_id: agentId, ...fields });
+}
+
+export async function fetchModels(connectionId: string): Promise<string[]> {
+  const result = await callWS<{ models: string[] }>(
+    "proxlab/connections/fetch_models",
+    { connection_id: connectionId }
+  );
+  return result.models || [];
 }
 
 export async function getDefaultPrompt(agentId: string): Promise<string> {
