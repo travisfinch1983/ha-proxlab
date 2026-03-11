@@ -216,7 +216,11 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
             "x-api-key": api_key,
             "anthropic-version": "2023-06-01",
         }
-        models_url = f"{base_url}/v1/models"
+        # base_url may already include /v1 (e.g. https://api.anthropic.com/v1)
+        if base_url.rstrip("/").endswith("/v1"):
+            models_url = f"{base_url.rstrip('/')}/models"
+        else:
+            models_url = f"{base_url}/v1/models"
 
         try:
             async with session.get(models_url, headers=headers) as resp:
