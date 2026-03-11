@@ -498,6 +498,7 @@ async def ws_connections_list(
         vol.Optional("embedding_provider"): str,
         vol.Optional("tool_description"): str,
         vol.Optional("auto_include_context"): bool,
+        vol.Optional("is_universal"): bool,
     }
 )
 @websocket_api.async_response
@@ -556,6 +557,7 @@ async def ws_connections_create(
         vol.Optional("embedding_provider"): str,
         vol.Optional("tool_description"): str,
         vol.Optional("auto_include_context"): bool,
+        vol.Optional("is_universal"): bool,
     }
 )
 @websocket_api.async_response

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPlus, faTrash, faVial } from "@fortawesome/free-solid-svg-icons";
+import { faPlus, faTrash, faVial, faArrowsRotate } from "@fortawesome/free-solid-svg-icons";
 import NavBar from "../layout/NavBar";
 import { useStore } from "../store";
 import ConnectionCard from "../components/ConnectionCard";
@@ -43,6 +43,7 @@ const EMPTY_CONN: Omit<Connection, "id"> = {
   top_p: 1.0,
   keep_alive: "5m",
   thinking_enabled: false,
+  is_universal: false,
   voice: "alloy",
   speed: 1.0,
   format: "mp3",
@@ -62,12 +63,29 @@ export default function ConnectionsPage() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [discovering, setDiscovering] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+  const [probeStatus, setProbeStatus] = useState<'idle' | 'probing' | 'invalid' | 'single' | 'universal'>('idle');
+  const [probeModels, setProbeModels] = useState<string[]>([]);
 
   useEffect(() => {
     if (selectedId && connections[selectedId]) {
       const conn = connections[selectedId];
       setForm({ ...EMPTY_CONN, ...conn });
       setIsNew(false);
+      // Initialize probe state from stored connection
+      const health = config.health[selectedId];
+      if (health?.available_models && health.available_models.length > 0) {
+        setProbeStatus('universal');
+        setProbeModels(health.available_models);
+      } else if (conn.is_universal) {
+        setProbeStatus('universal');
+        setProbeModels([]);
+      } else if (health?.reachable) {
+        setProbeStatus('single');
+        setProbeModels([]);
+      } else {
+        setProbeStatus('idle');
+        setProbeModels([]);
+      }
     }
   }, [selectedId, connections]);
 
@@ -86,6 +104,8 @@ export default function ConnectionsPage() {
     setIsNew(true);
     setForm({ ...EMPTY_CONN });
     setTestResult(null);
+    setProbeStatus('idle');
+    setProbeModels([]);
   };
 
   const handleSave = async () => {
@@ -170,6 +190,34 @@ export default function ConnectionsPage() {
       showToast(`Discovery failed: ${(err as Error).message}`);
     } finally {
       setDiscovering(false);
+    }
+  };
+
+  const probeEndpoint = async () => {
+    if (!form.base_url) return;
+    setProbeStatus('probing');
+    setProbeModels([]);
+    try {
+      const result = await testConnection({
+        base_url: form.base_url,
+        api_key: form.api_key,
+        capabilities: form.capabilities,
+        connection_type: form.connection_type,
+      });
+      if (!result.reachable || !result.api_valid) {
+        setProbeStatus('invalid');
+        setForm(f => ({ ...f, is_universal: false }));
+      } else if (result.available_models && result.available_models.length > 0) {
+        setProbeStatus('universal');
+        setProbeModels(result.available_models);
+        setForm(f => ({ ...f, is_universal: true }));
+      } else {
+        setProbeStatus('single');
+        setForm(f => ({ ...f, is_universal: false }));
+      }
+    } catch {
+      setProbeStatus('invalid');
+      setForm(f => ({ ...f, is_universal: false }));
     }
   };
 
@@ -287,15 +335,42 @@ export default function ConnectionsPage() {
                     <div className="label">
                       <span className="label-text">Base URL</span>
                     </div>
-                    <input
-                      type="url"
-                      className="input input-bordered input-sm"
-                      value={form.base_url}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, base_url: e.target.value }))
-                      }
-                      placeholder="http://10.0.0.232:8000/v1"
-                    />
+                    <div className="join w-full">
+                      <input
+                        type="url"
+                        className="input input-bordered input-sm join-item flex-1"
+                        value={form.base_url}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, base_url: e.target.value }))
+                        }
+                        onBlur={() => probeEndpoint()}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); probeEndpoint(); } }}
+                        placeholder="http://10.0.0.232:8000/v1"
+                      />
+                      <button
+                        className="btn btn-ghost btn-sm join-item"
+                        type="button"
+                        onClick={probeEndpoint}
+                        disabled={probeStatus === 'probing' || !form.base_url}
+                        title="Test endpoint"
+                      >
+                        {probeStatus === 'probing'
+                          ? <span className="loading loading-spinner loading-xs" />
+                          : <FontAwesomeIcon icon={faArrowsRotate} />}
+                      </button>
+                    </div>
+                    {probeStatus === 'invalid' && (
+                      <span className="text-xs text-error mt-1">Invalid Endpoint</span>
+                    )}
+                    {probeStatus === 'single' && (
+                      <span className="text-xs text-warning mt-1">Single Model Endpoint Connected</span>
+                    )}
+                    {probeStatus === 'universal' && (
+                      <span className="text-xs text-success mt-1">Model List Retrieved ({probeModels.length} models)</span>
+                    )}
+                    {probeStatus === 'probing' && (
+                      <span className="text-xs text-base-content/50 mt-1">Testing endpoint...</span>
+                    )}
                   </label>
                   <label className="form-control">
                     <div className="label">
@@ -311,34 +386,43 @@ export default function ConnectionsPage() {
                       placeholder="Optional"
                     />
                   </label>
-                  <label className="form-control">
-                    <div className="label">
-                      <span className="label-text">Model</span>
-                    </div>
-                    <input
-                      type="text"
-                      className="input input-bordered input-sm"
-                      list={`model-list-${selectedId ?? "new"}`}
-                      value={form.model}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, model: e.target.value }))
-                      }
-                      placeholder="gpt-4o-mini"
-                    />
-                    {(() => {
-                      const models =
-                        (selectedId && config.health[selectedId]?.available_models) ||
-                        testResult?.available_models ||
-                        [];
-                      return models.length > 0 ? (
-                        <datalist id={`model-list-${selectedId ?? "new"}`}>
-                          {models.map((m) => (
-                            <option key={m} value={m} />
-                          ))}
-                        </datalist>
-                      ) : null;
-                    })()}
-                  </label>
+                  {probeStatus === 'universal' && probeModels.length > 0 ? (
+                    <label className="form-control">
+                      <div className="label">
+                        <span className="label-text">Available Models</span>
+                      </div>
+                      <select
+                        multiple
+                        className="select select-bordered select-sm h-auto min-h-[4rem] max-h-32 overflow-y-auto"
+                        disabled
+                        value={probeModels}
+                      >
+                        {probeModels.map(m => (
+                          <option key={m} value={m}>{m}</option>
+                        ))}
+                      </select>
+                      <div className="label pt-0.5">
+                        <span className="label-text-alt text-base-content/40">
+                          Universal endpoint — models listed for verification
+                        </span>
+                      </div>
+                    </label>
+                  ) : (
+                    <label className="form-control">
+                      <div className="label">
+                        <span className="label-text">Model</span>
+                      </div>
+                      <input
+                        type="text"
+                        className="input input-bordered input-sm"
+                        value={form.model}
+                        onChange={(e) =>
+                          setForm((f) => ({ ...f, model: e.target.value }))
+                        }
+                        placeholder="gpt-4o-mini"
+                      />
+                    </label>
+                  )}
                 </div>
 
                 {/* Capabilities */}

@@ -32,6 +32,8 @@ export interface Connection {
   // External LLM fields
   tool_description?: string;
   auto_include_context?: boolean;
+  // Endpoint detection
+  is_universal?: boolean;
 }
 
 export interface ConnectionHealth {
