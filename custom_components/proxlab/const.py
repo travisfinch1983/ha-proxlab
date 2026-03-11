@@ -463,7 +463,7 @@ DEFAULT_MAX_TOKENS: Final = 500
 DEFAULT_TOP_P: Final = 1.0
 DEFAULT_LLM_KEEP_ALIVE: Final = "5m"
 DEFAULT_LLM_BACKEND: Final = LLM_BACKEND_DEFAULT
-DEFAULT_THINKING_ENABLED: Final = True  # Default: enabled (no /no_think appended)
+DEFAULT_THINKING_ENABLED: Final = False  # Default: disabled (strip thinking blocks)
 
 # Default values - Azure OpenAI
 # Azure API version used for chat completions endpoint.

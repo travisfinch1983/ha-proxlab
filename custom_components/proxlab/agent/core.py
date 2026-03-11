@@ -1381,6 +1381,17 @@ class ProxLabAgent(
             if not tool_calls:
                 raw_content = response_message.get("content") or ""
                 final_text = strip_thinking_blocks(raw_content) or ""
+                if not final_text and raw_content:
+                    _LOGGER.warning(
+                        "Response contained only thinking blocks (%d chars). "
+                        "The model may need a NoThink chat template.",
+                        len(raw_content),
+                    )
+                    final_text = (
+                        "I was unable to formulate a response. "
+                        "This may be caused by the model's thinking mode. "
+                        "Try disabling thinking in the backend (e.g., ChatML NoThink adapter in KoboldCpp)."
+                    )
                 break
 
             # Execute tool calls
@@ -1647,7 +1658,18 @@ class ProxLabAgent(
             tool_calls_buffer = [tc for tc in tool_calls_buffer if tc.get("function", {}).get("name")]
 
             if not tool_calls_buffer:
-                final_text = strip_thinking_blocks(accumulated_text) or accumulated_text
+                final_text = strip_thinking_blocks(accumulated_text) or ""
+                if not final_text and accumulated_text:
+                    _LOGGER.warning(
+                        "Streaming response contained only thinking blocks (%d chars). "
+                        "The model may need a NoThink chat template.",
+                        len(accumulated_text),
+                    )
+                    final_text = (
+                        "I was unable to formulate a response. "
+                        "This may be caused by the model's thinking mode. "
+                        "Try disabling thinking in the backend (e.g., ChatML NoThink adapter in KoboldCpp)."
+                    )
                 break
 
             # Execute tool calls
@@ -2428,16 +2450,29 @@ class ProxLabAgent(
 
                 # Log if we got an empty response
                 if not final_content:
-                    _LOGGER.error(
-                        "LLM returned empty content after iteration %d. Response message: %s",
-                        iteration,
-                        response_message,
-                    )
-                    # Provide an error message instead of misleading success message
-                    final_content = (
-                        "There was an error completing your request. "
-                        "The assistant did not provide a response."
-                    )
+                    if raw_content:
+                        _LOGGER.warning(
+                            "Response contained only thinking blocks (%d chars). "
+                            "The model may need a NoThink chat template.",
+                            len(raw_content),
+                        )
+                        final_content = (
+                            "I was unable to formulate a response. "
+                            "This may be caused by the model's thinking mode. "
+                            "Try disabling thinking in the backend "
+                            "(e.g., ChatML NoThink adapter in KoboldCpp)."
+                        )
+                    else:
+                        _LOGGER.error(
+                            "LLM returned empty content after iteration %d. "
+                            "Response message: %s",
+                            iteration,
+                            response_message,
+                        )
+                        final_content = (
+                            "There was an error completing your request. "
+                            "The assistant did not provide a response."
+                        )
 
                 # Update final performance metrics
                 if "performance" in metrics:

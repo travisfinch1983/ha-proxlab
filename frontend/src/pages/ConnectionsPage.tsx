@@ -42,7 +42,7 @@ const EMPTY_CONN: Omit<Connection, "id"> = {
   max_tokens: 500,
   top_p: 1.0,
   keep_alive: "5m",
-  thinking_enabled: true,
+  thinking_enabled: false,
   voice: "alloy",
   speed: 1.0,
   format: "mp3",
@@ -436,15 +436,15 @@ export default function ConnectionsPage() {
                         <input
                           type="checkbox"
                           className="toggle toggle-xs toggle-primary"
-                          checked={form.thinking_enabled ?? true}
+                          checked={!(form.thinking_enabled ?? false)}
                           onChange={(e) =>
                             setForm((f) => ({
                               ...f,
-                              thinking_enabled: e.target.checked,
+                              thinking_enabled: !e.target.checked,
                             }))
                           }
                         />
-                        <span className="text-xs">Enable Thinking</span>
+                        <span className="text-xs">Disable Thinking</span>
                       </label>
                     )}
                   </div>
