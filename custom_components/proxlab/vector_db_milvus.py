@@ -2,6 +2,10 @@
 
 Alternative to ChromaDB — connects to a Milvus instance for semantic
 search of Home Assistant entities and memory storage.
+
+Uses the Milvus v2 REST API (aiohttp) instead of pymilvus/grpcio to
+avoid import deadlocks caused by HA's blocking-call detector
+monkey-patching system calls.
 """
 
 from __future__ import annotations
@@ -32,22 +36,6 @@ from .const import (
 )
 from .exceptions import ContextInjectionError
 
-# Conditional import for pymilvus
-try:
-    from pymilvus import (
-        Collection,
-        CollectionSchema,
-        DataType,
-        FieldSchema,
-        MilvusClient,
-        connections,
-        utility,
-    )
-
-    MILVUS_AVAILABLE = True
-except ImportError:
-    MILVUS_AVAILABLE = False
-
 _LOGGER = logging.getLogger(__name__)
 
 # Embedding config
@@ -60,6 +48,9 @@ class MilvusVectorDB:
 
     Implements the same interface as the ChromaDB VectorDBManager
     but stores embeddings in Milvus instead.
+
+    All Milvus operations use the v2 REST API via aiohttp — no pymilvus
+    dependency required.
     """
 
     def __init__(self, hass: Any, config: dict[str, Any]) -> None:
@@ -69,16 +60,11 @@ class MilvusVectorDB:
             hass: Home Assistant instance.
             config: Configuration dictionary.
         """
-        if not MILVUS_AVAILABLE:
-            raise ContextInjectionError(
-                "pymilvus not installed. Install with: pip install pymilvus"
-            )
-
         self.hass = hass
         self.config = config
 
         raw_host = config.get(CONF_MILVUS_HOST, DEFAULT_MILVUS_HOST)
-        # Strip scheme prefix — pymilvus expects bare hostname, not a URL
+        # Strip scheme prefix — we build REST URLs ourselves
         for prefix in ("http://", "https://"):
             if raw_host.startswith(prefix):
                 raw_host = raw_host[len(prefix):]
@@ -94,7 +80,6 @@ class MilvusVectorDB:
             CONF_VECTOR_DB_EMBEDDING_BASE_URL, DEFAULT_VECTOR_DB_EMBEDDING_BASE_URL
         )
 
-        self._collection: Any | None = None
         self._embedding_cache: OrderedDict[str, list[float]] = OrderedDict()
         self._aiohttp_session: aiohttp.ClientSession | None = None
         self._connected = False
@@ -110,6 +95,40 @@ class MilvusVectorDB:
             self.port,
             self.collection_name,
         )
+
+    # --- REST API helper ---
+
+    async def _milvus_rest(
+        self, endpoint: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Call Milvus v2 REST API.
+
+        Args:
+            endpoint: REST path, e.g. '/v2/vectordb/collections/has'.
+            payload: JSON body.
+
+        Returns:
+            Parsed JSON response dict.
+
+        Raises:
+            ContextInjectionError: On non-zero response code or HTTP error.
+        """
+        url = f"http://{self.host}:{self.port}{endpoint}"
+        session = await self._ensure_aiohttp_session()
+        try:
+            async with session.post(url, json=payload) as resp:
+                result = await resp.json()
+                if result.get("code") != 0:
+                    raise ContextInjectionError(
+                        f"Milvus API error on {endpoint}: {result}"
+                    )
+                return result
+        except aiohttp.ClientError as err:
+            raise ContextInjectionError(
+                f"Milvus REST request failed ({endpoint}): {err}"
+            ) from err
+
+    # --- Setup / teardown ---
 
     async def async_setup(self) -> None:
         """Connect to Milvus and ensure collection exists.
@@ -142,92 +161,100 @@ class MilvusVectorDB:
             self._fingerprint = None
             self._entity_collection_name = None
 
-        # 2. Connect to Milvus (entity + card collections)
+        # 2. Connect to Milvus (entity + card collections) via REST
         try:
-            await self.hass.async_add_executor_job(self._connect_and_init)
+            await self._async_connect_and_init()
             _LOGGER.info("Milvus backend setup complete")
         except Exception as err:
             _LOGGER.error("Failed to set up Milvus backend: %s", err)
             raise ContextInjectionError(f"Milvus setup failed: {err}") from err
 
-    def _connect_and_init(self) -> None:
-        """Connect to Milvus and create collection if needed (sync, runs in executor)."""
-        alias = f"proxlab_{self.host}_{self.port}"
-
-        connections.connect(
-            alias=alias,
-            host=self.host,
-            port=self.port,
-            timeout=10,
-        )
-
-        # Entity collection — uses fingerprint-derived name if available
+    async def _async_connect_and_init(self) -> None:
+        """Check/create/load the entity collection via Milvus REST API."""
         entity_col_name = self._entity_collection_name or self.collection_name
-        if not utility.has_collection(entity_col_name, using=alias):
+
+        # Check if collection exists
+        has_result = await self._milvus_rest(
+            "/v2/vectordb/collections/has",
+            {"collectionName": entity_col_name},
+        )
+        has_collection = has_result.get("data", {}).get("has", False)
+
+        if not has_collection:
             _LOGGER.info("Creating Milvus collection: %s", entity_col_name)
-            fields = [
-                FieldSchema(
-                    name="id",
-                    dtype=DataType.VARCHAR,
-                    is_primary=True,
-                    max_length=256,
-                ),
-                FieldSchema(
-                    name="text",
-                    dtype=DataType.VARCHAR,
-                    max_length=4096,
-                ),
-                FieldSchema(
-                    name="embedding",
-                    dtype=DataType.FLOAT_VECTOR,
-                    dim=self.embedding_dim,
-                ),
-                FieldSchema(
-                    name="metadata",
-                    dtype=DataType.JSON,
-                ),
-            ]
-            schema = CollectionSchema(
-                fields=fields,
-                description="ProxLab entity embeddings",
+            await self._milvus_rest(
+                "/v2/vectordb/collections/create",
+                {
+                    "collectionName": entity_col_name,
+                    "schema": {
+                        "fields": [
+                            {
+                                "fieldName": "id",
+                                "dataType": "VarChar",
+                                "isPrimary": True,
+                                "elementTypeParams": {"max_length": "256"},
+                            },
+                            {
+                                "fieldName": "text",
+                                "dataType": "VarChar",
+                                "elementTypeParams": {"max_length": "4096"},
+                            },
+                            {
+                                "fieldName": "embedding",
+                                "dataType": "FloatVector",
+                                "elementTypeParams": {
+                                    "dim": str(self.embedding_dim)
+                                },
+                            },
+                            {
+                                "fieldName": "metadata",
+                                "dataType": "JSON",
+                            },
+                        ],
+                    },
+                    "indexParams": [
+                        {
+                            "fieldName": "embedding",
+                            "indexName": "embedding_idx",
+                            "metricType": "L2",
+                            "indexType": "IVF_FLAT",
+                            "params": {"nlist": 128},
+                        },
+                    ],
+                },
             )
-            self._collection = Collection(
-                name=entity_col_name,
-                schema=schema,
-                using=alias,
-            )
-            # Create IVF_FLAT index for similarity search
-            index_params = {
-                "metric_type": "L2",
-                "index_type": "IVF_FLAT",
-                "params": {"nlist": 128},
-            }
-            self._collection.create_index("embedding", index_params)
             _LOGGER.info("Created Milvus collection with IVF_FLAT index")
-        else:
-            self._collection = Collection(
-                name=entity_col_name, using=alias
-            )
 
         # Load collection into memory for searching
-        self._collection.load()
+        await self._milvus_rest(
+            "/v2/vectordb/collections/load",
+            {"collectionName": entity_col_name},
+        )
         self._connected = True
 
     async def async_shutdown(self) -> None:
         """Shut down Milvus connection."""
+        if self._connected:
+            entity_col_name = (
+                self._entity_collection_name or self.collection_name
+            )
+            try:
+                await self._milvus_rest(
+                    "/v2/vectordb/collections/release",
+                    {"collectionName": entity_col_name},
+                )
+            except Exception:
+                pass
+
         if self._aiohttp_session and not self._aiohttp_session.closed:
             await self._aiohttp_session.close()
             self._aiohttp_session = None
 
-        if self._collection is not None:
-            try:
-                await self.hass.async_add_executor_job(self._collection.release)
-            except Exception:
-                pass
-
         self._embedding_cache.clear()
         self._connected = False
         _LOGGER.info("Milvus backend shut down")
+
+    # --- Entity indexing ---
 
     async def async_index_entity(self, entity_id: str) -> None:
         """Index a single entity.
@@ -235,7 +262,7 @@ class MilvusVectorDB:
         Args:
             entity_id: The HA entity ID to index.
         """
-        if not self._connected or self._collection is None:
+        if not self._connected:
             raise ContextInjectionError("Milvus not connected")
         if self._fingerprint is None:
             raise ContextInjectionError(
@@ -256,32 +283,42 @@ class MilvusVectorDB:
             "friendly_name": state.attributes.get("friendly_name", entity_id),
         }
 
-        collection = self._collection
+        entity_col_name = self._entity_collection_name or self.collection_name
 
-        # Upsert: delete existing, then insert
-        await self.hass.async_add_executor_job(
-            lambda: collection.delete(expr=f'id == "{entity_id}"')
-        )
-        await self.hass.async_add_executor_job(
-            lambda: collection.insert([
-                [entity_id],
-                [text[:4096]],
-                [embedding],
-                [metadata],
-            ])
+        # Upsert via REST (handles insert-or-update in one call)
+        await self._milvus_rest(
+            "/v2/vectordb/entities/upsert",
+            {
+                "collectionName": entity_col_name,
+                "data": [
+                    {
+                        "id": entity_id,
+                        "text": text[:4096],
+                        "embedding": embedding,
+                        "metadata": metadata,
+                    },
+                ],
+            },
         )
 
         _LOGGER.debug("Milvus indexed entity: %s", entity_id)
 
     async def async_remove_entity(self, entity_id: str) -> None:
         """Remove an entity from the index."""
-        if not self._connected or self._collection is None:
+        if not self._connected:
             return
 
-        collection = self._collection
-        await self.hass.async_add_executor_job(
-            lambda: collection.delete(expr=f'id == "{entity_id}"')
-        )
+        entity_col_name = self._entity_collection_name or self.collection_name
+        try:
+            await self._milvus_rest(
+                "/v2/vectordb/entities/delete",
+                {
+                    "collectionName": entity_col_name,
+                    "filter": f'id == "{entity_id}"',
+                },
+            )
+        except Exception:
+            pass
 
     async def async_search(
         self, query: str, top_k: int = 5, threshold: float = 250.0
@@ -296,34 +333,40 @@ class MilvusVectorDB:
         Returns:
             List of dicts with entity_id, text, metadata, distance.
         """
-        if not self._connected or self._collection is None:
+        if not self._connected:
             return []
 
         embedding = await self._embed_text(query)
 
-        collection = self._collection
+        entity_col_name = self._entity_collection_name or self.collection_name
 
-        def _search() -> list[dict[str, Any]]:
-            results = collection.search(
-                data=[embedding],
-                anns_field="embedding",
-                param={"metric_type": "L2", "params": {"nprobe": 16}},
-                limit=top_k,
-                output_fields=["id", "text", "metadata"],
-            )
+        result = await self._milvus_rest(
+            "/v2/vectordb/entities/search",
+            {
+                "collectionName": entity_col_name,
+                "data": [embedding],
+                "annsField": "embedding",
+                "limit": top_k,
+                "outputFields": ["id", "text", "metadata"],
+                "searchParams": {
+                    "metric_type": "L2",
+                    "params": {"nprobe": 16},
+                },
+            },
+        )
 
-            hits = []
-            for hit in results[0]:
-                if hit.distance <= threshold:
-                    hits.append({
-                        "entity_id": hit.id,
-                        "text": hit.entity.get("text", ""),
-                        "metadata": hit.entity.get("metadata", {}),
-                        "distance": hit.distance,
-                    })
-            return hits
+        hits: list[dict[str, Any]] = []
+        for item in result.get("data", []):
+            distance = item.get("distance", 999.0)
+            if distance <= threshold:
+                hits.append({
+                    "entity_id": item.get("id", ""),
+                    "text": item.get("text", ""),
+                    "metadata": item.get("metadata", {}),
+                    "distance": distance,
+                })
 
-        return await self.hass.async_add_executor_job(_search)
+        return hits
 
     async def async_reindex_all_entities(self) -> dict[str, Any]:
         """Reindex all HA entities."""
@@ -422,6 +465,8 @@ class MilvusVectorDB:
             parts.append(f"Location: {area}")
 
         return " | ".join(parts)
+
+    # --- Embedding ---
 
     async def _embed_text(self, text: str) -> list[float]:
         """Embed text using Ollama embeddings API.
@@ -529,55 +574,65 @@ class MilvusVectorDB:
         Returns the collection name.
         """
         collection_name = f"proxlab_card_{card_id.replace('-', '_')}"
-        await self.hass.async_add_executor_job(
-            self._init_card_collection, collection_name
-        )
+        await self._async_init_card_collection(collection_name)
         return collection_name
 
-    def _init_card_collection(self, collection_name: str) -> None:
-        """Create card collection (sync, runs in executor)."""
-        alias = f"proxlab_{self.host}_{self.port}"
+    async def _async_init_card_collection(self, collection_name: str) -> None:
+        """Create card collection via REST API if it doesn't exist."""
+        has_result = await self._milvus_rest(
+            "/v2/vectordb/collections/has",
+            {"collectionName": collection_name},
+        )
+        has_collection = has_result.get("data", {}).get("has", False)
 
-        if not utility.has_collection(collection_name, using=alias):
+        if not has_collection:
             _LOGGER.info("Creating card Milvus collection: %s", collection_name)
-            fields = [
-                FieldSchema(
-                    name="id",
-                    dtype=DataType.VARCHAR,
-                    is_primary=True,
-                    max_length=256,
-                ),
-                FieldSchema(
-                    name="text",
-                    dtype=DataType.VARCHAR,
-                    max_length=8192,
-                ),
-                FieldSchema(
-                    name="embedding",
-                    dtype=DataType.FLOAT_VECTOR,
-                    dim=self.embedding_dim,
-                ),
-                FieldSchema(
-                    name="metadata",
-                    dtype=DataType.JSON,
-                ),
-            ]
-            schema = CollectionSchema(
-                fields=fields,
-                description=f"ProxLab chat card embeddings ({collection_name})",
+            await self._milvus_rest(
+                "/v2/vectordb/collections/create",
+                {
+                    "collectionName": collection_name,
+                    "schema": {
+                        "fields": [
+                            {
+                                "fieldName": "id",
+                                "dataType": "VarChar",
+                                "isPrimary": True,
+                                "elementTypeParams": {"max_length": "256"},
+                            },
+                            {
+                                "fieldName": "text",
+                                "dataType": "VarChar",
+                                "elementTypeParams": {"max_length": "8192"},
+                            },
+                            {
+                                "fieldName": "embedding",
+                                "dataType": "FloatVector",
+                                "elementTypeParams": {
+                                    "dim": str(self.embedding_dim)
+                                },
+                            },
+                            {
+                                "fieldName": "metadata",
+                                "dataType": "JSON",
+                            },
+                        ],
+                    },
+                    "indexParams": [
+                        {
+                            "fieldName": "embedding",
+                            "indexName": "embedding_idx",
+                            "metricType": "L2",
+                            "indexType": "IVF_FLAT",
+                            "params": {"nlist": 128},
+                        },
+                    ],
+                },
             )
-            col = Collection(
-                name=collection_name,
-                schema=schema,
-                using=alias,
+            # Load the new collection
+            await self._milvus_rest(
+                "/v2/vectordb/collections/load",
+                {"collectionName": collection_name},
             )
-            index_params = {
-                "metric_type": "L2",
-                "index_type": "IVF_FLAT",
-                "params": {"nlist": 128},
-            }
-            col.create_index("embedding", index_params)
-            col.load()
 
     async def store_card_embedding(
         self, collection_name: str, text: str, metadata: dict[str, Any]
@@ -586,17 +641,20 @@ class MilvusVectorDB:
         embedding = await self._embed_text(text)
         doc_id = hashlib.md5(text.encode()).hexdigest()
 
-        def _insert() -> None:
-            alias = f"proxlab_{self.host}_{self.port}"
-            col = Collection(name=collection_name, using=alias)
-            col.upsert([
-                [doc_id],
-                [text[:8192]],
-                [embedding],
-                [metadata],
-            ])
-
-        await self.hass.async_add_executor_job(_insert)
+        await self._milvus_rest(
+            "/v2/vectordb/entities/upsert",
+            {
+                "collectionName": collection_name,
+                "data": [
+                    {
+                        "id": doc_id,
+                        "text": text[:8192],
+                        "embedding": embedding,
+                        "metadata": metadata,
+                    },
+                ],
+            },
+        )
 
     async def search_card_collection(
         self, collection_name: str, query: str, top_k: int = 5
@@ -604,26 +662,41 @@ class MilvusVectorDB:
         """Search a card's dedicated collection for similar text."""
         query_embedding = await self._embed_text(query)
 
-        def _search() -> list[dict[str, Any]]:
-            alias = f"proxlab_{self.host}_{self.port}"
-            if not utility.has_collection(collection_name, using=alias):
-                return []
-            col = Collection(name=collection_name, using=alias)
-            col.load()
-            results = col.search(
-                data=[query_embedding],
-                anns_field="embedding",
-                param={"metric_type": "L2", "params": {"nprobe": 16}},
-                limit=top_k,
-                output_fields=["text", "metadata"],
-            )
-            hits: list[dict[str, Any]] = []
-            for hit in results[0]:
-                hits.append({
-                    "text": hit.entity.get("text", ""),
-                    "metadata": hit.entity.get("metadata", {}),
-                    "distance": hit.distance,
-                })
-            return hits
+        # Check collection exists first
+        has_result = await self._milvus_rest(
+            "/v2/vectordb/collections/has",
+            {"collectionName": collection_name},
+        )
+        if not has_result.get("data", {}).get("has", False):
+            return []
 
-        return await self.hass.async_add_executor_job(_search)
+        # Ensure loaded
+        await self._milvus_rest(
+            "/v2/vectordb/collections/load",
+            {"collectionName": collection_name},
+        )
+
+        result = await self._milvus_rest(
+            "/v2/vectordb/entities/search",
+            {
+                "collectionName": collection_name,
+                "data": [query_embedding],
+                "annsField": "embedding",
+                "limit": top_k,
+                "outputFields": ["text", "metadata"],
+                "searchParams": {
+                    "metric_type": "L2",
+                    "params": {"nprobe": 16},
+                },
+            },
+        )
+
+        hits: list[dict[str, Any]] = []
+        for item in result.get("data", []):
+            hits.append({
+                "text": item.get("text", ""),
+                "metadata": item.get("metadata", {}),
+                "distance": item.get("distance", 999.0),
+            })
+
+        return hits
