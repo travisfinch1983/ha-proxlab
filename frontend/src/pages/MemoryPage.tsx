@@ -10,8 +10,11 @@ import {
   getEntityScanStatus,
   updateEntityScan,
   subscribeReindexProgress,
+  discoverModels,
 } from "../api";
 import type { EntityScanStatus, ReindexResult, ReindexProgress } from "../api";
+import type { DiscoveredModel } from "../types";
+import { CAPABILITY_LABELS } from "../types";
 
 export default function MemoryPage() {
   const config = useStore((s) => s.config)!;
@@ -36,6 +39,7 @@ export default function MemoryPage() {
   const [indexProgress, setIndexProgress] = useState<ReindexProgress | null>(null);
   const [confirmIndex, setConfirmIndex] = useState(false);
   const [scanSaving, setScanSaving] = useState(false);
+  const [discoveredModels, setDiscoveredModels] = useState<DiscoveredModel[]>([]);
 
   useEffect(() => {
     getEntityScanStatus()
@@ -45,6 +49,7 @@ export default function MemoryPage() {
         setScanInterval(status.entity_scan_interval);
       })
       .catch(() => {});
+    discoverModels().then(setDiscoveredModels).catch(() => {});
   }, []);
 
   const handleSave = async () => {
@@ -273,6 +278,46 @@ export default function MemoryPage() {
                 <span className="text-base-content/60">Collection</span>
                 <span className="font-mono text-xs break-all">
                   {scanStatus.collection_name || "—"}
+                </span>
+
+                {/* Capabilities row */}
+                <span className="text-base-content/60">Capabilities</span>
+                <span className="flex flex-wrap gap-1">
+                  {/* User-assigned capabilities from embedding connection */}
+                  {scanStatus.capabilities.map((cap) => (
+                    <span key={cap} className="badge badge-xs badge-outline">
+                      {CAPABILITY_LABELS[cap] || cap}
+                    </span>
+                  ))}
+                  {/* Detected capabilities from model discovery */}
+                  {(() => {
+                    // Find embedding models by matching the embedding_model name
+                    const embModel = scanStatus.embedding_model;
+                    const matched = discoveredModels.filter(
+                      (m) => m.supports_embeddings || m.id === embModel
+                    );
+                    const det = new Set<string>();
+                    for (const m of matched) {
+                      if (m.supports_vision) det.add("vision");
+                      if (m.supports_embeddings) det.add("embeddings");
+                    }
+                    const extras = [...det].filter(
+                      (d) => !scanStatus.capabilities.includes(d)
+                    );
+                    return extras.map((d) => (
+                      <span
+                        key={`det-${d}`}
+                        className="badge badge-xs badge-accent badge-outline"
+                        title="Auto-detected"
+                      >
+                        {d}
+                      </span>
+                    ));
+                  })()}
+                  {scanStatus.capabilities.length === 0 &&
+                    discoveredModels.length === 0 && (
+                      <span className="text-xs text-base-content/40">—</span>
+                    )}
                 </span>
               </div>
             )}

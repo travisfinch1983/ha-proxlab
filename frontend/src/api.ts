@@ -660,6 +660,20 @@ export async function reconnectMcpServer(
   return callWS("proxlab/mcp/servers/reconnect", { server_id: serverId });
 }
 
+// --- Model Discovery ---
+
+import type { DiscoveredModel } from "./types";
+
+export async function discoverModels(
+  forceRefresh = false
+): Promise<DiscoveredModel[]> {
+  const res = await callWS<{ models: DiscoveredModel[] }>(
+    "proxlab/models/discover",
+    { force_refresh: forceRefresh }
+  );
+  return res.models;
+}
+
 // --- Agent Profiles ---
 
 import type { AgentProfile, GroupChatCardConfig } from "./types";

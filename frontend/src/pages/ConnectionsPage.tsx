@@ -12,10 +12,11 @@ import {
   deleteConnection,
   testConnection,
   discoverClaudeAddon,
+  discoverModels,
   fetchConfig,
   refreshHealth,
 } from "../api";
-import type { Connection, ConnectionHealth } from "../types";
+import type { Connection, ConnectionHealth, DiscoveredModel } from "../types";
 import { CAPABILITY_LABELS } from "../types";
 
 const ALL_CAPABILITIES = [
@@ -66,6 +67,12 @@ export default function ConnectionsPage() {
   const [toast, setToast] = useState<string | null>(null);
   const [probeStatus, setProbeStatus] = useState<'idle' | 'probing' | 'invalid' | 'single' | 'universal'>('idle');
   const [probeModels, setProbeModels] = useState<string[]>([]);
+  const [allDiscovered, setAllDiscovered] = useState<DiscoveredModel[]>([]);
+
+  // Load discovered models on mount (cached, fast)
+  useEffect(() => {
+    discoverModels().then(setAllDiscovered).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (selectedId && connections[selectedId]) {
@@ -138,6 +145,8 @@ export default function ConnectionsPage() {
         await reload();
         showToast("Connection updated");
       }
+      // Refresh model discovery (force) so detected badges update
+      discoverModels(true).then(setAllDiscovered).catch(() => {});
     } catch (err: unknown) {
       showToast(`Error: ${(err as Error).message}`);
     } finally {
@@ -280,6 +289,7 @@ export default function ConnectionsPage() {
                 setIsNew(false);
                 setTestResult(null);
               }}
+              discoveredModels={allDiscovered}
             />
           ))}
           {Object.keys(connections).length === 0 && (
@@ -456,6 +466,74 @@ export default function ConnectionsPage() {
                       </label>
                     ))}
                   </div>
+                  {/* Detected capabilities from model discovery */}
+                  {(() => {
+                    const connModels = selectedId
+                      ? allDiscovered.filter((m) => m.connection_id === selectedId)
+                      : [];
+                    if (connModels.length === 0) return null;
+                    const det: string[] = [];
+                    const has = (flag: boolean, name: string) => { if (flag) det.push(name); };
+                    for (const m of connModels) {
+                      has(m.supports_vision, "vision");
+                      has(m.supports_audio, "audio");
+                      has(m.supports_embeddings, "embeddings");
+                      has(m.supports_tts, "tts");
+                      has(m.supports_tool_use, "tool_use");
+                    }
+                    const unique = [...new Set(det)];
+                    const missing = unique.filter((d) => !form.capabilities.includes(d));
+                    if (unique.length === 0) return null;
+
+                    // Map detected capability names to ALL_CAPABILITIES entries
+                    const capMap: Record<string, string> = {
+                      vision: "vision",
+                      audio: "specialized",
+                      embeddings: "embeddings",
+                      tts: "tts",
+                      tool_use: "tool_use",
+                    };
+                    const detLabels: Record<string, string> = {
+                      vision: "Vision",
+                      audio: "Audio",
+                      embeddings: "Embeddings",
+                      tts: "TTS",
+                      tool_use: "Tool Use",
+                    };
+
+                    return (
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        <span className="text-xs text-base-content/50">Detected:</span>
+                        {unique.map((d) => (
+                          <span
+                            key={d}
+                            className={`badge badge-xs ${
+                              form.capabilities.includes(capMap[d] || d)
+                                ? "badge-success"
+                                : "badge-accent badge-outline"
+                            }`}
+                          >
+                            {detLabels[d] || d}
+                          </span>
+                        ))}
+                        {missing.length > 0 && (
+                          <button
+                            type="button"
+                            className="btn btn-xs btn-accent btn-outline"
+                            onClick={() => {
+                              const toAdd = missing.map((d) => capMap[d] || d);
+                              setForm((f) => ({
+                                ...f,
+                                capabilities: [...new Set([...f.capabilities, ...toAdd])],
+                              }));
+                            }}
+                          >
+                            Apply detected
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {/* LLM detail fields */}

@@ -1,4 +1,4 @@
-import type { Connection, ConnectionHealth } from "../types";
+import type { Connection, ConnectionHealth, DiscoveredModel } from "../types";
 import {
   CAPABILITY_LABELS,
   getHealthStatus,
@@ -6,19 +6,31 @@ import {
   healthLabel,
 } from "../types";
 
+/** Short labels for detected capability badges */
+const DETECTED_LABELS: Record<string, string> = {
+  vision: "Vision",
+  audio: "Audio",
+  embeddings: "Embeddings",
+  tts: "TTS",
+  tool_use: "Tool Use",
+};
+
 interface Props {
   id: string;
   connection: Connection;
   health?: ConnectionHealth;
   selected?: boolean;
   onClick?: () => void;
+  discoveredModels?: DiscoveredModel[];
 }
 
 export default function ConnectionCard({
+  id,
   connection,
   health,
   selected,
   onClick,
+  discoveredModels,
 }: Props) {
   const status = getHealthStatus(health);
   const borderColor =
@@ -27,6 +39,20 @@ export default function ConnectionCard({
       : status === "unreachable"
         ? "border-error"
         : "border-warning";
+
+  // Aggregate detected capabilities from discovered models for this connection
+  const detected = new Set<string>();
+  const models = (discoveredModels ?? []).filter((m) => m.connection_id === id);
+  for (const m of models) {
+    if (m.supports_vision) detected.add("vision");
+    if (m.supports_audio) detected.add("audio");
+    if (m.supports_embeddings) detected.add("embeddings");
+    if (m.supports_tts) detected.add("tts");
+    if (m.supports_tool_use) detected.add("tool_use");
+  }
+
+  // Provider tag from first model
+  const provider = models[0]?.provider;
 
   return (
     <div
@@ -49,11 +75,30 @@ export default function ConnectionCard({
           <p className="text-xs text-warning">{health.detail}</p>
         )}
         <div className="flex flex-wrap gap-1 mt-1">
+          {/* User-assigned capabilities */}
           {connection.capabilities.map((cap) => (
             <span key={cap} className="badge badge-xs badge-outline">
               {CAPABILITY_LABELS[cap] || cap}
             </span>
           ))}
+          {/* Detected capabilities (only those not already in user-assigned) */}
+          {[...detected]
+            .filter((d) => !connection.capabilities.includes(d))
+            .map((d) => (
+              <span
+                key={`det-${d}`}
+                className="badge badge-xs badge-accent badge-outline"
+                title="Auto-detected"
+              >
+                {DETECTED_LABELS[d] || d}
+              </span>
+            ))}
+          {/* Provider badge */}
+          {provider && (
+            <span className="badge badge-xs badge-ghost">
+              {provider}
+            </span>
+          )}
         </div>
       </div>
     </div>

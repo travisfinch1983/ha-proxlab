@@ -324,6 +324,34 @@ export interface GroupChatCardConfig {
   allowed_users: string[];
 }
 
+export interface DiscoveredModel {
+  id: string;
+  connection_id: string;
+  connection_name: string;
+  provider: string;
+  context_length: number | null;
+  parameter_count: string | null;
+  quantization: string | null;
+  architecture: string | null;
+  family: string | null;
+  format: string | null;
+  supports_vision: boolean;
+  supports_audio: boolean;
+  supports_embeddings: boolean;
+  supports_tts: boolean;
+  supports_tool_use: boolean;
+  size_bytes: number | null;
+  size_vram_bytes: number | null;
+  is_loaded: boolean;
+  generation_speed: number | null;
+  prompt_speed: number | null;
+  uptime_seconds: number | null;
+  queue_depth: number | null;
+  extras: Record<string, unknown>;
+  status: string;
+  error: string | null;
+}
+
 export const CAPABILITY_LABELS: Record<string, string> = {
   conversation: "Conversational LLM",
   tool_use: "Tool Use (LLM)",
