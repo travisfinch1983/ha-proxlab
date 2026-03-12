@@ -283,6 +283,9 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_group_invoke)
     websocket_api.async_register_command(hass, ws_group_invoke_stream)
 
+    # Model discovery
+    websocket_api.async_register_command(hass, ws_models_discover)
+
 
 # ---------------------------------------------------------------------------
 # Config snapshot
@@ -4157,3 +4160,35 @@ async def ws_group_invoke(
         msg["id"],
         {"success": True, "responses": responses, "turn_mode": turn_mode},
     )
+
+
+# ---------------------------------------------------------------------------
+# Model Discovery
+# ---------------------------------------------------------------------------
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/models/discover",
+        vol.Optional("entry_id"): str,
+        vol.Optional("force_refresh", default=False): bool,
+    }
+)
+@websocket_api.async_response
+async def ws_models_discover(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Discover models across all configured connections."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+
+    from .model_discovery import discover_all_models
+
+    try:
+        models = await discover_all_models(hass, entry, force_refresh=msg["force_refresh"])
+        connection.send_result(msg["id"], {"models": models})
+    except Exception as err:
+        _LOGGER.error("Model discovery failed: %s", err, exc_info=True)
+        connection.send_error(msg["id"], "discovery_failed", str(err))

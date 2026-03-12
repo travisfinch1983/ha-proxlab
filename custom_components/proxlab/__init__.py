@@ -431,6 +431,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     hass.data[DOMAIN][entry.entry_id] = {
         "agent": agent,
         "session_manager": session_manager,
+        "model_cache": {"data": [], "timestamp": 0},
     }
 
     # Set up agent registry (event-driven reactive layer)

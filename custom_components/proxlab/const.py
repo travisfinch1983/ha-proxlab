@@ -720,6 +720,10 @@ CLEANUP_INTERVAL: Final = 3600  # Cleanup old conversations every hour
 HEALTH_CHECK_INTERVAL: Final = 300  # 5 minutes between health checks
 HEALTH_CHECK_TIMEOUT: Final = 5  # Seconds per connection check
 
+# Model discovery
+MODEL_DISCOVERY_CACHE_TTL: Final = 300  # 5 minutes cache freshness
+MODEL_DISCOVERY_TIMEOUT: Final = 10  # Per-connection discovery timeout (seconds)
+
 # Connection type constants
 CONNECTION_TYPE_LOCAL: Final = "local"
 CONNECTION_TYPE_OPENAI: Final = "openai"
