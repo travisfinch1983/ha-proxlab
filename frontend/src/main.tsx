@@ -196,6 +196,9 @@ async function connectToHA(): Promise<void> {
       _hassInitialized = true;
       store.setHass({
         callWS: proxyCallWS as Hass["callWS"],
+        connection: {
+          subscribeEvents: () => Promise.resolve(() => {}),
+        },
         states: {},
         user: { id: "", name: "", is_admin: true },
         language: "en",

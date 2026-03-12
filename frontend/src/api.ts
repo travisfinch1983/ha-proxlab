@@ -201,8 +201,37 @@ export interface EntityScanStatus {
   capabilities: string[];
 }
 
+export interface ReindexProgress {
+  total: number;
+  processed: number;
+  indexed: number;
+  failed: number;
+  skipped: number;
+}
+
 export async function reindexEntities(): Promise<ReindexResult> {
   return callWS("proxlab/entity/reindex");
+}
+
+export function subscribeReindexProgress(
+  callback: (progress: ReindexProgress) => void
+): () => void {
+  const hass = getHass();
+  let unsub: (() => void) | null = null;
+
+  hass.connection
+    .subscribeEvents(
+      (event: unknown) =>
+        callback((event as { data: ReindexProgress }).data),
+      "proxlab_reindex_progress"
+    )
+    .then((unsubFn: () => void) => {
+      unsub = unsubFn;
+    });
+
+  return () => {
+    unsub?.();
+  };
 }
 
 export async function getEntityScanStatus(): Promise<EntityScanStatus> {

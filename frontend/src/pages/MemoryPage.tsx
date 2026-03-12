@@ -9,8 +9,9 @@ import {
   reindexEntities,
   getEntityScanStatus,
   updateEntityScan,
+  subscribeReindexProgress,
 } from "../api";
-import type { EntityScanStatus, ReindexResult } from "../api";
+import type { EntityScanStatus, ReindexResult, ReindexProgress } from "../api";
 
 export default function MemoryPage() {
   const config = useStore((s) => s.config)!;
@@ -32,6 +33,7 @@ export default function MemoryPage() {
   const [scanInterval, setScanInterval] = useState<"hourly" | "daily" | "weekly">("daily");
   const [indexing, setIndexing] = useState(false);
   const [indexResult, setIndexResult] = useState<ReindexResult | null>(null);
+  const [indexProgress, setIndexProgress] = useState<ReindexProgress | null>(null);
   const [confirmIndex, setConfirmIndex] = useState(false);
   const [scanSaving, setScanSaving] = useState(false);
 
@@ -73,6 +75,12 @@ export default function MemoryPage() {
     setConfirmIndex(false);
     setIndexing(true);
     setIndexResult(null);
+    setIndexProgress(null);
+
+    const unsub = subscribeReindexProgress((progress) => {
+      setIndexProgress(progress);
+    });
+
     try {
       const result = await reindexEntities();
       setIndexResult(result);
@@ -86,7 +94,9 @@ export default function MemoryPage() {
         error: (err as Error).message,
       });
     } finally {
+      unsub();
       setIndexing(false);
+      setIndexProgress(null);
     }
   };
 
@@ -287,6 +297,28 @@ export default function MemoryPage() {
                 </span>
               )}
             </div>
+
+            {/* Index progress */}
+            {indexing && indexProgress && indexProgress.total > 0 && (
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs text-base-content/70">
+                  <span>
+                    {indexProgress.indexed} indexed
+                    {indexProgress.failed > 0 && `, ${indexProgress.failed} failed`}
+                    {indexProgress.skipped > 0 && `, ${indexProgress.skipped} skipped`}
+                  </span>
+                  <span>
+                    {indexProgress.processed} / {indexProgress.total}
+                    {" "}({Math.round((indexProgress.processed / indexProgress.total) * 100)}%)
+                  </span>
+                </div>
+                <progress
+                  className="progress progress-primary w-full"
+                  value={indexProgress.processed}
+                  max={indexProgress.total}
+                />
+              </div>
+            )}
 
             {/* Index result */}
             {indexResult && (

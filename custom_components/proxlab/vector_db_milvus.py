@@ -388,11 +388,13 @@ class MilvusVectorDB:
         indexed = 0
         failed = 0
         skipped = 0
+        processed = 0
 
         for state in all_states:
             try:
                 if self._should_skip_entity(state.entity_id):
                     skipped += 1
+                    processed += 1
                     continue
                 await self.async_index_entity(state.entity_id)
                 indexed += 1
@@ -402,9 +404,33 @@ class MilvusVectorDB:
                 )
                 failed += 1
 
-            # Yield to event loop periodically
-            if indexed % 50 == 0:
+            processed += 1
+
+            # Fire progress event every 10 entities
+            if processed % 10 == 0:
+                self.hass.bus.async_fire(
+                    "proxlab_reindex_progress",
+                    {
+                        "total": total,
+                        "processed": processed,
+                        "indexed": indexed,
+                        "failed": failed,
+                        "skipped": skipped,
+                    },
+                )
                 await asyncio.sleep(0)
+
+        # Fire final 100% event
+        self.hass.bus.async_fire(
+            "proxlab_reindex_progress",
+            {
+                "total": total,
+                "processed": total,
+                "indexed": indexed,
+                "failed": failed,
+                "skipped": skipped,
+            },
+        )
 
         _LOGGER.info(
             "Milvus reindex: %d indexed, %d failed, %d skipped",

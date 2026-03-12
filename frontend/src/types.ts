@@ -1,6 +1,12 @@
 /** Home Assistant hass object (subset we use). */
 export interface Hass {
   callWS: <T>(msg: Record<string, unknown>) => Promise<T>;
+  connection: {
+    subscribeEvents: (
+      callback: (event: unknown) => void,
+      eventType: string
+    ) => Promise<() => void>;
+  };
   states: Record<string, unknown>;
   user: { id: string; name: string; is_admin: boolean };
   language: string;
