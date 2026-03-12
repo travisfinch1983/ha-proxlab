@@ -279,9 +279,11 @@ export default function MemoryPage() {
                 ) : null}
                 Index All Entities
               </button>
-              {!hasFingerprint && (
+              {!hasFingerprint && scanStatus && (
                 <span className="text-xs text-warning">
-                  Embedding model unavailable
+                  {!connected
+                    ? "Vector DB not connected"
+                    : "Fingerprint not computed — restart HA to retry"}
                 </span>
               )}
             </div>

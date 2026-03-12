@@ -24,14 +24,19 @@ from .const import (
     CONF_MILVUS_COLLECTION,
     CONF_MILVUS_HOST,
     CONF_MILVUS_PORT,
+    CONF_OPENAI_API_KEY,
     CONF_VECTOR_DB_EMBEDDING_BASE_URL,
     CONF_VECTOR_DB_EMBEDDING_MODEL,
+    CONF_VECTOR_DB_EMBEDDING_PROVIDER,
     DEFAULT_EMBEDDING_KEEP_ALIVE,
     DEFAULT_MILVUS_COLLECTION,
     DEFAULT_MILVUS_HOST,
     DEFAULT_MILVUS_PORT,
     DEFAULT_VECTOR_DB_EMBEDDING_BASE_URL,
     DEFAULT_VECTOR_DB_EMBEDDING_MODEL,
+    DEFAULT_VECTOR_DB_EMBEDDING_PROVIDER,
+    EMBEDDING_PROVIDER_OLLAMA,
+    EMBEDDING_PROVIDER_OPENAI,
     ENTITY_COLLECTION_PREFIX,
 )
 from .exceptions import ContextInjectionError
@@ -79,6 +84,10 @@ class MilvusVectorDB:
         self.embedding_base_url = config.get(
             CONF_VECTOR_DB_EMBEDDING_BASE_URL, DEFAULT_VECTOR_DB_EMBEDDING_BASE_URL
         )
+        self.embedding_provider = config.get(
+            CONF_VECTOR_DB_EMBEDDING_PROVIDER, DEFAULT_VECTOR_DB_EMBEDDING_PROVIDER
+        )
+        self.openai_api_key = config.get(CONF_OPENAI_API_KEY, "")
 
         self._embedding_cache: OrderedDict[str, list[float]] = OrderedDict()
         self._aiohttp_session: aiohttp.ClientSession | None = None
@@ -90,10 +99,14 @@ class MilvusVectorDB:
         self._entity_collection_name: str | None = None
 
         _LOGGER.info(
-            "Milvus backend initialized (host=%s:%s, collection=%s)",
+            "Milvus backend initialized (host=%s:%s, collection=%s, "
+            "embedding_provider=%s, model=%s, base_url=%s)",
             self.host,
             self.port,
             self.collection_name,
+            self.embedding_provider,
+            self.embedding_model,
+            self.embedding_base_url,
         )
 
     # --- REST API helper ---
@@ -469,19 +482,76 @@ class MilvusVectorDB:
     # --- Embedding ---
 
     async def _embed_text(self, text: str) -> list[float]:
-        """Embed text using Ollama embeddings API.
+        """Embed text using the configured embedding provider.
+
+        Supports both OpenAI-compatible and Ollama endpoints.
 
         Args:
             text: Text to embed.
 
         Returns:
-            Embedding vector of dimension EMBEDDING_DIM.
+            Embedding vector.
         """
         cache_key = hashlib.md5(text.encode()).hexdigest()
         if cache_key in self._embedding_cache:
             self._embedding_cache.move_to_end(cache_key)
             return self._embedding_cache[cache_key]
 
+        embedding = await self._call_embedding_api(text)
+
+        self._embedding_cache[cache_key] = embedding
+        while len(self._embedding_cache) > EMBEDDING_CACHE_MAX_SIZE:
+            self._embedding_cache.popitem(last=False)
+
+        return embedding
+
+    async def _call_embedding_api(self, text: str) -> list[float]:
+        """Call the embedding API based on configured provider.
+
+        Args:
+            text: Text to embed.
+
+        Returns:
+            Embedding vector.
+        """
+        session = await self._ensure_aiohttp_session()
+
+        if self.embedding_provider == EMBEDDING_PROVIDER_OPENAI:
+            return await self._embed_openai(session, text)
+        if self.embedding_provider == EMBEDDING_PROVIDER_OLLAMA:
+            return await self._embed_ollama(session, text)
+        raise ContextInjectionError(
+            f"Unknown embedding provider: {self.embedding_provider}"
+        )
+
+    async def _embed_openai(
+        self, session: aiohttp.ClientSession, text: str
+    ) -> list[float]:
+        """Embed via OpenAI-compatible /embeddings endpoint."""
+        url = f"{self.embedding_base_url.rstrip('/')}/embeddings"
+        headers: dict[str, str] = {"Content-Type": "application/json"}
+        if self.openai_api_key:
+            headers["Authorization"] = f"Bearer {self.openai_api_key}"
+        payload = {"model": self.embedding_model, "input": text}
+
+        try:
+            async with session.post(url, json=payload, headers=headers) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
+                    raise ContextInjectionError(
+                        f"Embedding API error {resp.status}: {error_text}"
+                    )
+                result = await resp.json()
+                return result["data"][0]["embedding"]
+        except aiohttp.ClientError as err:
+            raise ContextInjectionError(
+                f"Failed to get embedding from {url}: {err}"
+            ) from err
+
+    async def _embed_ollama(
+        self, session: aiohttp.ClientSession, text: str
+    ) -> list[float]:
+        """Embed via Ollama /api/embeddings endpoint."""
         url = f"{self.embedding_base_url.rstrip('/')}/api/embeddings"
         payload = {
             "model": self.embedding_model,
@@ -492,25 +562,18 @@ class MilvusVectorDB:
         }
 
         try:
-            session = await self._ensure_aiohttp_session()
-            async with session.post(url, json=payload) as response:
-                if response.status != 200:
-                    error_text = await response.text()
+            async with session.post(url, json=payload) as resp:
+                if resp.status != 200:
+                    error_text = await resp.text()
                     raise ContextInjectionError(
-                        f"Ollama embedding error {response.status}: {error_text}"
+                        f"Ollama embedding error {resp.status}: {error_text}"
                     )
-                result = await response.json()
-                embedding: list[float] = result["embedding"]
+                result = await resp.json()
+                return result["embedding"]
         except aiohttp.ClientError as err:
             raise ContextInjectionError(
                 f"Failed to get embedding from Ollama: {err}"
             ) from err
-
-        self._embedding_cache[cache_key] = embedding
-        while len(self._embedding_cache) > EMBEDDING_CACHE_MAX_SIZE:
-            self._embedding_cache.popitem(last=False)
-
-        return embedding
 
     async def _ensure_aiohttp_session(self) -> aiohttp.ClientSession:
         """Ensure aiohttp session exists."""
@@ -524,23 +587,7 @@ class MilvusVectorDB:
 
     async def _embed_text_raw(self, text: str) -> list[float]:
         """Embed text WITHOUT caching — used only for canary fingerprint."""
-        url = f"{self.embedding_base_url.rstrip('/')}/api/embeddings"
-        payload = {
-            "model": self.embedding_model,
-            "prompt": text,
-            "keep_alive": self.config.get(
-                CONF_EMBEDDING_KEEP_ALIVE, DEFAULT_EMBEDDING_KEEP_ALIVE
-            ),
-        }
-        session = await self._ensure_aiohttp_session()
-        async with session.post(url, json=payload) as response:
-            if response.status != 200:
-                error_text = await response.text()
-                raise ContextInjectionError(
-                    f"Ollama embedding error {response.status}: {error_text}"
-                )
-            result = await response.json()
-            return result["embedding"]
+        return await self._call_embedding_api(text)
 
     async def _async_compute_canary_fingerprint(self) -> tuple[str, int]:
         """Compute a deterministic fingerprint for the current embedding model.

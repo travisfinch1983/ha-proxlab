@@ -1323,8 +1323,12 @@ def ws_entity_scan_status(
     from .const import (
         CONF_ENTITY_SCAN_ENABLED,
         CONF_ENTITY_SCAN_INTERVAL,
+        CONF_VECTOR_DB_EMBEDDING_BASE_URL,
+        CONF_VECTOR_DB_EMBEDDING_MODEL,
         DEFAULT_ENTITY_SCAN_ENABLED,
         DEFAULT_ENTITY_SCAN_INTERVAL,
+        DEFAULT_VECTOR_DB_EMBEDDING_BASE_URL,
+        DEFAULT_VECTOR_DB_EMBEDDING_MODEL,
     )
 
     entry = _get_entry(hass, msg)
@@ -1333,20 +1337,28 @@ def ws_entity_scan_status(
         return
 
     options = dict(entry.options)
+    cfg = dict(entry.data) | options
     entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
     vector_manager = entry_data.get("vector_manager")
 
-    model_info = (
-        vector_manager.model_info
-        if vector_manager is not None and hasattr(vector_manager, "model_info")
-        else {
+    # Always read the configured embedding model from entry config
+    configured_model = cfg.get(
+        CONF_VECTOR_DB_EMBEDDING_MODEL, DEFAULT_VECTOR_DB_EMBEDDING_MODEL
+    )
+    configured_base_url = cfg.get(
+        CONF_VECTOR_DB_EMBEDDING_BASE_URL, DEFAULT_VECTOR_DB_EMBEDDING_BASE_URL
+    )
+
+    # Overlay live status from vector_manager if available
+    if vector_manager is not None and hasattr(vector_manager, "model_info"):
+        live = vector_manager.model_info
+    else:
+        live = {
             "fingerprint": None,
-            "embedding_model": "",
             "embedding_dim": 0,
             "collection_name": "",
             "connected": False,
         }
-    )
 
     connection.send_result(
         msg["id"],
@@ -1357,7 +1369,12 @@ def ws_entity_scan_status(
             "entity_scan_interval": options.get(
                 CONF_ENTITY_SCAN_INTERVAL, DEFAULT_ENTITY_SCAN_INTERVAL
             ),
-            **model_info,
+            "embedding_model": configured_model,
+            "embedding_base_url": configured_base_url,
+            "fingerprint": live["fingerprint"],
+            "embedding_dim": live.get("embedding_dim", 0),
+            "collection_name": live.get("collection_name", ""),
+            "connected": live.get("connected", False),
         },
     )
 

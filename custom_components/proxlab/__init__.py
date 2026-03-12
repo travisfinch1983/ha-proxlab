@@ -780,66 +780,71 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # --- Vector DB + Memory Manager (background, non-blocking) ---
     # Moved after service/WS/panel registration so Milvus/ChromaDB can't block them.
+
     async def _setup_vector_and_memory() -> None:
         """Set up vector DB backend and memory manager in background."""
         vector_manager = None
-        if context_mode == CONTEXT_MODE_VECTOR_DB:
-            vector_backend = config.get(
-                CONF_VECTOR_DB_BACKEND, DEFAULT_VECTOR_DB_BACKEND
-            )
+        _vector_backend = config.get(
+            CONF_VECTOR_DB_BACKEND, DEFAULT_VECTOR_DB_BACKEND
+        )
+        _LOGGER.info(
+            "Background vector/memory setup: vector_backend=%s, context_mode=%s",
+            _vector_backend,
+            context_mode,
+        )
 
-            if vector_backend == VECTOR_DB_BACKEND_MILVUS:
+        # Always init MilvusVectorDB when Milvus is the configured backend,
+        # regardless of context_mode — entity vectorization needs it even
+        # when the newer context provider system handles RAG context.
+        if _vector_backend == VECTOR_DB_BACKEND_MILVUS:
+            try:
+                from .vector_db_milvus import MilvusVectorDB
+
+                vector_manager = MilvusVectorDB(hass, config)
+                _LOGGER.info("Running MilvusVectorDB.async_setup()...")
+                await asyncio.wait_for(
+                    vector_manager.async_setup(), timeout=60.0
+                )
+                hass.data[DOMAIN][entry.entry_id][
+                    "vector_manager"
+                ] = vector_manager
+                _LOGGER.info("Milvus Vector DB backend enabled for this entry")
+
+                # Set up entity auto-scan timer if configured
                 try:
-                    # Import pymilvus in executor (heavy blocking I/O at import)
-                    await asyncio.wait_for(
-                        hass.async_add_executor_job(__import__, "pymilvus"),
-                        timeout=30.0,
-                    )
-                    from .vector_db_milvus import MilvusVectorDB
-
-                    vector_manager = MilvusVectorDB(hass, config)
-                    await asyncio.wait_for(
-                        vector_manager.async_setup(), timeout=15.0
-                    )
-                    hass.data[DOMAIN][entry.entry_id][
-                        "vector_manager"
-                    ] = vector_manager
-                    _LOGGER.info("Milvus Vector DB backend enabled for this entry")
-
-                    # Set up entity auto-scan timer if configured
-                    try:
-                        from .websocket_api import _rebuild_entity_scan_timer
-                        _rebuild_entity_scan_timer(hass, entry)
-                    except Exception as timer_err:
-                        _LOGGER.warning(
-                            "Failed to set up entity scan timer: %s", timer_err
-                        )
-                except asyncio.TimeoutError:
+                    from .websocket_api import _rebuild_entity_scan_timer
+                    _rebuild_entity_scan_timer(hass, entry)
+                except Exception as timer_err:
                     _LOGGER.warning(
-                        "Milvus Vector DB setup timed out — "
-                        "continuing without Milvus"
+                        "Failed to set up entity scan timer: %s", timer_err
                     )
-                except Exception as err:
-                    _LOGGER.error("Failed to set up Milvus backend: %s", err)
-            else:
-                try:
-                    from .vector_db_manager import VectorDBManager
+            except asyncio.TimeoutError:
+                _LOGGER.warning(
+                    "Milvus Vector DB setup timed out — "
+                    "continuing without Milvus"
+                )
+            except Exception as err:
+                _LOGGER.error("Failed to set up Milvus backend: %s", err)
+        elif context_mode == CONTEXT_MODE_VECTOR_DB:
+            # ChromaDB only when context_mode explicitly requires it
+            try:
+                from .vector_db_manager import VectorDBManager
 
-                    vector_manager = VectorDBManager(hass, config)
-                    await asyncio.wait_for(
-                        vector_manager.async_setup(), timeout=15.0
-                    )
-                    hass.data[DOMAIN][entry.entry_id][
-                        "vector_manager"
-                    ] = vector_manager
-                    _LOGGER.info("ChromaDB Vector DB backend enabled for this entry")
-                except asyncio.TimeoutError:
-                    _LOGGER.warning(
-                        "ChromaDB Vector DB setup timed out — "
-                        "continuing without ChromaDB"
-                    )
-                except Exception as err:
-                    _LOGGER.error("Failed to set up ChromaDB backend: %s", err)
+                vector_manager = VectorDBManager(hass, config)
+                await asyncio.wait_for(
+                    vector_manager.async_setup(), timeout=15.0
+                )
+                hass.data[DOMAIN][entry.entry_id][
+                    "vector_manager"
+                ] = vector_manager
+                _LOGGER.info("ChromaDB Vector DB backend enabled for this entry")
+            except asyncio.TimeoutError:
+                _LOGGER.warning(
+                    "ChromaDB Vector DB setup timed out — "
+                    "continuing without ChromaDB"
+                )
+            except Exception as err:
+                _LOGGER.error("Failed to set up ChromaDB backend: %s", err)
 
         # Set up memory manager if enabled
         memory_enabled = config.get(CONF_MEMORY_ENABLED, DEFAULT_MEMORY_ENABLED)
