@@ -175,6 +175,45 @@ export async function updateMemory(
   return callWS("proxlab/memory/update", fields);
 }
 
+// --- Entity Vectorization ---
+
+export interface ReindexResult {
+  success: boolean;
+  total: number;
+  indexed: number;
+  failed: number;
+  skipped: number;
+  fingerprint?: string;
+  embedding_model?: string;
+  embedding_dim?: number;
+  collection_name?: string;
+  error?: string;
+}
+
+export interface EntityScanStatus {
+  entity_scan_enabled: boolean;
+  entity_scan_interval: "hourly" | "daily" | "weekly";
+  fingerprint: string | null;
+  embedding_model: string;
+  embedding_dim: number;
+  collection_name: string;
+  connected: boolean;
+}
+
+export async function reindexEntities(): Promise<ReindexResult> {
+  return callWS("proxlab/entity/reindex");
+}
+
+export async function getEntityScanStatus(): Promise<EntityScanStatus> {
+  return callWS("proxlab/entity/scan_status");
+}
+
+export async function updateEntityScan(
+  fields: Partial<Pick<EntityScanStatus, "entity_scan_enabled" | "entity_scan_interval">>
+): Promise<void> {
+  return callWS("proxlab/entity/scan_update", fields);
+}
+
 // --- Settings ---
 
 export async function getSettings(): Promise<GeneralSettings> {

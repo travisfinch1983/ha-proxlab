@@ -206,6 +206,10 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_vector_db_delete)
     websocket_api.async_register_command(hass, ws_memory_get)
     websocket_api.async_register_command(hass, ws_memory_update)
+    # Entity Vectorization
+    websocket_api.async_register_command(hass, ws_entity_reindex)
+    websocket_api.async_register_command(hass, ws_entity_scan_status)
+    websocket_api.async_register_command(hass, ws_entity_scan_update)
     websocket_api.async_register_command(hass, ws_settings_get)
     websocket_api.async_register_command(hass, ws_settings_update)
     websocket_api.async_register_command(hass, ws_discovery_services)
@@ -1267,8 +1271,191 @@ async def ws_memory_update(
 
 
 # ---------------------------------------------------------------------------
-# Settings
+# Entity Vectorization
 # ---------------------------------------------------------------------------
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "proxlab/entity/reindex", vol.Optional("entry_id"): str}
+)
+@websocket_api.async_response
+async def ws_entity_reindex(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Reindex all HA entities into the Milvus vector store."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    vector_manager = entry_data.get("vector_manager")
+    if vector_manager is None:
+        connection.send_error(msg["id"], "not_ready", "Vector DB not initialised")
+        return
+
+    if getattr(vector_manager, "_fingerprint", None) is None:
+        connection.send_error(
+            msg["id"],
+            "no_fingerprint",
+            "Embedding model fingerprint unavailable — cannot index entities",
+        )
+        return
+
+    try:
+        stats = await vector_manager.async_reindex_all_entities()
+        result = {"success": True, **stats, **vector_manager.model_info}
+    except Exception as err:
+        _LOGGER.error("Entity reindex failed: %s", err)
+        result = {"success": False, "error": str(err)}
+
+    connection.send_result(msg["id"], result)
+
+
+@websocket_api.websocket_command(
+    {vol.Required("type"): "proxlab/entity/scan_status", vol.Optional("entry_id"): str}
+)
+@callback
+def ws_entity_scan_status(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Return entity scan config and model info."""
+    from .const import (
+        CONF_ENTITY_SCAN_ENABLED,
+        CONF_ENTITY_SCAN_INTERVAL,
+        DEFAULT_ENTITY_SCAN_ENABLED,
+        DEFAULT_ENTITY_SCAN_INTERVAL,
+    )
+
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_result(msg["id"], {})
+        return
+
+    options = dict(entry.options)
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    vector_manager = entry_data.get("vector_manager")
+
+    model_info = (
+        vector_manager.model_info
+        if vector_manager is not None and hasattr(vector_manager, "model_info")
+        else {
+            "fingerprint": None,
+            "embedding_model": "",
+            "embedding_dim": 0,
+            "collection_name": "",
+            "connected": False,
+        }
+    )
+
+    connection.send_result(
+        msg["id"],
+        {
+            "entity_scan_enabled": options.get(
+                CONF_ENTITY_SCAN_ENABLED, DEFAULT_ENTITY_SCAN_ENABLED
+            ),
+            "entity_scan_interval": options.get(
+                CONF_ENTITY_SCAN_INTERVAL, DEFAULT_ENTITY_SCAN_INTERVAL
+            ),
+            **model_info,
+        },
+    )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/entity/scan_update",
+        vol.Optional("entry_id"): str,
+        vol.Optional("entity_scan_enabled"): bool,
+        vol.Optional("entity_scan_interval"): vol.In(["hourly", "daily", "weekly"]),
+    }
+)
+@websocket_api.async_response
+async def ws_entity_scan_update(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Update entity auto-scan settings."""
+    from .const import CONF_ENTITY_SCAN_ENABLED, CONF_ENTITY_SCAN_INTERVAL
+
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+
+    new_options = dict(entry.options)
+    if "entity_scan_enabled" in msg:
+        new_options[CONF_ENTITY_SCAN_ENABLED] = msg["entity_scan_enabled"]
+    if "entity_scan_interval" in msg:
+        new_options[CONF_ENTITY_SCAN_INTERVAL] = msg["entity_scan_interval"]
+
+    hass.config_entries.async_update_entry(entry, options=new_options)
+
+    # Rebuild timer with new settings
+    _rebuild_entity_scan_timer(hass, entry)
+
+    connection.send_result(msg["id"], {})
+
+
+def _rebuild_entity_scan_timer(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> None:
+    """Cancel and optionally re-create the periodic entity scan timer."""
+    from datetime import timedelta
+
+    from homeassistant.helpers.event import async_track_time_interval
+
+    from .const import (
+        CONF_ENTITY_SCAN_ENABLED,
+        CONF_ENTITY_SCAN_INTERVAL,
+        DEFAULT_ENTITY_SCAN_ENABLED,
+        DEFAULT_ENTITY_SCAN_INTERVAL,
+    )
+
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+
+    # Cancel existing timer
+    unsub = entry_data.pop("_entity_scan_unsub", None)
+    if unsub is not None:
+        unsub()
+        _LOGGER.debug("Cancelled existing entity scan timer")
+
+    options = dict(entry.options)
+    enabled = options.get(CONF_ENTITY_SCAN_ENABLED, DEFAULT_ENTITY_SCAN_ENABLED)
+    interval_key = options.get(CONF_ENTITY_SCAN_INTERVAL, DEFAULT_ENTITY_SCAN_INTERVAL)
+
+    vector_manager = entry_data.get("vector_manager")
+    has_fingerprint = (
+        vector_manager is not None
+        and getattr(vector_manager, "_fingerprint", None) is not None
+    )
+
+    if not enabled or not has_fingerprint:
+        return
+
+    interval_map = {
+        "hourly": timedelta(hours=1),
+        "daily": timedelta(hours=24),
+        "weekly": timedelta(days=7),
+    }
+    interval = interval_map.get(interval_key, timedelta(hours=24))
+
+    async def _scheduled_reindex(_now: Any) -> None:
+        """Run entity reindex on schedule."""
+        vm = entry_data.get("vector_manager")
+        if vm is None or getattr(vm, "_fingerprint", None) is None:
+            return
+        try:
+            stats = await vm.async_reindex_all_entities()
+            _LOGGER.info("Scheduled entity reindex: %s", stats)
+        except Exception as err:
+            _LOGGER.error("Scheduled entity reindex failed: %s", err)
+
+    entry_data["_entity_scan_unsub"] = async_track_time_interval(
+        hass, _scheduled_reindex, interval
+    )
+    _LOGGER.info(
+        "Entity scan timer set: interval=%s, enabled=%s", interval_key, enabled
+    )
 
 
 @websocket_api.websocket_command(

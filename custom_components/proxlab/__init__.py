@@ -805,6 +805,15 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         "vector_manager"
                     ] = vector_manager
                     _LOGGER.info("Milvus Vector DB backend enabled for this entry")
+
+                    # Set up entity auto-scan timer if configured
+                    try:
+                        from .websocket_api import _rebuild_entity_scan_timer
+                        _rebuild_entity_scan_timer(hass, entry)
+                    except Exception as timer_err:
+                        _LOGGER.warning(
+                            "Failed to set up entity scan timer: %s", timer_err
+                        )
                 except asyncio.TimeoutError:
                     _LOGGER.warning(
                         "Milvus Vector DB setup timed out — "
@@ -917,6 +926,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         # Shut down health coordinator if it exists
         if "coordinator" in entry_data:
             await entry_data["coordinator"].async_shutdown()
+
+        # Cancel entity scan timer if it exists
+        unsub = entry_data.pop("_entity_scan_unsub", None)
+        if unsub is not None:
+            unsub()
 
         # Shut down memory manager if it exists
         if "memory_manager" in entry_data:

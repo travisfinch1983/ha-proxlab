@@ -15,6 +15,7 @@ from typing import Any
 import aiohttp
 
 from .const import (
+    CANARY_PHRASE,
     CONF_EMBEDDING_KEEP_ALIVE,
     CONF_MILVUS_COLLECTION,
     CONF_MILVUS_HOST,
@@ -27,6 +28,7 @@ from .const import (
     DEFAULT_MILVUS_PORT,
     DEFAULT_VECTOR_DB_EMBEDDING_BASE_URL,
     DEFAULT_VECTOR_DB_EMBEDDING_MODEL,
+    ENTITY_COLLECTION_PREFIX,
 )
 from .exceptions import ContextInjectionError
 
@@ -50,7 +52,7 @@ _LOGGER = logging.getLogger(__name__)
 
 # Embedding config
 EMBEDDING_CACHE_MAX_SIZE = 1000
-EMBEDDING_DIM = 4096  # qwen3-embedding:8b dimension
+DEFAULT_EMBEDDING_DIM = 4096  # qwen3-embedding:8b dimension
 
 
 class MilvusVectorDB:
@@ -97,6 +99,11 @@ class MilvusVectorDB:
         self._aiohttp_session: aiohttp.ClientSession | None = None
         self._connected = False
 
+        # Dynamic embedding dimension and canary fingerprint
+        self.embedding_dim: int = DEFAULT_EMBEDDING_DIM
+        self._fingerprint: str | None = None
+        self._entity_collection_name: str | None = None
+
         _LOGGER.info(
             "Milvus backend initialized (host=%s:%s, collection=%s)",
             self.host,
@@ -105,7 +112,37 @@ class MilvusVectorDB:
         )
 
     async def async_setup(self) -> None:
-        """Connect to Milvus and ensure collection exists."""
+        """Connect to Milvus and ensure collection exists.
+
+        Computes a canary fingerprint to derive a model-specific entity
+        collection name.  If the embedding model is unreachable the
+        fingerprint is left as None and entity indexing is disabled, but
+        Milvus connection proceeds so card collections still work.
+        """
+        # 1. Compute canary fingerprint (15s timeout)
+        try:
+            fp, dim = await asyncio.wait_for(
+                self._async_compute_canary_fingerprint(), timeout=15.0
+            )
+            self._fingerprint = fp
+            self.embedding_dim = dim
+            self._entity_collection_name = f"{ENTITY_COLLECTION_PREFIX}{fp}"
+            _LOGGER.info(
+                "Canary fingerprint: %s  (dim=%d, collection=%s)",
+                fp,
+                dim,
+                self._entity_collection_name,
+            )
+        except Exception as err:
+            _LOGGER.warning(
+                "Could not compute canary fingerprint — entity indexing "
+                "disabled until next restart: %s",
+                err,
+            )
+            self._fingerprint = None
+            self._entity_collection_name = None
+
+        # 2. Connect to Milvus (entity + card collections)
         try:
             await self.hass.async_add_executor_job(self._connect_and_init)
             _LOGGER.info("Milvus backend setup complete")
@@ -124,8 +161,10 @@ class MilvusVectorDB:
             timeout=10,
         )
 
-        if not utility.has_collection(self.collection_name, using=alias):
-            _LOGGER.info("Creating Milvus collection: %s", self.collection_name)
+        # Entity collection — uses fingerprint-derived name if available
+        entity_col_name = self._entity_collection_name or self.collection_name
+        if not utility.has_collection(entity_col_name, using=alias):
+            _LOGGER.info("Creating Milvus collection: %s", entity_col_name)
             fields = [
                 FieldSchema(
                     name="id",
@@ -141,7 +180,7 @@ class MilvusVectorDB:
                 FieldSchema(
                     name="embedding",
                     dtype=DataType.FLOAT_VECTOR,
-                    dim=EMBEDDING_DIM,
+                    dim=self.embedding_dim,
                 ),
                 FieldSchema(
                     name="metadata",
@@ -153,7 +192,7 @@ class MilvusVectorDB:
                 description="ProxLab entity embeddings",
             )
             self._collection = Collection(
-                name=self.collection_name,
+                name=entity_col_name,
                 schema=schema,
                 using=alias,
             )
@@ -167,7 +206,7 @@ class MilvusVectorDB:
             _LOGGER.info("Created Milvus collection with IVF_FLAT index")
         else:
             self._collection = Collection(
-                name=self.collection_name, using=alias
+                name=entity_col_name, using=alias
             )
 
         # Load collection into memory for searching
@@ -198,6 +237,10 @@ class MilvusVectorDB:
         """
         if not self._connected or self._collection is None:
             raise ContextInjectionError("Milvus not connected")
+        if self._fingerprint is None:
+            raise ContextInjectionError(
+                "Entity indexing disabled — embedding model fingerprint unavailable"
+            )
 
         state = self.hass.states.get(entity_id)
         if state is None:
@@ -432,6 +475,52 @@ class MilvusVectorDB:
             )
         return self._aiohttp_session
 
+    # --- Canary fingerprint & model info ---
+
+    async def _embed_text_raw(self, text: str) -> list[float]:
+        """Embed text WITHOUT caching — used only for canary fingerprint."""
+        url = f"{self.embedding_base_url.rstrip('/')}/api/embeddings"
+        payload = {
+            "model": self.embedding_model,
+            "prompt": text,
+            "keep_alive": self.config.get(
+                CONF_EMBEDDING_KEEP_ALIVE, DEFAULT_EMBEDDING_KEEP_ALIVE
+            ),
+        }
+        session = await self._ensure_aiohttp_session()
+        async with session.post(url, json=payload) as response:
+            if response.status != 200:
+                error_text = await response.text()
+                raise ContextInjectionError(
+                    f"Ollama embedding error {response.status}: {error_text}"
+                )
+            result = await response.json()
+            return result["embedding"]
+
+    async def _async_compute_canary_fingerprint(self) -> tuple[str, int]:
+        """Compute a deterministic fingerprint for the current embedding model.
+
+        Returns (fingerprint_hex_12, actual_dimension).
+        """
+        vec = await self._embed_text_raw(CANARY_PHRASE)
+        dim = len(vec)
+        # Take first 8 floats, truncate to 6 decimal places
+        sample = ",".join(f"{v:.6f}" for v in vec[:8])
+        tag = f"{dim}:{sample}"
+        fp = hashlib.sha256(tag.encode()).hexdigest()[:12]
+        return fp, dim
+
+    @property
+    def model_info(self) -> dict[str, Any]:
+        """Return model/fingerprint metadata for UI display."""
+        return {
+            "fingerprint": self._fingerprint,
+            "embedding_model": self.embedding_model,
+            "embedding_dim": self.embedding_dim,
+            "collection_name": self._entity_collection_name or self.collection_name,
+            "connected": self._connected,
+        }
+
     # --- Per-card collection methods ---
 
     async def create_card_collection(self, card_id: str) -> str:
@@ -466,7 +555,7 @@ class MilvusVectorDB:
                 FieldSchema(
                     name="embedding",
                     dtype=DataType.FLOAT_VECTOR,
-                    dim=EMBEDDING_DIM,
+                    dim=self.embedding_dim,
                 ),
                 FieldSchema(
                     name="metadata",

@@ -340,6 +340,14 @@ CONF_ADDITIONAL_COLLECTIONS: Final = "additional_collections"
 CONF_ADDITIONAL_TOP_K: Final = "additional_top_k"
 CONF_ADDITIONAL_L2_DISTANCE_THRESHOLD: Final = "additional_l2_distance_threshold"
 
+# Configuration keys - Entity Scan / Canary Fingerprint
+CONF_ENTITY_SCAN_ENABLED: Final = "entity_scan_enabled"
+CONF_ENTITY_SCAN_INTERVAL: Final = "entity_scan_interval"
+DEFAULT_ENTITY_SCAN_ENABLED: Final = False
+DEFAULT_ENTITY_SCAN_INTERVAL: Final = "daily"
+CANARY_PHRASE: Final = "proxlab_model_fingerprint_canary"
+ENTITY_COLLECTION_PREFIX: Final = "proxlab_entities_"
+
 # Configuration keys - Conversation History
 CONF_HISTORY_ENABLED: Final = "history_enabled"
 CONF_HISTORY_MAX_MESSAGES: Final = "history_max_messages"
