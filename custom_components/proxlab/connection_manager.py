@@ -370,10 +370,24 @@ def resolve_connections_to_flat_config(config: dict[str, Any]) -> dict[str, Any]
     )
     if emb_conn:
         config[CONF_VECTOR_DB_EMBEDDING_BASE_URL] = normalize_url(emb_conn.get("base_url", ""))
-        config[CONF_VECTOR_DB_EMBEDDING_MODEL] = emb_conn.get("model", "")
-        config[CONF_VECTOR_DB_EMBEDDING_PROVIDER] = emb_conn.get(
-            "embedding_provider", DEFAULT_VECTOR_DB_EMBEDDING_PROVIDER
+
+        # Model: prefer agent's primary_model_override, then connection model
+        agents_cfg = config.get(CONF_AGENTS, {})
+        emb_agent_cfg = agents_cfg.get(AGENT_EMBEDDINGS, {})
+        emb_model = (
+            emb_agent_cfg.get("primary_model_override")
+            or emb_conn.get("model", "")
         )
+        config[CONF_VECTOR_DB_EMBEDDING_MODEL] = emb_model
+
+        # Provider: explicit embedding_provider → connection_type → default
+        emb_provider = (
+            emb_conn.get("embedding_provider")
+            or emb_conn.get("connection_type")
+            or DEFAULT_VECTOR_DB_EMBEDDING_PROVIDER
+        )
+        config[CONF_VECTOR_DB_EMBEDDING_PROVIDER] = emb_provider
+
         config[CONF_OPENAI_API_KEY] = emb_conn.get("api_key", "")
         config[CONF_EMBEDDING_KEEP_ALIVE] = emb_conn.get("keep_alive", "5m")
 

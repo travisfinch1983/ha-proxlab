@@ -38,6 +38,7 @@ const EMPTY_CONN: Omit<Connection, "id"> = {
   model: "",
   capabilities: [],
   connection_type: "openai",
+  embedding_provider: "openai",
   temperature: 0.7,
   max_tokens: 500,
   top_p: 1.0,
@@ -110,6 +111,16 @@ export default function ConnectionsPage() {
 
   const handleSave = async () => {
     setSaving(true);
+
+    // Ensure embedding_provider is always saved when embedding caps are present
+    const hasEmb =
+      form.capabilities?.includes("embeddings") ||
+      form.capabilities?.includes("multimodal_embeddings");
+    if (hasEmb && !form.embedding_provider) {
+      form.embedding_provider =
+        form.connection_type === "ollama" ? "ollama" : "openai";
+    }
+
     try {
       if (isNew) {
         const { connection_id } = await createConnection(form);
@@ -635,12 +646,7 @@ export default function ConnectionsPage() {
                       </div>
                       <select
                         className="select select-bordered select-xs"
-                        value={
-                          form.embedding_provider ??
-                          (form.connection_type === "ollama"
-                            ? "ollama"
-                            : "openai")
-                        }
+                        value={form.embedding_provider ?? "openai"}
                         onChange={(e) =>
                           setForm((f) => ({
                             ...f,
