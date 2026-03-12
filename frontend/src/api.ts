@@ -198,6 +198,7 @@ export interface EntityScanStatus {
   embedding_dim: number;
   collection_name: string;
   connected: boolean;
+  capabilities: string[];
 }
 
 export async function reindexEntities(): Promise<ReindexResult> {
