@@ -663,7 +663,7 @@ export async function reconnectMcpServer(
 
 // --- Model Discovery ---
 
-import type { DiscoveredModel, HfEnrichment } from "./types";
+import type { DiscoveredModel, HfEnrichment, HfReadmeResult } from "./types";
 
 export async function discoverModels(
   forceRefresh = false
@@ -682,6 +682,17 @@ export async function fetchHfEnrichment(): Promise<
     "proxlab/models/hf_enrich"
   );
   return res.enrichment;
+}
+
+export async function fetchHfReadme(
+  model: DiscoveredModel
+): Promise<HfReadmeResult> {
+  return callWS<HfReadmeResult>("proxlab/models/hf_readme", {
+    model_id: model.id,
+    provider: model.provider,
+    family: model.family ?? undefined,
+    extras: model.extras as Record<string, unknown>,
+  });
 }
 
 // --- Agent Profiles ---

@@ -1,7 +1,9 @@
 """HuggingFace model enrichment for ProxLab.
 
 Resolves provider model IDs to HuggingFace repo slugs, fetches metadata
-from the HF API, and caches results persistently with a 7-day TTL.
+from the HF API (including org avatars), and provides on-demand README
+fetching and GGUF quant-repo search.  Results cached persistently with
+a 7-day TTL.
 """
 
 from __future__ import annotations
@@ -15,7 +17,6 @@ from typing import Any
 
 import aiohttp
 
-from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
@@ -25,11 +26,20 @@ _LOGGER = logging.getLogger(__name__)
 # Cache entry TTL (seconds) — 7 days
 _CACHE_TTL = 7 * 24 * 3600
 
+# Org avatar cache TTL — 30 days
+_ORG_AVATAR_TTL = 30 * 24 * 3600
+
 # Max concurrent HF API requests
 _HF_CONCURRENCY = 3
 
 # HF API timeout (seconds)
 _HF_TIMEOUT = 10
+
+# README fetch timeout (seconds)
+_README_TIMEOUT = 15
+
+# Max README size to store (characters)
+_README_MAX_CHARS = 50_000
 
 # ---------------------------------------------------------------------------
 # Org map: model family prefix -> HuggingFace org
@@ -126,7 +136,6 @@ def _find_org(name_lower: str) -> str | None:
 
 def _build_hf_slug(org: str, name: str, size: str | None) -> str:
     """Construct a likely HF repo slug from org + model name + size."""
-    # Capitalize first letter of each segment
     parts = name.replace(".", "-").replace("_", "-").split("-")
     pretty = "-".join(p.capitalize() if not p[0].isdigit() else p for p in parts if p)
     if size:
@@ -140,47 +149,36 @@ def resolve_hf_slug(
     family: str | None = None,
     extras: dict[str, Any] | None = None,
 ) -> str | None:
-    """Resolve a provider model ID to a HuggingFace repo slug.
-
-    Returns None if the model cannot be mapped (e.g., proprietary Claude models).
-    """
+    """Resolve a provider model ID to a HuggingFace repo slug."""
     extras = extras or {}
 
-    # Claude models are proprietary — no HF page
     if provider == "claude":
         return None
 
-    # vLLM typically uses the HF repo slug directly
     if provider == "vllm":
         if "/" in model_id:
             return model_id
-        # Try family-based lookup
         if family:
             org = _find_org(family.lower())
             if org:
                 return _build_hf_slug(org, model_id, None)
         return None
 
-    # Ollama: parse tag name
     if provider == "ollama":
         name, size = _normalize_ollama_name(model_id)
         org = _find_org(name.lower())
         if org:
             return _build_hf_slug(org, name, size)
-        # Try family field
         if family:
             org = _find_org(family.lower())
             if org:
                 return _build_hf_slug(org, family, size)
         return None
 
-    # KoboldCpp: parse GGUF filename
     if provider == "koboldcpp":
         filename = extras.get("gguf_file") or model_id
-        # Strip .gguf extension and quant suffix
         base = re.sub(r"\.gguf$", "", filename, flags=re.IGNORECASE)
         base = _QUANT_PATTERN.sub("", base).rstrip("-_")
-        # Check if it already contains a slash (full HF path)
         if "/" in base:
             return base
         org = _find_org(base.lower())
@@ -199,6 +197,53 @@ def resolve_hf_slug(
     if org:
         return _build_hf_slug(org, model_id, None)
     return None
+
+
+# ---------------------------------------------------------------------------
+# Org avatar fetcher (cached per-org)
+# ---------------------------------------------------------------------------
+
+# In-memory org avatar cache: {org_name: {"url": str, "fetched_at": float}}
+_org_avatar_cache: dict[str, dict[str, Any]] = {}
+
+
+async def _fetch_org_avatar(
+    session: aiohttp.ClientSession,
+    author: str,
+) -> str:
+    """Fetch org/user avatar URL from HuggingFace API."""
+    if not author:
+        return ""
+
+    # Check in-memory cache
+    cached = _org_avatar_cache.get(author)
+    if cached and (time.time() - cached.get("fetched_at", 0)) < _ORG_AVATAR_TTL:
+        return cached["url"]
+
+    # Try organization endpoint first, then user endpoint
+    for endpoint in (
+        f"https://huggingface.co/api/organizations/{author}/overview",
+        f"https://huggingface.co/api/users/{author}",
+    ):
+        try:
+            async with session.get(
+                endpoint, timeout=aiohttp.ClientTimeout(total=5)
+            ) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    avatar = data.get("avatarUrl", "")
+                    if avatar:
+                        _org_avatar_cache[author] = {
+                            "url": avatar,
+                            "fetched_at": time.time(),
+                        }
+                        return avatar
+        except Exception:
+            continue
+
+    # Cache the miss too
+    _org_avatar_cache[author] = {"url": "", "fetched_at": time.time()}
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -235,15 +280,12 @@ async def fetch_hf_info(
             fetched_at=time.time(),
         )
 
-    # Extract fields
     tags = data.get("tags", [])
     card_data = data.get("cardData") or {}
     author = data.get("author", "")
 
-    # Description: prefer cardData.model_summary, else first paragraph of model card
-    description = ""
-    if card_data.get("model_summary"):
-        description = card_data["model_summary"]
+    # Description from cardData
+    description = card_data.get("model_summary", "")
 
     # License from tags
     license_str = ""
@@ -255,18 +297,15 @@ async def fetch_hf_info(
     # Model type
     model_type = "MoE" if any("moe" in t.lower() for t in tags) else "Dense"
 
-    # Pipeline tag
-    pipeline_tag = data.get("pipeline_tag", "")
-
-    # Org logo
-    logo_url = f"https://huggingface.co/avatars/{author}" if author else ""
+    # Org avatar
+    logo_url = await _fetch_org_avatar(session, author)
 
     return HfModelInfo(
         hf_repo=repo_slug,
         description=description,
-        pipeline_tag=pipeline_tag,
+        pipeline_tag=data.get("pipeline_tag", ""),
         model_type=model_type,
-        tags=tags[:20],  # limit stored tags
+        tags=tags[:20],
         license=license_str,
         author=author,
         last_modified=data.get("lastModified", ""),
@@ -277,6 +316,143 @@ async def fetch_hf_info(
         fetched_at=time.time(),
         status="ok",
     )
+
+
+# ---------------------------------------------------------------------------
+# README fetcher (on-demand, not cached in persistent store)
+# ---------------------------------------------------------------------------
+
+
+def _strip_yaml_frontmatter(text: str) -> str:
+    """Strip YAML frontmatter (---...---) from README content."""
+    if text.startswith("---"):
+        end = text.find("---", 3)
+        if end != -1:
+            text = text[end + 3:].lstrip("\n")
+    return text
+
+
+async def fetch_readme(
+    session: aiohttp.ClientSession,
+    repo_slug: str,
+) -> str:
+    """Fetch README.md content from a HuggingFace repo."""
+    url = f"https://huggingface.co/{repo_slug}/raw/main/README.md"
+    try:
+        async with session.get(
+            url, timeout=aiohttp.ClientTimeout(total=_README_TIMEOUT)
+        ) as resp:
+            if resp.status != 200:
+                return ""
+            text = await resp.text()
+            text = _strip_yaml_frontmatter(text)
+            return text[:_README_MAX_CHARS]
+    except Exception as err:
+        _LOGGER.debug("README fetch error for %s: %s", repo_slug, err)
+        return ""
+
+
+# ---------------------------------------------------------------------------
+# GGUF quant-repo search
+# ---------------------------------------------------------------------------
+
+
+async def search_gguf_repo(
+    session: aiohttp.ClientSession,
+    model_name: str,
+) -> str | None:
+    """Search HuggingFace for a GGUF repo matching the model name.
+
+    Returns the best-matching repo slug, or None.
+    """
+    # Build search query: strip common suffixes, add -GGUF
+    search_name = re.sub(r"[-_](?:instruct|chat|base)$", "", model_name, flags=re.IGNORECASE)
+    search_query = f"{search_name}-GGUF"
+
+    url = "https://huggingface.co/api/models"
+    params = {
+        "search": search_query,
+        "filter": "gguf",
+        "sort": "likes",
+        "direction": "-1",
+        "limit": "5",
+    }
+    try:
+        async with session.get(
+            url, params=params, timeout=aiohttp.ClientTimeout(total=_HF_TIMEOUT)
+        ) as resp:
+            if resp.status != 200:
+                return None
+            results = await resp.json()
+    except Exception as err:
+        _LOGGER.debug("GGUF search error for %s: %s", search_query, err)
+        return None
+
+    if not results:
+        return None
+
+    # Prefer exact match (contains the model name in the repo ID)
+    name_lower = model_name.lower().replace(".", "-")
+    for r in results:
+        rid = r.get("_id", r.get("id", "")).lower()
+        if name_lower in rid and "gguf" in rid:
+            return r.get("id", r.get("_id"))
+
+    # Fall back to first result
+    return results[0].get("id", results[0].get("_id"))
+
+
+# ---------------------------------------------------------------------------
+# On-demand README + GGUF info for a single model
+# ---------------------------------------------------------------------------
+
+
+async def fetch_model_readmes(
+    hass: HomeAssistant,
+    entry_id: str,
+    model_id: str,
+    provider: str,
+    family: str | None = None,
+    extras: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Fetch README content for base model and GGUF quant repo.
+
+    Returns:
+        {
+            "base_repo": "Qwen/Qwen3-8B",
+            "base_readme": "# Qwen3-8B\n...",
+            "quant_repo": "bartowski/Qwen3-8B-GGUF" | null,
+            "quant_readme": "# ...\n..." | "",
+        }
+    """
+    slug = resolve_hf_slug(model_id, provider, family, extras)
+    if not slug:
+        return {
+            "base_repo": None,
+            "base_readme": "",
+            "quant_repo": None,
+            "quant_readme": "",
+        }
+
+    async with aiohttp.ClientSession() as session:
+        # Fetch base README
+        base_readme = await fetch_readme(session, slug)
+
+        # Search for GGUF quant repo
+        # Extract just the model name (after org/)
+        base_name = slug.split("/", 1)[1] if "/" in slug else slug
+        quant_repo = await search_gguf_repo(session, base_name)
+
+        quant_readme = ""
+        if quant_repo and quant_repo != slug:
+            quant_readme = await fetch_readme(session, quant_repo)
+
+    return {
+        "base_repo": slug,
+        "base_readme": base_readme,
+        "quant_repo": quant_repo,
+        "quant_readme": quant_readme,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -292,7 +468,6 @@ async def enrich_models(
     """Enrich discovered models with HF metadata.
 
     Returns a dict keyed by "{connection_id}:{model_id}" -> HfModelInfo dict.
-    Uses persistent cache with 7-day TTL per HF repo slug.
     """
     domain_data = hass.data.get(DOMAIN, {}).get(entry_id, {})
     hf_data = domain_data.get("hf_enrichment", {"models": {}, "updated_at": 0})
@@ -303,9 +478,8 @@ async def enrich_models(
     sem = asyncio.Semaphore(_HF_CONCURRENCY)
     result: dict[str, dict[str, Any]] = {}
 
-    # Build map: unique_key -> (slug, model_dict)
-    to_fetch: dict[str, str] = {}  # slug -> first unique_key (for tracking)
-    slug_map: dict[str, str | None] = {}  # unique_key -> slug
+    to_fetch: dict[str, str] = {}
+    slug_map: dict[str, str | None] = {}
 
     for m in models:
         unique_key = f"{m.get('connection_id', '')}:{m.get('id', '')}"
@@ -318,21 +492,17 @@ async def enrich_models(
         slug_map[unique_key] = slug
 
         if slug is None:
-            # Unmapped (e.g., Claude)
             info = HfModelInfo(status="unmapped", fetched_at=now)
             result[unique_key] = asdict(info)
             continue
 
-        # Check cache
         cached = cache.get(slug)
         if cached and (now - cached.get("fetched_at", 0)) < _CACHE_TTL:
             result[unique_key] = cached
             continue
 
-        # Need to fetch
         to_fetch[slug] = unique_key
 
-    # Fetch missing/stale entries
     if to_fetch:
         async with aiohttp.ClientSession() as session:
             async def _fetch(slug: str) -> tuple[str, HfModelInfo]:
@@ -350,16 +520,14 @@ async def enrich_models(
             info_dict = asdict(info)
             cache[slug] = info_dict
 
-    # Map all results
     for unique_key, slug in slug_map.items():
         if unique_key in result:
-            continue  # already set (unmapped or cached)
+            continue
         if slug and slug in cache:
             result[unique_key] = cache[slug]
         else:
             result[unique_key] = asdict(HfModelInfo(status="error", fetched_at=now))
 
-    # Persist cache
     hf_data["models"] = cache
     hf_data["updated_at"] = now
     if hf_store:

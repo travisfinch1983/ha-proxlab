@@ -286,6 +286,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     # Model discovery
     websocket_api.async_register_command(hass, ws_models_discover)
     websocket_api.async_register_command(hass, ws_models_hf_enrich)
+    websocket_api.async_register_command(hass, ws_models_hf_readme)
 
 
 # ---------------------------------------------------------------------------
@@ -4224,3 +4225,40 @@ async def ws_models_hf_enrich(
     except Exception as err:
         _LOGGER.error("HF enrichment failed: %s", err, exc_info=True)
         connection.send_error(msg["id"], "enrichment_failed", str(err))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/models/hf_readme",
+        vol.Optional("entry_id"): str,
+        vol.Required("model_id"): str,
+        vol.Required("provider"): str,
+        vol.Optional("family"): str,
+        vol.Optional("extras"): dict,
+    }
+)
+@websocket_api.async_response
+async def ws_models_hf_readme(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Fetch README content for a model's base and GGUF repos."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+
+    from .hf_enrichment import fetch_model_readmes
+
+    try:
+        result = await fetch_model_readmes(
+            hass,
+            entry.entry_id,
+            model_id=msg["model_id"],
+            provider=msg["provider"],
+            family=msg.get("family"),
+            extras=msg.get("extras"),
+        )
+        connection.send_result(msg["id"], result)
+    except Exception as err:
+        _LOGGER.error("HF readme fetch failed: %s", err, exc_info=True)
+        connection.send_error(msg["id"], "readme_failed", str(err))

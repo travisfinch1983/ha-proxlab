@@ -371,6 +371,13 @@ export interface HfEnrichment {
   status: "ok" | "not_found" | "error" | "unmapped";
 }
 
+export interface HfReadmeResult {
+  base_repo: string | null;
+  base_readme: string;
+  quant_repo: string | null;
+  quant_readme: string;
+}
+
 export const CAPABILITY_LABELS: Record<string, string> = {
   conversation: "Conversational LLM",
   tool_use: "Tool Use (LLM)",

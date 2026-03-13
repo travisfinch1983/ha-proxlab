@@ -1,9 +1,17 @@
-import { useRef, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
+import Markdown from "react-markdown";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faXmark, faArrowUpRightFromSquare } from "@fortawesome/free-solid-svg-icons";
-import type { DiscoveredModel, HfEnrichment } from "../types";
+import {
+  faXmark,
+  faArrowUpRightFromSquare,
+  faSpinner,
+  faBook,
+  faBoxesStacked,
+} from "@fortawesome/free-solid-svg-icons";
+import { fetchHfReadme } from "../api";
+import type { DiscoveredModel, HfEnrichment, HfReadmeResult } from "../types";
 
-/** Format seconds to "2h 15m" / "5m 30s". */
+/** Format seconds to "2h 15m". */
 function fmtUptime(sec: number | null): string {
   if (!sec) return "-";
   if (sec >= 3600) {
@@ -27,6 +35,8 @@ function fmtCtxFull(n: number | null): string {
   return n.toLocaleString();
 }
 
+type Tab = "base" | "quant";
+
 interface Props {
   model: DiscoveredModel;
   enrichment?: HfEnrichment;
@@ -34,8 +44,10 @@ interface Props {
 }
 
 export default function ModelDetailPanel({ model, enrichment, onClose }: Props) {
-  const ref = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [readmeData, setReadmeData] = useState<HfReadmeResult | null>(null);
+  const [readmeLoading, setReadmeLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<Tab>("base");
   const hfOk = enrichment && enrichment.status === "ok";
 
   // Animate open on mount
@@ -43,33 +55,44 @@ export default function ModelDetailPanel({ model, enrichment, onClose }: Props) 
     requestAnimationFrame(() => setOpen(true));
   }, []);
 
+  // Fetch README on mount
+  useEffect(() => {
+    if (model.provider === "claude") return;
+    let cancelled = false;
+    setReadmeLoading(true);
+    fetchHfReadme(model)
+      .then((data) => {
+        if (!cancelled) {
+          setReadmeData(data);
+          // Default to quant tab if no base readme but quant exists
+          if (!data.base_readme && data.quant_readme) {
+            setActiveTab("quant");
+          }
+        }
+      })
+      .catch((err) => console.error("README fetch failed:", err))
+      .finally(() => {
+        if (!cancelled) setReadmeLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [model]);
+
   // Capability tags
   const capTags: string[] = [];
-  if (model.extras?.connection_capabilities) {
-    const caps = model.extras.connection_capabilities as string[];
-    const labels: Record<string, string> = {
-      conversation: "Conversational LLM",
-      tool_use: "Tool Use",
-      vision: "Vision",
-      embeddings: "Embeddings",
-      tts: "Text-to-Speech",
-      stt: "Speech-to-Text",
-      reranker: "Reranker",
-    };
-    caps.forEach((c) => {
-      if (labels[c]) capTags.push(labels[c]);
-    });
-  }
-  if (model.supports_vision && !capTags.includes("Vision")) capTags.push("Vision");
-  if (model.supports_tool_use && !capTags.includes("Tool Use")) capTags.push("Tool Use");
-  if (model.supports_embeddings && !capTags.includes("Embeddings")) capTags.push("Embeddings");
+  if (model.supports_vision) capTags.push("Vision");
+  if (model.supports_tool_use) capTags.push("Tool Use");
+  if (model.supports_embeddings) capTags.push("Embeddings");
   if (model.supports_audio) capTags.push("Audio");
+  if (model.supports_tts) capTags.push("TTS");
+
+  const hasBaseReadme = readmeData?.base_readme;
+  const hasQuantReadme = readmeData?.quant_readme;
+  const hasAnyReadme = hasBaseReadme || hasQuantReadme;
 
   return (
     <div
-      ref={ref}
       className="col-span-full overflow-hidden transition-all duration-300 ease-in-out"
-      style={{ maxHeight: open ? "600px" : "0px" }}
+      style={{ maxHeight: open ? "1200px" : "0px" }}
     >
       <div className="card bg-base-100 border border-primary/30 shadow-lg m-1">
         <div className="card-body p-4 gap-3">
@@ -98,7 +121,7 @@ export default function ModelDetailPanel({ model, enrichment, onClose }: Props) 
             </button>
           </div>
 
-          {/* Two-column layout */}
+          {/* Two-column: specs + capabilities/performance */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Left: Specs */}
             <div className="space-y-1">
@@ -172,15 +195,14 @@ export default function ModelDetailPanel({ model, enrichment, onClose }: Props) 
                   </h4>
                   <div className="flex flex-wrap gap-1">
                     {capTags.map((tag) => (
-                      <span key={tag} className="badge badge-sm badge-outline">
-                        {tag}
-                      </span>
+                      <span key={tag} className="badge badge-sm badge-outline">{tag}</span>
                     ))}
                   </div>
                 </div>
               )}
 
-              {(model.generation_speed || model.prompt_speed || model.uptime_seconds || model.queue_depth !== null) && (
+              {(model.generation_speed != null || model.prompt_speed != null ||
+                model.uptime_seconds != null || model.queue_depth != null) && (
                 <div>
                   <h4 className="text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-1">
                     Performance
@@ -218,30 +240,94 @@ export default function ModelDetailPanel({ model, enrichment, onClose }: Props) 
             </div>
           </div>
 
-          {/* Description */}
+          {/* HF Description (brief) */}
           {hfOk && enrichment.description && (
             <div>
               <h4 className="text-xs font-semibold text-base-content/50 uppercase tracking-wider mb-1">
-                Description
+                Summary
               </h4>
               <p className="text-sm text-base-content/70">{enrichment.description}</p>
             </div>
           )}
 
-          {/* HF link */}
-          {hfOk && enrichment.hf_repo && (
-            <div className="flex justify-end">
+          {/* README tabs */}
+          {readmeLoading && (
+            <div className="flex items-center gap-2 text-sm text-base-content/50 py-4">
+              <FontAwesomeIcon icon={faSpinner} className="animate-spin" />
+              Loading README...
+            </div>
+          )}
+
+          {!readmeLoading && hasAnyReadme && (
+            <div>
+              {/* Tab bar */}
+              <div className="tabs tabs-bordered mb-2">
+                {hasBaseReadme && (
+                  <button
+                    className={`tab gap-1 ${activeTab === "base" ? "tab-active" : ""}`}
+                    onClick={() => setActiveTab("base")}
+                  >
+                    <FontAwesomeIcon icon={faBook} className="text-xs" />
+                    Base Model
+                    {readmeData?.base_repo && (
+                      <span className="text-xs text-base-content/40 ml-1">
+                        {readmeData.base_repo}
+                      </span>
+                    )}
+                  </button>
+                )}
+                {hasQuantReadme && (
+                  <button
+                    className={`tab gap-1 ${activeTab === "quant" ? "tab-active" : ""}`}
+                    onClick={() => setActiveTab("quant")}
+                  >
+                    <FontAwesomeIcon icon={faBoxesStacked} className="text-xs" />
+                    GGUF Repo
+                    {readmeData?.quant_repo && (
+                      <span className="text-xs text-base-content/40 ml-1">
+                        {readmeData.quant_repo}
+                      </span>
+                    )}
+                  </button>
+                )}
+              </div>
+
+              {/* README content */}
+              <div className="bg-base-200/50 rounded-lg p-4 max-h-[500px] overflow-y-auto prose prose-sm prose-invert max-w-none">
+                <Markdown>
+                  {activeTab === "base"
+                    ? readmeData?.base_readme || ""
+                    : readmeData?.quant_readme || ""}
+                </Markdown>
+              </div>
+            </div>
+          )}
+
+          {/* HF links */}
+          <div className="flex flex-wrap gap-2 justify-end">
+            {hfOk && enrichment.hf_repo && (
               <a
                 href={`https://huggingface.co/${enrichment.hf_repo}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="btn btn-sm btn-outline gap-1"
               >
-                View on HuggingFace
+                Base Model
                 <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="text-xs" />
               </a>
-            </div>
-          )}
+            )}
+            {readmeData?.quant_repo && (
+              <a
+                href={`https://huggingface.co/${readmeData.quant_repo}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn btn-sm btn-outline gap-1"
+              >
+                GGUF Repo
+                <FontAwesomeIcon icon={faArrowUpRightFromSquare} className="text-xs" />
+              </a>
+            )}
+          </div>
         </div>
       </div>
     </div>

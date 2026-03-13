@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCircle,
@@ -42,10 +43,7 @@ const PROVIDER_COLORS: Record<
 };
 
 function providerConfig(provider: string) {
-  return (
-    PROVIDER_COLORS[provider] ??
-    PROVIDER_COLORS["openai"]
-  );
+  return PROVIDER_COLORS[provider] ?? PROVIDER_COLORS["openai"];
 }
 
 /** Strip org prefix from model name for display. */
@@ -53,7 +51,6 @@ function displayName(m: DiscoveredModel): string {
   const dn = m.extras?.display_name;
   if (typeof dn === "string" && dn) return dn;
   const id = m.id;
-  // Strip "org/..." prefix
   const slash = id.lastIndexOf("/");
   return slash >= 0 ? id.slice(slash + 1) : id;
 }
@@ -95,6 +92,9 @@ export default function ModelCard({ model, enrichment, selected, onClick }: Prop
   };
   const caps = CAP_MAP.filter(([key]) => capFlags[key]);
   const hfOk = enrichment && enrichment.status === "ok";
+  const hasLogo = hfOk && enrichment.logo_url;
+
+  const [imgError, setImgError] = useState(false);
 
   return (
     <div
@@ -107,21 +107,19 @@ export default function ModelCard({ model, enrichment, selected, onClick }: Prop
       <div
         className={`flex items-center justify-center h-24 rounded-t-2xl bg-gradient-to-br ${prov.gradient}`}
       >
-        {hfOk && enrichment.logo_url ? (
+        {hasLogo && !imgError ? (
           <img
             src={enrichment.logo_url}
-            alt=""
-            className="w-12 h-12 rounded-full object-cover"
-            onError={(e) => {
-              (e.target as HTMLImageElement).style.display = "none";
-              (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
-            }}
+            alt={enrichment.author}
+            className="w-14 h-14 rounded-full object-cover bg-base-200"
+            onError={() => setImgError(true)}
           />
-        ) : null}
-        <FontAwesomeIcon
-          icon={prov.icon}
-          className={`${prov.accent} text-3xl ${hfOk && enrichment.logo_url ? "hidden" : ""}`}
-        />
+        ) : (
+          <FontAwesomeIcon
+            icon={prov.icon}
+            className={`${prov.accent} text-3xl`}
+          />
+        )}
       </div>
 
       <div className="card-body p-3 gap-1.5">
@@ -157,7 +155,7 @@ export default function ModelCard({ model, enrichment, selected, onClick }: Prop
           </p>
         ) : (
           <p className="text-xs text-base-content/40 min-h-[2rem] italic">
-            {model.architecture || model.family || ""}
+            {model.architecture || model.family || model.provider}
           </p>
         )}
 
@@ -165,15 +163,8 @@ export default function ModelCard({ model, enrichment, selected, onClick }: Prop
         <div className="flex items-center justify-between mt-auto pt-1 border-t border-base-200">
           <div className="flex items-center gap-0.5">
             {caps.map(([, label]) => (
-              <span
-                key={label}
-                className="tooltip tooltip-top"
-                data-tip={label}
-              >
-                <FontAwesomeIcon
-                  icon={faCircle}
-                  className="text-primary text-[6px]"
-                />
+              <span key={label} className="tooltip tooltip-top" data-tip={label}>
+                <FontAwesomeIcon icon={faCircle} className="text-primary text-[6px]" />
               </span>
             ))}
           </div>
