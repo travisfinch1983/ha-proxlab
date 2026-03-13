@@ -21,7 +21,7 @@ import {
   CAPABILITY_LABELS,
   CAPABILITY_COLORS,
   ALL_CAPABILITIES,
-  HIDDEN_CAPABILITIES,
+  cleanStoredCaps,
   computeEffectiveCaps,
 } from "../types";
 
@@ -94,24 +94,34 @@ export default function ConnectionsPage() {
   }, [selectedId, connections]);
 
   // Compute detected capabilities for the selected connection
-  // Includes stored capabilities as baseline + model discovery enrichment
+  // Reads stored caps directly from config (not form state) to avoid useEffect timing issues
   const detectedCapsForConn = useMemo(() => {
     const caps = new Set<string>();
     if (!selectedId) return caps;
-    // Include stored capabilities as baseline (filter out hidden ones)
-    for (const cap of form.capabilities) {
-      if (!HIDDEN_CAPABILITIES.has(cap)) caps.add(cap);
+    // Include stored capabilities from the connection config directly
+    const conn = connections[selectedId];
+    if (conn) {
+      for (const cap of cleanStoredCaps(conn.capabilities ?? [])) {
+        caps.add(cap);
+      }
     }
     // Enrich from model discovery
-    for (const m of allDiscovered.filter((m) => m.connection_id === selectedId)) {
+    const connModels = allDiscovered.filter((m) => m.connection_id === selectedId);
+    let hasNonEmbeddingModel = false;
+    for (const m of connModels) {
       if (m.supports_vision) caps.add("vision");
       if (m.supports_audio) caps.add("specialized");
       if (m.supports_embeddings) caps.add("embeddings");
       if (m.supports_tts) caps.add("tts");
       if (m.supports_tool_use) caps.add("tool_use");
+      // Any model that isn't purely an embedding model can do conversation
+      if (!m.supports_embeddings || m.supports_vision || m.supports_tool_use || m.supports_tts) {
+        hasNonEmbeddingModel = true;
+      }
     }
+    if (hasNonEmbeddingModel) caps.add("conversation");
     return caps;
-  }, [selectedId, allDiscovered, form.capabilities]);
+  }, [selectedId, connections, allDiscovered]);
 
   // Effective capabilities = detected + overrides
   const effectiveCaps = useMemo(
@@ -286,8 +296,7 @@ export default function ConnectionsPage() {
 
   const hasLlmCaps =
     effectiveCaps.includes("conversation") ||
-    effectiveCaps.includes("tool_use") ||
-    effectiveCaps.includes("external_llm");
+    effectiveCaps.includes("tool_use");
   const hasTtsCaps = effectiveCaps.includes("tts");
   const hasSttCaps = effectiveCaps.includes("stt");
   const hasEmbeddingCaps = effectiveCaps.includes("embeddings");

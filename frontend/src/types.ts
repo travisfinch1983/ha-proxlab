@@ -35,7 +35,7 @@ export interface Connection {
   language?: string;
   // Embeddings fields
   embedding_provider?: string;
-  // External LLM fields
+  // Per-connection tool config
   tool_description?: string;
   auto_include_context?: boolean;
   // Endpoint detection
@@ -390,8 +390,8 @@ export const ALL_CAPABILITIES = [
   "vision",
 ] as const;
 
-/** Capabilities that exist in storage but should not be displayed in the UI. */
-export const HIDDEN_CAPABILITIES = new Set(["external_llm"]);
+/** Deprecated capabilities stripped from storage — no longer valid in the UI. */
+const RETIRED_CAPABILITIES = new Set(["external_llm"]);
 
 export function computeEffectiveCaps(
   overrides: Record<string, "force_enable" | "force_disable"> | undefined,
@@ -404,5 +404,12 @@ export function computeEffectiveCaps(
       else if (mode === "force_disable") eff.delete(cap);
     }
   }
+  // Strip retired capabilities
+  for (const cap of RETIRED_CAPABILITIES) eff.delete(cap);
   return [...eff].sort();
+}
+
+/** Strip retired capabilities from a stored capabilities array. */
+export function cleanStoredCaps(caps: string[]): string[] {
+  return caps.filter((c) => !RETIRED_CAPABILITIES.has(c));
 }
