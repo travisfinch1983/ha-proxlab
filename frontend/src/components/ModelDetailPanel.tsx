@@ -100,15 +100,23 @@ export default function ModelDetailPanel({ model, enrichment, connections, onClo
           {/* Header */}
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
-              {hfOk && enrichment.logo_url && (
+              {((hfOk && enrichment.logo_url) || model.provider === "claude") && (
                 <img
-                  src={enrichment.logo_url}
+                  src={hfOk && enrichment.logo_url ? enrichment.logo_url : "https://avatars.githubusercontent.com/u/76263028"}
                   alt=""
                   className="w-10 h-10 rounded-full object-cover"
                 />
               )}
               <div>
-                <h3 className="font-bold text-base">{model.id}</h3>
+                <h3 className="font-bold text-base">
+                  {(model.extras?.display_name as string)
+                    || (hfOk && enrichment.hf_repo
+                      ? enrichment.hf_repo.split("/").pop() ?? model.id
+                      : model.id)}
+                </h3>
+                {model.id !== (model.extras?.display_name || "") && (
+                  <p className="text-[11px] text-base-content/40 font-mono">{model.id}</p>
+                )}
                 <div className="flex flex-wrap items-center gap-1 mt-0.5">
                   <span className="text-xs text-base-content/50">{model.provider}</span>
                   {connections.map((c) => (

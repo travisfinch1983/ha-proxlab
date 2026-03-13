@@ -462,8 +462,8 @@ export default function ConnectionsPage() {
                     />
                   </label>
 
-                  {/* Model listbox — upgraded with per-model capability dots for universal endpoints */}
-                  {probeStatus === 'universal' && (probeModels.length > 0 || connDiscoveredModels.length > 0) ? (
+                  {/* Model listbox — show when probe detects multiple models OR discovery found multiple */}
+                  {(probeStatus === 'universal' && probeModels.length > 0) || connDiscoveredModels.length > 1 ? (
                     <div className="form-control md:col-span-2">
                       <div className="label">
                         <span className="label-text">Available Models</span>
@@ -472,13 +472,20 @@ export default function ConnectionsPage() {
                         {connDiscoveredModels.length > 0
                           ? connDiscoveredModels.map((m) => {
                               const mCaps = getModelCaps(m);
+                              const isSelected = form.model === m.id;
                               return (
                                 <div
                                   key={m.id}
-                                  className="flex items-center justify-between px-3 py-1.5 border-b border-base-300/50 last:border-b-0 hover:bg-base-200/50"
+                                  className={`flex items-center justify-between px-3 py-1.5 border-b border-base-300/50 last:border-b-0 cursor-pointer transition-colors ${
+                                    isSelected ? "bg-primary/20 font-medium" : "hover:bg-base-200/50"
+                                  }`}
+                                  onClick={() => setForm((f) => ({ ...f, model: m.id }))}
                                 >
                                   <span className="text-xs font-mono truncate flex-1">{m.id}</span>
                                   <div className="flex gap-1 items-center ml-2 shrink-0">
+                                    {isSelected && (
+                                      <span className="badge badge-xs badge-primary mr-1">selected</span>
+                                    )}
                                     {mCaps.map((cap) => {
                                       const color = CAPABILITY_COLORS[cap]?.dot || "bg-base-content";
                                       return (
@@ -493,19 +500,28 @@ export default function ConnectionsPage() {
                                 </div>
                               );
                             })
-                          : probeModels.map((m) => (
-                              <div
-                                key={m}
-                                className="px-3 py-1.5 border-b border-base-300/50 last:border-b-0"
-                              >
-                                <span className="text-xs font-mono">{m}</span>
-                              </div>
-                            ))
+                          : probeModels.map((m) => {
+                              const isSelected = form.model === m;
+                              return (
+                                <div
+                                  key={m}
+                                  className={`px-3 py-1.5 border-b border-base-300/50 last:border-b-0 cursor-pointer transition-colors ${
+                                    isSelected ? "bg-primary/20 font-medium" : "hover:bg-base-200/50"
+                                  }`}
+                                  onClick={() => setForm((f) => ({ ...f, model: m }))}
+                                >
+                                  <span className="text-xs font-mono">{m}</span>
+                                  {isSelected && (
+                                    <span className="badge badge-xs badge-primary ml-2">selected</span>
+                                  )}
+                                </div>
+                              );
+                            })
                         }
                       </div>
                       <div className="label pt-0.5">
                         <span className="label-text-alt text-base-content/40">
-                          Universal endpoint — colored dots indicate per-model capabilities
+                          {connDiscoveredModels.length || probeModels.length} models available — click to select
                         </span>
                       </div>
                     </div>

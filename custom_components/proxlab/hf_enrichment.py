@@ -78,6 +78,9 @@ HF_ORG_MAP: dict[str, str] = {
     "solar": "upstage",
     "vicuna": "lmsys",
     "nous-hermes": "NousResearch", "hermes": "NousResearch",
+    "f5-tts": "SWivid", "f5tts": "SWivid",
+    "glm": "THUDM", "glm-4": "THUDM",
+    "medgemma": "google",
 }
 
 # Common size suffixes in model names

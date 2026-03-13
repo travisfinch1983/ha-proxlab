@@ -42,17 +42,42 @@ const PROVIDER_COLORS: Record<
   },
 };
 
+/** Provider-specific logo URLs for models without HF enrichment. */
+const PROVIDER_LOGOS: Record<string, string> = {
+  claude: "https://avatars.githubusercontent.com/u/76263028",  // Anthropic GitHub avatar
+};
+
 function providerConfig(provider: string) {
   return PROVIDER_COLORS[provider] ?? PROVIDER_COLORS["openai"];
 }
 
-/** Strip org prefix from model name for display. */
-function displayName(m: DiscoveredModel): string {
+/** Derive a human-readable model name from HF enrichment or model ID. */
+function modelDisplayName(m: DiscoveredModel, enrichment?: HfEnrichment): string {
+  // Use extras.display_name (set by Claude discovery)
   const dn = m.extras?.display_name;
   if (typeof dn === "string" && dn) return dn;
+
+  // Use HF repo name (e.g. "Qwen/Qwen3.5-32B-Instruct" → "Qwen3.5-32B-Instruct")
+  const hfOk = enrichment && enrichment.status === "ok";
+  if (hfOk && enrichment.hf_repo) {
+    const slash = enrichment.hf_repo.lastIndexOf("/");
+    return slash >= 0 ? enrichment.hf_repo.slice(slash + 1) : enrichment.hf_repo;
+  }
+
+  // Strip org prefix from model ID
   const id = m.id;
   const slash = id.lastIndexOf("/");
   return slash >= 0 ? id.slice(slash + 1) : id;
+}
+
+/** Check if the display name differs from the raw ID (warrants subtitle). */
+function needsSubtitle(displayName: string, model: DiscoveredModel): boolean {
+  const rawName = model.id;
+  // Show subtitle if display name differs meaningfully from raw ID
+  if (displayName === rawName) return false;
+  // Don't show subtitle if it's just the org-stripped version
+  if (rawName.endsWith(displayName)) return false;
+  return true;
 }
 
 /** Format context length as "32K", "128K", "1M". */
@@ -82,7 +107,8 @@ interface Props {
 
 export default function ModelCard({ model, enrichment, connections, selected, onClick }: Props) {
   const prov = providerConfig(model.provider);
-  const name = displayName(model);
+  const name = modelDisplayName(model, enrichment);
+  const showSub = needsSubtitle(name, model);
   const ctx = fmtCtx(model.context_length);
   const capFlags: Record<string, boolean> = {
     supports_vision: model.supports_vision,
@@ -93,7 +119,10 @@ export default function ModelCard({ model, enrichment, connections, selected, on
   };
   const caps = CAP_MAP.filter(([key]) => capFlags[key]);
   const hfOk = enrichment && enrichment.status === "ok";
-  const hasLogo = hfOk && enrichment.logo_url;
+  const hfLogo = hfOk && enrichment.logo_url;
+  const providerLogo = PROVIDER_LOGOS[model.provider];
+  const hasLogo = hfLogo || providerLogo;
+  const logoUrl = hfLogo ? enrichment.logo_url : providerLogo;
 
   const [imgError, setImgError] = useState(false);
 
@@ -110,8 +139,8 @@ export default function ModelCard({ model, enrichment, connections, selected, on
       >
         {hasLogo && !imgError ? (
           <img
-            src={enrichment.logo_url}
-            alt={enrichment.author}
+            src={logoUrl}
+            alt={hfOk ? enrichment.author : model.provider}
             className="w-14 h-14 rounded-full object-cover bg-base-200"
             onError={() => setImgError(true)}
           />
@@ -124,10 +153,17 @@ export default function ModelCard({ model, enrichment, connections, selected, on
       </div>
 
       <div className="card-body p-3 gap-1.5">
-        {/* Model name */}
-        <h3 className="font-semibold text-sm leading-tight line-clamp-2" title={model.id}>
-          {name}
-        </h3>
+        {/* Model name + subtitle */}
+        <div>
+          <h3 className="font-semibold text-sm leading-tight line-clamp-2" title={model.id}>
+            {name}
+          </h3>
+          {showSub && (
+            <p className="text-[10px] text-base-content/40 font-mono truncate" title={model.id}>
+              {model.id}
+            </p>
+          )}
+        </div>
 
         {/* Spec badges */}
         <div className="flex flex-wrap gap-1">
