@@ -21,6 +21,7 @@ import {
   CAPABILITY_LABELS,
   CAPABILITY_COLORS,
   ALL_CAPABILITIES,
+  HIDDEN_CAPABILITIES,
   computeEffectiveCaps,
 } from "../types";
 
@@ -93,9 +94,15 @@ export default function ConnectionsPage() {
   }, [selectedId, connections]);
 
   // Compute detected capabilities for the selected connection
+  // Includes stored capabilities as baseline + model discovery enrichment
   const detectedCapsForConn = useMemo(() => {
     const caps = new Set<string>();
     if (!selectedId) return caps;
+    // Include stored capabilities as baseline (filter out hidden ones)
+    for (const cap of form.capabilities) {
+      if (!HIDDEN_CAPABILITIES.has(cap)) caps.add(cap);
+    }
+    // Enrich from model discovery
     for (const m of allDiscovered.filter((m) => m.connection_id === selectedId)) {
       if (m.supports_vision) caps.add("vision");
       if (m.supports_audio) caps.add("specialized");
@@ -104,7 +111,7 @@ export default function ConnectionsPage() {
       if (m.supports_tool_use) caps.add("tool_use");
     }
     return caps;
-  }, [selectedId, allDiscovered]);
+  }, [selectedId, allDiscovered, form.capabilities]);
 
   // Effective capabilities = detected + overrides
   const effectiveCaps = useMemo(

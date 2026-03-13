@@ -2,6 +2,7 @@ import type { Connection, ConnectionHealth, DiscoveredModel } from "../types";
 import {
   CAPABILITY_LABELS,
   CAPABILITY_COLORS,
+  HIDDEN_CAPABILITIES,
   computeEffectiveCaps,
   getHealthStatus,
   healthBadgeClass,
@@ -44,9 +45,9 @@ export default function ConnectionCard({
     if (m.supports_tool_use) detectedSet.add("tool_use");
   }
 
-  // Merge user-assigned capabilities into detected set
+  // Merge user-assigned capabilities into detected set (filter out hidden ones)
   for (const cap of connection.capabilities) {
-    detectedSet.add(cap);
+    if (!HIDDEN_CAPABILITIES.has(cap)) detectedSet.add(cap);
   }
 
   // Apply overrides to get effective capabilities

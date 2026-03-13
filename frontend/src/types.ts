@@ -390,6 +390,9 @@ export const ALL_CAPABILITIES = [
   "vision",
 ] as const;
 
+/** Capabilities that exist in storage but should not be displayed in the UI. */
+export const HIDDEN_CAPABILITIES = new Set(["external_llm"]);
+
 export function computeEffectiveCaps(
   overrides: Record<string, "force_enable" | "force_disable"> | undefined,
   detected: Set<string>,
