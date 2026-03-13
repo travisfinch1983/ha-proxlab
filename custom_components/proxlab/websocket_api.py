@@ -288,6 +288,11 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_models_hf_enrich)
     websocket_api.async_register_command(hass, ws_models_hf_readme)
 
+    # Custom model logos
+    websocket_api.async_register_command(hass, ws_model_logo_upload)
+    websocket_api.async_register_command(hass, ws_model_logo_list)
+    websocket_api.async_register_command(hass, ws_model_logo_delete)
+
 
 # ---------------------------------------------------------------------------
 # Config snapshot
@@ -4271,3 +4276,105 @@ async def ws_models_hf_readme(
     except Exception as err:
         _LOGGER.error("HF readme fetch failed: %s", err, exc_info=True)
         connection.send_error(msg["id"], "readme_failed", str(err))
+
+
+# ---------------------------------------------------------------------------
+# Custom Model Logos
+# ---------------------------------------------------------------------------
+
+
+def _get_model_logos(hass: HomeAssistant) -> tuple[dict, Any]:
+    """Return (logo_data, store) from first entry."""
+    for eid, ed in hass.data.get(DOMAIN, {}).items():
+        if isinstance(ed, dict) and "model_logos" in ed:
+            return ed["model_logos"], ed.get("model_logos_store")
+    return {"logos": {}}, None
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/models/logo/upload",
+        vol.Optional("entry_id"): str,
+        vol.Required("model_key"): str,
+        vol.Required("data"): str,
+        vol.Optional("filename", default="logo.png"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_model_logo_upload(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Save base64 model logo image and return URL path."""
+    import base64
+    import pathlib
+    import re as _re
+
+    logo_dir = pathlib.Path(hass.config.path("www/proxlab/model-logos"))
+    logo_dir.mkdir(parents=True, exist_ok=True)
+
+    # Sanitize model key for use as filename
+    safe_key = _re.sub(r"[^a-zA-Z0-9_.-]", "_", msg["model_key"])
+    ext = pathlib.Path(msg["filename"]).suffix or ".png"
+    filename = f"{safe_key}{ext}"
+    filepath = logo_dir / filename
+
+    try:
+        image_data = base64.b64decode(msg["data"])
+        await hass.async_add_executor_job(filepath.write_bytes, image_data)
+        url = f"/local/proxlab/model-logos/{filename}"
+
+        # Persist in store
+        logo_data, store = _get_model_logos(hass)
+        logo_data.setdefault("logos", {})[msg["model_key"]] = url
+        if store:
+            await store.async_save(logo_data)
+
+        connection.send_result(msg["id"], {"url": url})
+    except Exception as err:
+        connection.send_error(msg["id"], "upload_failed", str(err))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/models/logo/list",
+        vol.Optional("entry_id"): str,
+    }
+)
+@callback
+def ws_model_logo_list(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Return all custom model logo mappings."""
+    logo_data, _ = _get_model_logos(hass)
+    connection.send_result(msg["id"], {"logos": logo_data.get("logos", {})})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/models/logo/delete",
+        vol.Optional("entry_id"): str,
+        vol.Required("model_key"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_model_logo_delete(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Delete a custom model logo."""
+    import pathlib
+
+    logo_data, store = _get_model_logos(hass)
+    logos = logo_data.get("logos", {})
+    url = logos.pop(msg["model_key"], None)
+
+    if url and store:
+        await store.async_save(logo_data)
+        # Try to delete the file
+        try:
+            filepath = pathlib.Path(hass.config.path(f"www{url.replace('/local/', '/')}"))
+            if filepath.exists():
+                await hass.async_add_executor_job(filepath.unlink)
+        except Exception:
+            pass
+
+    connection.send_result(msg["id"], {"deleted": url is not None})

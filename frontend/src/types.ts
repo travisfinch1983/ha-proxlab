@@ -371,6 +371,8 @@ export interface HfEnrichment {
   status: "ok" | "not_found" | "error" | "unmapped";
 }
 
+export type ModelLogoMap = Record<string, string>;
+
 export interface HfReadmeResult {
   base_repo: string | null;
   base_readme: string;

@@ -51,8 +51,49 @@ function providerConfig(provider: string) {
   return PROVIDER_COLORS[provider] ?? PROVIDER_COLORS["openai"];
 }
 
+/** Known HF uploader/org prefixes to strip from filenames. */
+const KNOWN_UPLOADERS = new Set([
+  "thedrummer", "bartowski", "unsloth", "quantfactory",
+  "mradermacher", "lmstudio", "mmnga", "cjpais",
+]);
+
+/**
+ * Parse a GGUF filename or model ID into a human-friendly display name.
+ *
+ * "TheDrummer_Behemoth-X-123B-v2-Q6_K-00001-of-00003" → "Behemoth X 123B v2"
+ * "koboldcpp/Qwen3.5-0.8B-UD-Q6_K_XL" → "Qwen3.5 0.8B UD"
+ */
+export function parseModelName(raw: string): string {
+  let name = raw;
+  // Strip provider prefix (koboldcpp/, openai/, etc.)
+  if (name.includes("/")) name = name.split("/").pop()!;
+  // Strip .gguf extension
+  name = name.replace(/\.gguf$/i, "");
+  // Strip split indicators (-00001-of-00003)
+  name = name.replace(/-\d{5}-of-\d{5}$/, "");
+  // Strip quant suffixes (Q4_K_M, IQ3_M, F16, etc.)
+  name = name.replace(/[-_](Q\d+_K(?:_[SMLX]+)?|IQ\d+_\w+|F(?:16|32)|BF16|FP16)(?:[-_].*)?$/i, "");
+  // Strip trailing dashes/underscores from quant removal
+  name = name.replace(/[-_]+$/, "");
+  // Strip known uploader prefixes (TheDrummer_, bartowski_, etc.)
+  const prefixMatch = name.match(/^([A-Za-z][A-Za-z0-9]*)[-_](.+)$/);
+  if (prefixMatch) {
+    const [, prefix, rest] = prefixMatch;
+    if (KNOWN_UPLOADERS.has(prefix.toLowerCase())) {
+      name = rest;
+    }
+  }
+  // Replace underscores with hyphens for uniform splitting, then convert to spaces
+  name = name.replace(/_/g, "-");
+  // Split on hyphens but keep version-like tokens (v2, x2) attached
+  name = name.replace(/-/g, " ");
+  // Collapse multiple spaces
+  name = name.replace(/\s+/g, " ").trim();
+  return name;
+}
+
 /** Derive a human-readable model name from HF enrichment or model ID. */
-function modelDisplayName(m: DiscoveredModel, enrichment?: HfEnrichment): string {
+export function modelDisplayName(m: DiscoveredModel, enrichment?: HfEnrichment): string {
   // Use extras.display_name (set by Claude discovery)
   const dn = m.extras?.display_name;
   if (typeof dn === "string" && dn) return dn;
@@ -64,10 +105,8 @@ function modelDisplayName(m: DiscoveredModel, enrichment?: HfEnrichment): string
     return slash >= 0 ? enrichment.hf_repo.slice(slash + 1) : enrichment.hf_repo;
   }
 
-  // Strip org prefix from model ID
-  const id = m.id;
-  const slash = id.lastIndexOf("/");
-  return slash >= 0 ? id.slice(slash + 1) : id;
+  // Smart fallback: parse model ID into clean display name
+  return parseModelName(m.id);
 }
 
 /** Check if the display name differs from the raw ID (warrants subtitle). */
@@ -103,9 +142,10 @@ interface Props {
   connections: { id: string; name: string }[];
   selected: boolean;
   onClick: () => void;
+  customLogo?: string;
 }
 
-export default function ModelCard({ model, enrichment, connections, selected, onClick }: Props) {
+export default function ModelCard({ model, enrichment, connections, selected, onClick, customLogo }: Props) {
   const prov = providerConfig(model.provider);
   const name = modelDisplayName(model, enrichment);
   const showSub = needsSubtitle(name, model);
@@ -121,8 +161,10 @@ export default function ModelCard({ model, enrichment, connections, selected, on
   const hfOk = enrichment && enrichment.status === "ok";
   const hfLogo = hfOk && enrichment.logo_url;
   const providerLogo = PROVIDER_LOGOS[model.provider];
-  const hasLogo = hfLogo || providerLogo;
-  const logoUrl = hfLogo ? enrichment.logo_url : providerLogo;
+
+  // Logo priority: custom → HF enrichment → provider-specific → icon fallback
+  const logoUrl = customLogo || (hfLogo ? enrichment.logo_url : providerLogo) || null;
+  const hasLogo = !!logoUrl;
 
   const [imgError, setImgError] = useState(false);
 

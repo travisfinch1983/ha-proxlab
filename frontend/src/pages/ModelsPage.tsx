@@ -5,8 +5,14 @@ import {
   faMagnifyingGlass,
   faLayerGroup,
 } from "@fortawesome/free-solid-svg-icons";
-import { discoverModels, fetchHfEnrichment } from "../api";
-import type { DiscoveredModel, HfEnrichment } from "../types";
+import {
+  discoverModels,
+  fetchHfEnrichment,
+  fetchModelLogos,
+  uploadModelLogo,
+  deleteModelLogo,
+} from "../api";
+import type { DiscoveredModel, HfEnrichment, ModelLogoMap } from "../types";
 import ModelCard from "../components/ModelCard";
 import ModelDetailPanel from "../components/ModelDetailPanel";
 
@@ -71,6 +77,7 @@ function deduplicateModels(models: DiscoveredModel[]): MergedModel[] {
 export default function ModelsPage() {
   const [models, setModels] = useState<DiscoveredModel[]>([]);
   const [enrichment, setEnrichment] = useState<Record<string, HfEnrichment>>({});
+  const [customLogos, setCustomLogos] = useState<ModelLogoMap>({});
   const [loading, setLoading] = useState(true);
   const [enriching, setEnriching] = useState(false);
   const [search, setSearch] = useState("");
@@ -103,10 +110,21 @@ export default function ModelsPage() {
     }
   }, []);
 
+  // Load custom logos
+  const loadCustomLogos = useCallback(async () => {
+    try {
+      const logos = await fetchModelLogos();
+      setCustomLogos(logos);
+    } catch (err) {
+      console.error("Custom logos load failed:", err);
+    }
+  }, []);
+
   // Initial load
   useEffect(() => {
     loadModels();
-  }, [loadModels]);
+    loadCustomLogos();
+  }, [loadModels, loadCustomLogos]);
 
   // Background enrichment after models load
   useEffect(() => {
@@ -119,6 +137,30 @@ export default function ModelsPage() {
   const handleRefresh = () => {
     setSelectedKey(null);
     loadModels(true);
+  };
+
+  // Logo upload handler
+  const handleLogoUpload = async (modelKey: string, data: string, filename: string) => {
+    try {
+      const res = await uploadModelLogo(modelKey, data, filename);
+      setCustomLogos((prev) => ({ ...prev, [modelKey]: res.url }));
+    } catch (err) {
+      console.error("Logo upload failed:", err);
+    }
+  };
+
+  // Logo delete handler
+  const handleLogoDelete = async (modelKey: string) => {
+    try {
+      await deleteModelLogo(modelKey);
+      setCustomLogos((prev) => {
+        const next = { ...prev };
+        delete next[modelKey];
+        return next;
+      });
+    } catch (err) {
+      console.error("Logo delete failed:", err);
+    }
   };
 
   // Deduplicate models
@@ -301,6 +343,7 @@ export default function ModelsPage() {
                     connections={mm.connections}
                     selected={isSelected}
                     onClick={() => handleCardClick(mm.key)}
+                    customLogo={customLogos[mm.key]}
                   />,
                   isSelected && selectedMerged && (
                     <ModelDetailPanel
@@ -309,6 +352,9 @@ export default function ModelsPage() {
                       enrichment={hfData}
                       connections={selectedMerged.connections}
                       onClose={() => setSelectedKey(null)}
+                      customLogo={customLogos[mm.key]}
+                      onLogoUpload={handleLogoUpload}
+                      onLogoDelete={handleLogoDelete}
                     />
                   ),
                 ];

@@ -769,6 +769,10 @@ GROUP_CHAT_CARDS_STORAGE_VERSION: Final = 1
 HF_ENRICHMENT_STORAGE_KEY: Final = f"{DOMAIN}.hf_enrichment"
 HF_ENRICHMENT_STORAGE_VERSION: Final = 1
 
+# Custom model logo storage
+MODEL_LOGO_STORAGE_KEY: Final = f"{DOMAIN}.model_logos"
+MODEL_LOGO_STORAGE_VERSION: Final = 1
+
 # Custom tool handler types
 CUSTOM_TOOL_HANDLER_REST: Final = "rest"
 CUSTOM_TOOL_HANDLER_SERVICE: Final = "service"

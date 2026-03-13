@@ -436,12 +436,23 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # -- Persistent HuggingFace enrichment cache (per-entry) --
     from homeassistant.helpers.storage import Store as _HfStore
-    from .const import HF_ENRICHMENT_STORAGE_KEY, HF_ENRICHMENT_STORAGE_VERSION
+    from .const import (
+        HF_ENRICHMENT_STORAGE_KEY,
+        HF_ENRICHMENT_STORAGE_VERSION,
+        MODEL_LOGO_STORAGE_KEY,
+        MODEL_LOGO_STORAGE_VERSION,
+    )
 
     _hf_store = _HfStore(hass, HF_ENRICHMENT_STORAGE_VERSION, HF_ENRICHMENT_STORAGE_KEY)
     _hf_data = await _hf_store.async_load() or {"models": {}, "updated_at": 0}
     hass.data[DOMAIN][entry.entry_id]["hf_enrichment"] = _hf_data
     hass.data[DOMAIN][entry.entry_id]["hf_enrichment_store"] = _hf_store
+
+    # -- Custom model logo store (per-entry) --
+    _logo_store = _HfStore(hass, MODEL_LOGO_STORAGE_VERSION, MODEL_LOGO_STORAGE_KEY)
+    _logo_data = await _logo_store.async_load() or {"logos": {}}
+    hass.data[DOMAIN][entry.entry_id]["model_logos"] = _logo_data
+    hass.data[DOMAIN][entry.entry_id]["model_logos_store"] = _logo_store
 
     # Set up agent registry (event-driven reactive layer)
     from .agent_registry import AgentRegistry

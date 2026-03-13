@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Markdown from "react-markdown";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -7,8 +7,11 @@ import {
   faSpinner,
   faBook,
   faBoxesStacked,
+  faCamera,
+  faTrash,
 } from "@fortawesome/free-solid-svg-icons";
 import { fetchHfReadme } from "../api";
+import { modelDisplayName } from "./ModelCard";
 import type { DiscoveredModel, HfEnrichment, HfReadmeResult } from "../types";
 
 /** Format seconds to "2h 15m". */
@@ -42,14 +45,36 @@ interface Props {
   enrichment?: HfEnrichment;
   connections: { id: string; name: string }[];
   onClose: () => void;
+  customLogo?: string;
+  onLogoUpload?: (modelKey: string, data: string, filename: string) => void;
+  onLogoDelete?: (modelKey: string) => void;
 }
 
-export default function ModelDetailPanel({ model, enrichment, connections, onClose }: Props) {
+export default function ModelDetailPanel({
+  model,
+  enrichment,
+  connections,
+  onClose,
+  customLogo,
+  onLogoUpload,
+  onLogoDelete,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [readmeData, setReadmeData] = useState<HfReadmeResult | null>(null);
   const [readmeLoading, setReadmeLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<Tab>("base");
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const hfOk = enrichment && enrichment.status === "ok";
+
+  const displayName = modelDisplayName(model, enrichment);
+
+  // Logo priority: custom → HF enrichment → provider-specific → none
+  const PROVIDER_LOGOS: Record<string, string> = {
+    claude: "https://avatars.githubusercontent.com/u/76263028",
+  };
+  const hfLogo = hfOk && enrichment.logo_url ? enrichment.logo_url : null;
+  const providerLogo = PROVIDER_LOGOS[model.provider] ?? null;
+  const logoUrl = customLogo || hfLogo || providerLogo;
 
   // Animate open on mount
   useEffect(() => {
@@ -90,6 +115,21 @@ export default function ModelDetailPanel({ model, enrichment, connections, onClo
   const hasQuantReadme = readmeData?.quant_readme;
   const hasAnyReadme = hasBaseReadme || hasQuantReadme;
 
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !onLogoUpload) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Strip data:...;base64, prefix
+      const base64 = result.split(",")[1] || result;
+      onLogoUpload(model.id, base64, file.name);
+    };
+    reader.readAsDataURL(file);
+    // Reset input so same file can be re-selected
+    e.target.value = "";
+  };
+
   return (
     <div
       className="col-span-full overflow-hidden transition-all duration-300 ease-in-out"
@@ -100,21 +140,57 @@ export default function ModelDetailPanel({ model, enrichment, connections, onClo
           {/* Header */}
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-3">
-              {((hfOk && enrichment.logo_url) || model.provider === "claude") && (
-                <img
-                  src={hfOk && enrichment.logo_url ? enrichment.logo_url : "https://avatars.githubusercontent.com/u/76263028"}
-                  alt=""
-                  className="w-10 h-10 rounded-full object-cover"
+              {/* Logo area with upload overlay */}
+              <div className="relative group">
+                {logoUrl ? (
+                  <img
+                    src={logoUrl}
+                    alt=""
+                    className="w-10 h-10 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="w-10 h-10 rounded-full bg-base-200 flex items-center justify-center text-base-content/30">
+                    <FontAwesomeIcon icon={faCamera} className="text-sm" />
+                  </div>
+                )}
+                {/* Upload/delete overlay */}
+                {onLogoUpload && (
+                  <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-1">
+                    <button
+                      className="btn btn-xs btn-circle btn-ghost text-white"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        fileInputRef.current?.click();
+                      }}
+                      title="Upload logo"
+                    >
+                      <FontAwesomeIcon icon={faCamera} className="text-[10px]" />
+                    </button>
+                    {customLogo && onLogoDelete && (
+                      <button
+                        className="btn btn-xs btn-circle btn-ghost text-white"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onLogoDelete(model.id);
+                        }}
+                        title="Remove custom logo"
+                      >
+                        <FontAwesomeIcon icon={faTrash} className="text-[10px]" />
+                      </button>
+                    )}
+                  </div>
+                )}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileSelect}
                 />
-              )}
+              </div>
               <div>
-                <h3 className="font-bold text-base">
-                  {(model.extras?.display_name as string)
-                    || (hfOk && enrichment.hf_repo
-                      ? enrichment.hf_repo.split("/").pop() ?? model.id
-                      : model.id)}
-                </h3>
-                {model.id !== (model.extras?.display_name || "") && (
+                <h3 className="font-bold text-base">{displayName}</h3>
+                {model.id !== displayName && (
                   <p className="text-[11px] text-base-content/40 font-mono">{model.id}</p>
                 )}
                 <div className="flex flex-wrap items-center gap-1 mt-0.5">

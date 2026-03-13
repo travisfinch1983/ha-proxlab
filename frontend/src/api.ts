@@ -695,6 +695,33 @@ export async function fetchHfReadme(
   });
 }
 
+// --- Custom Model Logos ---
+
+export async function uploadModelLogo(
+  modelKey: string,
+  data: string,
+  filename: string
+): Promise<{ url: string }> {
+  return callWS("proxlab/models/logo/upload", {
+    model_key: modelKey,
+    data,
+    filename,
+  });
+}
+
+export async function fetchModelLogos(): Promise<Record<string, string>> {
+  const res = await callWS<{ logos: Record<string, string> }>(
+    "proxlab/models/logo/list"
+  );
+  return res.logos;
+}
+
+export async function deleteModelLogo(
+  modelKey: string
+): Promise<{ deleted: boolean }> {
+  return callWS("proxlab/models/logo/delete", { model_key: modelKey });
+}
+
 // --- Agent Profiles ---
 
 import type { AgentProfile, GroupChatCardConfig } from "./types";

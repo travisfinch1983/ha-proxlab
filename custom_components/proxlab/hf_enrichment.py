@@ -191,14 +191,30 @@ def resolve_hf_slug(
 
     # Generic OpenAI-compatible
     if "/" in model_id:
-        return model_id
+        prefix, remainder = model_id.split("/", 1)
+        # Only trust slash-separated IDs where prefix is a known HF org
+        known_orgs = set(HF_ORG_MAP.values())
+        if prefix in known_orgs or (
+            any(c.isupper() for c in prefix)
+            and any(c.islower() for c in prefix)
+            and prefix not in {"koboldcpp", "openai", "lmstudio", "llamacpp"}
+        ):
+            return model_id
+        # Strip the non-HF prefix and resolve the filename portion
+        model_id = remainder
+
+    # Clean GGUF filename: strip extension, quant suffixes, split indicator
+    cleaned = re.sub(r"\.gguf$", "", model_id, flags=re.IGNORECASE)
+    cleaned = _QUANT_PATTERN.sub("", cleaned).rstrip("-_")
+    cleaned = re.sub(r"-\d{5}-of-\d{5}$", "", cleaned).rstrip("-_")
+
     if family:
         org = _find_org(family.lower())
         if org:
-            return _build_hf_slug(org, model_id, None)
-    org = _find_org(model_id.lower())
+            return _build_hf_slug(org, cleaned, None)
+    org = _find_org(cleaned.lower())
     if org:
-        return _build_hf_slug(org, model_id, None)
+        return _build_hf_slug(org, cleaned, None)
     return None
 
 
@@ -501,6 +517,10 @@ async def enrich_models(
 
         cached = cache.get(slug)
         if cached and (now - cached.get("fetched_at", 0)) < _CACHE_TTL:
+            # Re-fetch if previously not_found (slug resolution may have improved)
+            if cached.get("status") == "not_found":
+                to_fetch[slug] = unique_key
+                continue
             result[unique_key] = cached
             continue
 
