@@ -398,14 +398,21 @@ async def _discover_openai_generic(
     url = base_url.rstrip("/")
     models: list[ModelInfo] = []
 
-    # Try /v1/models first, fall back to /models
+    # Build endpoint list — avoid doubling /v1 if URL already ends with it
+    if url.endswith("/v1"):
+        endpoints = [f"{url}/models"]
+    else:
+        endpoints = [f"{url}/v1/models", f"{url}/models"]
+
     data = None
-    for endpoint in (f"{url}/v1/models", f"{url}/models"):
+    for endpoint in endpoints:
         try:
             async with session.get(endpoint) as resp:
                 if resp.status == 200:
                     data = await resp.json()
-                    break
+                    if isinstance(data, dict) and "data" in data:
+                        break
+                    data = None  # Got 200 but not valid model list
         except Exception:
             continue
 
