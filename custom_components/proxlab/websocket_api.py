@@ -285,6 +285,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
 
     # Model discovery
     websocket_api.async_register_command(hass, ws_models_discover)
+    websocket_api.async_register_command(hass, ws_models_hf_enrich)
 
 
 # ---------------------------------------------------------------------------
@@ -4195,3 +4196,31 @@ async def ws_models_discover(
     except Exception as err:
         _LOGGER.error("Model discovery failed: %s", err, exc_info=True)
         connection.send_error(msg["id"], "discovery_failed", str(err))
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/models/hf_enrich",
+        vol.Optional("entry_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_models_hf_enrich(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Enrich discovered models with HuggingFace metadata."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+
+    from .model_discovery import discover_all_models
+    from .hf_enrichment import enrich_models
+
+    try:
+        models = await discover_all_models(hass, entry, force_refresh=False)
+        enrichment = await enrich_models(hass, entry.entry_id, models)
+        connection.send_result(msg["id"], {"enrichment": enrichment})
+    except Exception as err:
+        _LOGGER.error("HF enrichment failed: %s", err, exc_info=True)
+        connection.send_error(msg["id"], "enrichment_failed", str(err))

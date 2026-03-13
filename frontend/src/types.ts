@@ -354,6 +354,23 @@ export interface DiscoveredModel {
   error: string | null;
 }
 
+export interface HfEnrichment {
+  hf_repo: string;
+  description: string;
+  pipeline_tag: string;
+  model_type: string;
+  tags: string[];
+  license: string;
+  author: string;
+  last_modified: string;
+  downloads: number;
+  likes: number;
+  logo_url: string;
+  card_data: Record<string, unknown>;
+  fetched_at: number;
+  status: "ok" | "not_found" | "error" | "unmapped";
+}
+
 export const CAPABILITY_LABELS: Record<string, string> = {
   conversation: "Conversational LLM",
   tool_use: "Tool Use (LLM)",
