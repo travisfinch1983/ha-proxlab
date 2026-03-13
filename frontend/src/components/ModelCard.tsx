@@ -75,11 +75,12 @@ const CAP_MAP: [string, string][] = [
 interface Props {
   model: DiscoveredModel;
   enrichment?: HfEnrichment;
+  connections: { id: string; name: string }[];
   selected: boolean;
   onClick: () => void;
 }
 
-export default function ModelCard({ model, enrichment, selected, onClick }: Props) {
+export default function ModelCard({ model, enrichment, connections, selected, onClick }: Props) {
   const prov = providerConfig(model.provider);
   const name = displayName(model);
   const ctx = fmtCtx(model.context_length);
@@ -159,7 +160,7 @@ export default function ModelCard({ model, enrichment, selected, onClick }: Prop
           </p>
         )}
 
-        {/* Footer: capability dots + provider + status */}
+        {/* Footer: capability dots + connections + status */}
         <div className="flex items-center justify-between mt-auto pt-1 border-t border-base-200">
           <div className="flex items-center gap-0.5">
             {caps.map(([, label]) => (
@@ -168,8 +169,14 @@ export default function ModelCard({ model, enrichment, selected, onClick }: Prop
               </span>
             ))}
           </div>
-          <div className="flex items-center gap-1.5 text-xs text-base-content/50">
-            <span>{model.provider}</span>
+          <div className="flex items-center gap-1.5 text-xs text-base-content/50 flex-wrap justify-end">
+            {connections.length > 1 ? (
+              <span className="tooltip tooltip-top" data-tip={connections.map(c => c.name).join(", ")}>
+                {model.provider} &times;{connections.length}
+              </span>
+            ) : (
+              <span>{connections[0]?.name || model.provider}</span>
+            )}
             {model.is_loaded && (
               <span className="badge badge-xs badge-success gap-0.5">loaded</span>
             )}

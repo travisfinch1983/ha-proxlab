@@ -432,30 +432,54 @@ async def _discover_claude(
     conn: dict[str, Any],
     base_url: str,
 ) -> list[ModelInfo]:
-    """Discover models from the Anthropic Claude API."""
+    """Discover models from the Anthropic Claude API or Claude Code addon proxy."""
     url = base_url.rstrip("/")
     api_key = conn.get("api_key", "")
-    headers = {
-        "x-api-key": api_key,
-        "anthropic-version": "2023-06-01",
-    }
+    connection_type = conn.get("connection_type", "")
 
-    # base_url may already include /v1
+    # Build URL
     if url.endswith("/v1"):
         models_url = f"{url}/models"
     else:
         models_url = f"{url}/v1/models"
 
-    models: list[ModelInfo] = []
+    # Anthropic API needs special headers; addon proxy doesn't
+    headers: dict[str, str] = {}
+    if api_key:
+        headers["x-api-key"] = api_key
+        headers["anthropic-version"] = "2023-06-01"
+
+    data = None
     try:
         async with session.get(models_url, headers=headers) as resp:
-            if resp.status != 200:
-                return []
-            data = await resp.json()
+            if resp.status == 200:
+                data = await resp.json()
     except Exception as err:
-        _LOGGER.debug("Claude /v1/models failed: %s", err)
+        _LOGGER.debug("Claude /v1/models failed for %s: %s", conn_id, err)
+
+    # For addon connections that don't have a /v1/models endpoint,
+    # fall back to the known Claude model list
+    if not data or "data" not in data:
+        if connection_type == CONNECTION_TYPE_CLAUDE_ADDON:
+            from .const import CLAUDE_MODELS
+
+            models: list[ModelInfo] = []
+            for model_id in CLAUDE_MODELS:
+                display = model_id.replace("claude-", "Claude ").replace("-", " ").title()
+                info = ModelInfo(
+                    id=model_id,
+                    connection_id=conn_id,
+                    connection_name=conn.get("name", ""),
+                    provider="claude",
+                    supports_tool_use=True,
+                    supports_vision=True,
+                )
+                info.extras["display_name"] = display
+                models.append(info)
+            return models
         return []
 
+    models = []
     for m in data.get("data", []):
         model_id = m.get("id", "unknown")
         supports_vision = "claude-3" in model_id or "claude-4" in model_id
@@ -499,14 +523,13 @@ async def discover_connection_models(
         native_base = native_base[:-3]
 
     try:
-        if connection_type == CONNECTION_TYPE_CLAUDE:
+        if connection_type in (CONNECTION_TYPE_CLAUDE, CONNECTION_TYPE_CLAUDE_ADDON):
             return await _discover_claude(session, conn_id, conn, base_url)
         elif connection_type == CONNECTION_TYPE_OLLAMA:
             return await _discover_ollama(session, conn_id, conn, native_base)
         elif connection_type in (
             CONNECTION_TYPE_OPENAI,
             CONNECTION_TYPE_LOCAL,
-            CONNECTION_TYPE_CLAUDE_ADDON,
             "",
         ) or not connection_type:
             # Auto-detect the actual provider behind this endpoint

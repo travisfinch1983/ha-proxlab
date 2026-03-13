@@ -220,10 +220,10 @@ async def _fetch_org_avatar(
     if cached and (time.time() - cached.get("fetched_at", 0)) < _ORG_AVATAR_TTL:
         return cached["url"]
 
-    # Try organization endpoint first, then user endpoint
+    # Try organization endpoint first, then user endpoint (both need /overview)
     for endpoint in (
         f"https://huggingface.co/api/organizations/{author}/overview",
-        f"https://huggingface.co/api/users/{author}",
+        f"https://huggingface.co/api/users/{author}/overview",
     ):
         try:
             async with session.get(

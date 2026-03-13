@@ -40,10 +40,11 @@ type Tab = "base" | "quant";
 interface Props {
   model: DiscoveredModel;
   enrichment?: HfEnrichment;
+  connections: { id: string; name: string }[];
   onClose: () => void;
 }
 
-export default function ModelDetailPanel({ model, enrichment, onClose }: Props) {
+export default function ModelDetailPanel({ model, enrichment, connections, onClose }: Props) {
   const [open, setOpen] = useState(false);
   const [readmeData, setReadmeData] = useState<HfReadmeResult | null>(null);
   const [readmeLoading, setReadmeLoading] = useState(false);
@@ -108,12 +109,15 @@ export default function ModelDetailPanel({ model, enrichment, onClose }: Props) 
               )}
               <div>
                 <h3 className="font-bold text-base">{model.id}</h3>
-                <p className="text-xs text-base-content/50">
-                  {model.provider} &bull; {model.connection_name}
+                <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                  <span className="text-xs text-base-content/50">{model.provider}</span>
+                  {connections.map((c) => (
+                    <span key={c.id} className="badge badge-xs badge-ghost">{c.name}</span>
+                  ))}
                   {model.is_loaded && (
-                    <span className="badge badge-xs badge-success ml-2">loaded</span>
+                    <span className="badge badge-xs badge-success">loaded</span>
                   )}
-                </p>
+                </div>
               </div>
             </div>
             <button className="btn btn-ghost btn-sm btn-circle" onClick={onClose}>

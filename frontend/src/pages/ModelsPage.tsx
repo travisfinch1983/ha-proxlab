@@ -12,6 +12,62 @@ import ModelDetailPanel from "../components/ModelDetailPanel";
 
 type GroupBy = "none" | "connection" | "provider";
 
+/** A deduplicated model merging instances from multiple connections. */
+export interface MergedModel {
+  /** The primary (best) instance used for display. */
+  primary: DiscoveredModel;
+  /** All connections this model is available through. */
+  connections: { id: string; name: string }[];
+  /** Unique key for this merged model (the model ID). */
+  key: string;
+}
+
+/** Deduplicate models by ID across connections. */
+function deduplicateModels(models: DiscoveredModel[]): MergedModel[] {
+  const map = new Map<string, DiscoveredModel[]>();
+  for (const m of models) {
+    const existing = map.get(m.id);
+    if (existing) {
+      existing.push(m);
+    } else {
+      map.set(m.id, [m]);
+    }
+  }
+
+  const result: MergedModel[] = [];
+  for (const [modelId, instances] of map) {
+    // Pick the best instance: prefer loaded, then most metadata
+    const sorted = [...instances].sort((a, b) => {
+      if (a.is_loaded !== b.is_loaded) return a.is_loaded ? -1 : 1;
+      if ((a.parameter_count || "") !== (b.parameter_count || ""))
+        return a.parameter_count ? -1 : 1;
+      if ((a.context_length || 0) !== (b.context_length || 0))
+        return (b.context_length || 0) - (a.context_length || 0);
+      return 0;
+    });
+
+    const connections = instances.map((m) => ({
+      id: m.connection_id,
+      name: m.connection_name,
+    }));
+    // Deduplicate connection names
+    const seen = new Set<string>();
+    const uniqueConns = connections.filter((c) => {
+      if (seen.has(c.name)) return false;
+      seen.add(c.name);
+      return true;
+    });
+
+    result.push({
+      primary: sorted[0],
+      connections: uniqueConns,
+      key: modelId,
+    });
+  }
+
+  return result;
+}
+
 export default function ModelsPage() {
   const [models, setModels] = useState<DiscoveredModel[]>([]);
   const [enrichment, setEnrichment] = useState<Record<string, HfEnrichment>>({});
@@ -20,8 +76,6 @@ export default function ModelsPage() {
   const [search, setSearch] = useState("");
   const [groupBy, setGroupBy] = useState<GroupBy>("none");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
-
-  const uniqueKey = (m: DiscoveredModel) => `${m.connection_id}:${m.id}`;
 
   // Load models
   const loadModels = useCallback(async (force = false) => {
@@ -67,42 +121,64 @@ export default function ModelsPage() {
     loadModels(true);
   };
 
-  // Filter models by search
+  // Deduplicate models
+  const merged = useMemo(() => deduplicateModels(models), [models]);
+
+  // Filter by search
   const filtered = useMemo(() => {
-    if (!search.trim()) return models;
+    if (!search.trim()) return merged;
     const q = search.toLowerCase();
-    return models.filter(
-      (m) =>
+    return merged.filter((mm) => {
+      const m = mm.primary;
+      return (
         m.id.toLowerCase().includes(q) ||
         m.provider.toLowerCase().includes(q) ||
-        m.connection_name.toLowerCase().includes(q) ||
+        mm.connections.some((c) => c.name.toLowerCase().includes(q)) ||
         (m.architecture && m.architecture.toLowerCase().includes(q)) ||
         (m.family && m.family.toLowerCase().includes(q))
-    );
-  }, [models, search]);
+      );
+    });
+  }, [merged, search]);
 
   // Group models
   const groups = useMemo(() => {
     if (groupBy === "none") return [{ label: "", models: filtered }];
 
-    const map = new Map<string, DiscoveredModel[]>();
-    for (const m of filtered) {
-      const key = groupBy === "connection" ? m.connection_name : m.provider;
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(m);
+    const map = new Map<string, MergedModel[]>();
+    for (const mm of filtered) {
+      if (groupBy === "connection") {
+        // Show under each connection it belongs to
+        for (const conn of mm.connections) {
+          if (!map.has(conn.name)) map.set(conn.name, []);
+          map.get(conn.name)!.push(mm);
+        }
+      } else {
+        const key = mm.primary.provider;
+        if (!map.has(key)) map.set(key, []);
+        map.get(key)!.push(mm);
+      }
     }
     return [...map.entries()]
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([label, models]) => ({ label, models }));
   }, [filtered, groupBy]);
 
+  // Find enrichment for a merged model — check all connection keys
+  const getEnrichment = (mm: MergedModel): HfEnrichment | undefined => {
+    for (const conn of mm.connections) {
+      const key = `${conn.id}:${mm.primary.id}`;
+      if (enrichment[key]) return enrichment[key];
+    }
+    return undefined;
+  };
+
   // Toggle selection
   const handleCardClick = (key: string) => {
     setSelectedKey((prev) => (prev === key ? null : key));
   };
 
-  const selectedModel = selectedKey
-    ? models.find((m) => uniqueKey(m) === selectedKey)
+  const selectedMerged = selectedKey
+    ? filtered.find((mm) => mm.key === selectedKey) ?? merged.find((mm) => mm.key === selectedKey)
     : undefined;
 
   return (
@@ -112,7 +188,8 @@ export default function ModelsPage() {
         <div>
           <h1 className="text-2xl font-bold">Models</h1>
           <p className="text-sm text-base-content/50">
-            {models.length} model{models.length !== 1 ? "s" : ""} discovered
+            {merged.length} unique model{merged.length !== 1 ? "s" : ""} across{" "}
+            {models.length} instance{models.length !== 1 ? "s" : ""}
             {enriching && (
               <span className="ml-2 text-info">
                 <span className="loading loading-spinner loading-xs mr-1" />
@@ -196,7 +273,7 @@ export default function ModelsPage() {
       {/* No search results */}
       {!loading && models.length > 0 && filtered.length === 0 && (
         <div className="text-center py-8 text-base-content/50">
-          No models match "{search}"
+          No models match &ldquo;{search}&rdquo;
         </div>
       )}
 
@@ -213,22 +290,24 @@ export default function ModelsPage() {
               </h2>
             )}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {group.models.map((m) => {
-                const key = uniqueKey(m);
-                const isSelected = selectedKey === key;
+              {group.models.map((mm) => {
+                const isSelected = selectedKey === mm.key;
+                const hfData = getEnrichment(mm);
                 return [
                   <ModelCard
-                    key={key}
-                    model={m}
-                    enrichment={enrichment[key]}
+                    key={mm.key}
+                    model={mm.primary}
+                    enrichment={hfData}
+                    connections={mm.connections}
                     selected={isSelected}
-                    onClick={() => handleCardClick(key)}
+                    onClick={() => handleCardClick(mm.key)}
                   />,
-                  isSelected && selectedModel && (
+                  isSelected && selectedMerged && (
                     <ModelDetailPanel
-                      key={`detail-${key}`}
-                      model={selectedModel}
-                      enrichment={enrichment[key]}
+                      key={`detail-${mm.key}`}
+                      model={selectedMerged.primary}
+                      enrichment={hfData}
+                      connections={selectedMerged.connections}
                       onClose={() => setSelectedKey(null)}
                     />
                   ),

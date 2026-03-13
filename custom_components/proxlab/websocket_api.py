@@ -732,11 +732,7 @@ async def ws_connections_test(
 # ---------------------------------------------------------------------------
 
 _CLAUDE_ADDON_SLUG = "local_claude_code_server"
-_CLAUDE_ADDON_MODELS = [
-    ("Claude Code - Sonnet", "claude-sonnet-4-6"),
-    ("Claude Code - Opus", "claude-opus-4-6"),
-    ("Claude Code - Haiku", "claude-haiku-4-5-20251001"),
-]
+_CLAUDE_ADDON_DEFAULT_MODEL = "claude-sonnet-4-6"
 
 
 @websocket_api.websocket_command(
@@ -850,36 +846,49 @@ async def ws_discover_claude_addon(
         )
         return
 
-    # 4. Create connections for each model
+    # 4. Create a single connection for the Claude Code add-on
     from .config_flow import normalize_url
+    from .const import CLAUDE_MODELS
 
     new_data = dict(entry.data)
     new_conns = dict(new_data.get(CONF_CONNECTIONS, {}))
-    created_ids = []
 
-    for name, model in _CLAUDE_ADDON_MODELS:
-        conn_id = uuid4().hex[:8]
-        new_conns[conn_id] = {
-            "name": name,
-            "base_url": normalize_url(base_url),
-            "api_key": "",
-            "model": model,
-            "capabilities": ["conversation", "tool_use"],
-            "connection_type": "claude_addon",
-        }
-        created_ids.append(conn_id)
+    # Check if a claude_addon connection already exists
+    existing_addon = [
+        cid for cid, c in new_conns.items()
+        if c.get("connection_type") == "claude_addon"
+    ]
+    if existing_addon:
+        # Update existing connection's base_url in case it changed
+        for cid in existing_addon:
+            new_conns[cid]["base_url"] = normalize_url(base_url)
+        new_data[CONF_CONNECTIONS] = new_conns
+        hass.config_entries.async_update_entry(entry, data=new_data)
+        connection.send_result(msg["id"], {
+            "connection_ids": existing_addon,
+            "base_url": base_url,
+            "models": CLAUDE_MODELS,
+        })
+        return
+
+    conn_id = uuid4().hex[:8]
+    new_conns[conn_id] = {
+        "name": "Claude Code",
+        "base_url": normalize_url(base_url),
+        "api_key": "",
+        "model": _CLAUDE_ADDON_DEFAULT_MODEL,
+        "capabilities": ["conversation", "tool_use"],
+        "connection_type": "claude_addon",
+    }
 
     new_data[CONF_CONNECTIONS] = new_conns
     hass.config_entries.async_update_entry(entry, data=new_data)
 
-    _LOGGER.info(
-        "Claude Code add-on discovered at %s — created %d connections",
-        base_url, len(created_ids),
-    )
+    _LOGGER.info("Claude Code add-on discovered at %s — created connection %s", base_url, conn_id)
     connection.send_result(msg["id"], {
-        "connection_ids": created_ids,
+        "connection_ids": [conn_id],
         "base_url": base_url,
-        "models": [m for _, m in _CLAUDE_ADDON_MODELS],
+        "models": CLAUDE_MODELS,
     })
 
 
