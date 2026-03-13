@@ -1,19 +1,12 @@
 import type { Connection, ConnectionHealth, DiscoveredModel } from "../types";
 import {
   CAPABILITY_LABELS,
+  CAPABILITY_COLORS,
+  computeEffectiveCaps,
   getHealthStatus,
   healthBadgeClass,
   healthLabel,
 } from "../types";
-
-/** Short labels for detected capability badges */
-const DETECTED_LABELS: Record<string, string> = {
-  vision: "Vision",
-  audio: "Audio",
-  embeddings: "Embeddings",
-  tts: "TTS",
-  tool_use: "Tool Use",
-};
 
 interface Props {
   id: string;
@@ -41,18 +34,29 @@ export default function ConnectionCard({
         : "border-warning";
 
   // Aggregate detected capabilities from discovered models for this connection
-  const detected = new Set<string>();
+  const detectedSet = new Set<string>();
   const models = (discoveredModels ?? []).filter((m) => m.connection_id === id);
   for (const m of models) {
-    if (m.supports_vision) detected.add("vision");
-    if (m.supports_audio) detected.add("audio");
-    if (m.supports_embeddings) detected.add("embeddings");
-    if (m.supports_tts) detected.add("tts");
-    if (m.supports_tool_use) detected.add("tool_use");
+    if (m.supports_vision) detectedSet.add("vision");
+    if (m.supports_audio) detectedSet.add("specialized");
+    if (m.supports_embeddings) detectedSet.add("embeddings");
+    if (m.supports_tts) detectedSet.add("tts");
+    if (m.supports_tool_use) detectedSet.add("tool_use");
   }
+
+  // Merge user-assigned capabilities into detected set
+  for (const cap of connection.capabilities) {
+    detectedSet.add(cap);
+  }
+
+  // Apply overrides to get effective capabilities
+  const effectiveCaps = computeEffectiveCaps(connection.capability_overrides, detectedSet);
 
   // Provider tag from first model
   const provider = models[0]?.provider;
+
+  // Use compact dots when >4 capabilities
+  const useCompactDots = effectiveCaps.length > 4;
 
   return (
     <div
@@ -74,25 +78,26 @@ export default function ConnectionCard({
         {health?.detail && health.detail !== "OK" && (
           <p className="text-xs text-warning">{health.detail}</p>
         )}
-        <div className="flex flex-wrap gap-1 mt-1">
-          {/* User-assigned capabilities */}
-          {connection.capabilities.map((cap) => (
-            <span key={cap} className="badge badge-xs badge-outline">
-              {CAPABILITY_LABELS[cap] || cap}
-            </span>
-          ))}
-          {/* Detected capabilities (only those not already in user-assigned) */}
-          {[...detected]
-            .filter((d) => !connection.capabilities.includes(d))
-            .map((d) => (
-              <span
-                key={`det-${d}`}
-                className="badge badge-xs badge-accent badge-outline"
-                title="Auto-detected"
-              >
-                {DETECTED_LABELS[d] || d}
-              </span>
-            ))}
+        <div className="flex flex-wrap gap-1 mt-1 items-center">
+          {useCompactDots
+            ? effectiveCaps.map((cap) => {
+                const color = CAPABILITY_COLORS[cap]?.dot || "bg-base-content";
+                return (
+                  <span
+                    key={cap}
+                    className={`w-2.5 h-2.5 rounded-full ${color} inline-block`}
+                    title={CAPABILITY_LABELS[cap] || cap}
+                  />
+                );
+              })
+            : effectiveCaps.map((cap) => {
+                const color = CAPABILITY_COLORS[cap]?.badge || "badge-outline";
+                return (
+                  <span key={cap} className={`badge badge-xs ${color}`}>
+                    {CAPABILITY_LABELS[cap] || cap}
+                  </span>
+                );
+              })}
           {/* Provider badge */}
           {provider && (
             <span className="badge badge-xs badge-ghost">

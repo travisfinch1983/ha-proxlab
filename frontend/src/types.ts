@@ -40,6 +40,8 @@ export interface Connection {
   auto_include_context?: boolean;
   // Endpoint detection
   is_universal?: boolean;
+  // Capability overrides (3-state: force_enable / force_disable)
+  capability_overrides?: Record<string, "force_enable" | "force_disable">;
 }
 
 export interface ConnectionHealth {
@@ -360,7 +362,44 @@ export const CAPABILITY_LABELS: Record<string, string> = {
   embeddings: "Embeddings",
   reranker: "Reranker",
   multimodal_embeddings: "Multimodal Embeddings",
-  external_llm: "External LLM",
   specialized: "Specialized",
   vision: "Vision Capable",
 };
+
+export const CAPABILITY_COLORS: Record<string, { badge: string; dot: string }> = {
+  conversation:          { badge: "badge-primary",   dot: "bg-primary" },
+  tool_use:              { badge: "badge-secondary", dot: "bg-secondary" },
+  tts:                   { badge: "badge-accent",    dot: "bg-accent" },
+  stt:                   { badge: "badge-info",      dot: "bg-info" },
+  embeddings:            { badge: "badge-success",   dot: "bg-success" },
+  reranker:              { badge: "badge-warning",   dot: "bg-warning" },
+  multimodal_embeddings: { badge: "badge-error",     dot: "bg-error" },
+  specialized:           { badge: "badge-neutral",   dot: "bg-neutral" },
+  vision:                { badge: "badge-ghost border-purple-400 text-purple-400", dot: "bg-purple-500" },
+};
+
+export const ALL_CAPABILITIES = [
+  "conversation",
+  "tool_use",
+  "tts",
+  "stt",
+  "embeddings",
+  "reranker",
+  "multimodal_embeddings",
+  "specialized",
+  "vision",
+] as const;
+
+export function computeEffectiveCaps(
+  overrides: Record<string, "force_enable" | "force_disable"> | undefined,
+  detected: Set<string>,
+): string[] {
+  const eff = new Set(detected);
+  if (overrides) {
+    for (const [cap, mode] of Object.entries(overrides)) {
+      if (mode === "force_enable") eff.add(cap);
+      else if (mode === "force_disable") eff.delete(cap);
+    }
+  }
+  return [...eff].sort();
+}

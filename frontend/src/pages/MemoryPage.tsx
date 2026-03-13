@@ -280,44 +280,54 @@ export default function MemoryPage() {
                   {scanStatus.collection_name || "—"}
                 </span>
 
-                {/* Capabilities row */}
+                {/* Model-specific capabilities from discovery */}
                 <span className="text-base-content/60">Capabilities</span>
                 <span className="flex flex-wrap gap-1">
-                  {/* User-assigned capabilities from embedding connection */}
-                  {scanStatus.capabilities.map((cap) => (
-                    <span key={cap} className="badge badge-xs badge-outline">
-                      {CAPABILITY_LABELS[cap] || cap}
-                    </span>
-                  ))}
-                  {/* Detected capabilities from model discovery */}
                   {(() => {
-                    // Find embedding models by matching the embedding_model name
                     const embModel = scanStatus.embedding_model;
-                    const matched = discoveredModels.filter(
-                      (m) => m.supports_embeddings || m.id === embModel
-                    );
-                    const det = new Set<string>();
-                    for (const m of matched) {
-                      if (m.supports_vision) det.add("vision");
-                      if (m.supports_embeddings) det.add("embeddings");
+                    const connId = scanStatus.connection_id;
+
+                    // Try exact model ID match first
+                    let match = discoveredModels.find((m) => m.id === embModel);
+                    // Try matching by connection_id + embedding support
+                    if (!match && connId) {
+                      match = discoveredModels.find(
+                        (m) => m.connection_id === connId && m.supports_embeddings
+                      );
                     }
-                    const extras = [...det].filter(
-                      (d) => !scanStatus.capabilities.includes(d)
+
+                    if (match) {
+                      // Show only this model's detected capabilities
+                      const caps: Array<{ key: string; label: string }> = [];
+                      if (match.supports_embeddings) caps.push({ key: "embeddings", label: "Embeddings" });
+                      if (match.supports_vision) caps.push({ key: "vision", label: "Vision" });
+                      if (match.supports_audio) caps.push({ key: "audio", label: "Audio" });
+                      if (match.supports_tts) caps.push({ key: "tts", label: "TTS" });
+                      if (match.supports_tool_use) caps.push({ key: "tool_use", label: "Tool Use" });
+                      if (caps.length === 0)
+                        return <span className="text-xs text-base-content/40">—</span>;
+                      return caps.map((c) => (
+                        <span key={c.key} className="badge badge-xs badge-primary badge-outline">
+                          {c.label}
+                        </span>
+                      ));
+                    }
+
+                    // Fallback: filter connection caps to embedding-relevant only
+                    const EMBEDDING_RELEVANT = new Set([
+                      "embeddings", "multimodal_embeddings", "vision",
+                    ]);
+                    const filtered = scanStatus.capabilities.filter(
+                      (c) => EMBEDDING_RELEVANT.has(c)
                     );
-                    return extras.map((d) => (
-                      <span
-                        key={`det-${d}`}
-                        className="badge badge-xs badge-accent badge-outline"
-                        title="Auto-detected"
-                      >
-                        {d}
+                    if (filtered.length === 0)
+                      return <span className="text-xs text-base-content/40">—</span>;
+                    return filtered.map((cap) => (
+                      <span key={cap} className="badge badge-xs badge-outline">
+                        {CAPABILITY_LABELS[cap] || cap}
                       </span>
                     ));
                   })()}
-                  {scanStatus.capabilities.length === 0 &&
-                    discoveredModels.length === 0 && (
-                      <span className="text-xs text-base-content/40">—</span>
-                    )}
                 </span>
               </div>
             )}

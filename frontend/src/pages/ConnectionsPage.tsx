@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faPlus, faTrash, faVial, faArrowsRotate } from "@fortawesome/free-solid-svg-icons";
+import { faPlus, faTrash, faVial, faArrowsRotate, faChevronDown, faChevronRight } from "@fortawesome/free-solid-svg-icons";
 import NavBar from "../layout/NavBar";
 import { useStore } from "../store";
 import ConnectionCard from "../components/ConnectionCard";
@@ -17,20 +17,12 @@ import {
   refreshHealth,
 } from "../api";
 import type { Connection, ConnectionHealth, DiscoveredModel } from "../types";
-import { CAPABILITY_LABELS } from "../types";
-
-const ALL_CAPABILITIES = [
-  "conversation",
-  "tool_use",
-  "tts",
-  "stt",
-  "embeddings",
-  "reranker",
-  "multimodal_embeddings",
-  "external_llm",
-  "specialized",
-  "vision",
-];
+import {
+  CAPABILITY_LABELS,
+  CAPABILITY_COLORS,
+  ALL_CAPABILITIES,
+  computeEffectiveCaps,
+} from "../types";
 
 const EMPTY_CONN: Omit<Connection, "id"> = {
   name: "",
@@ -46,6 +38,7 @@ const EMPTY_CONN: Omit<Connection, "id"> = {
   keep_alive: "5m",
   thinking_enabled: false,
   is_universal: false,
+  capability_overrides: {},
   voice: "alloy",
   speed: 1.0,
   format: "mp3",
@@ -68,6 +61,7 @@ export default function ConnectionsPage() {
   const [probeStatus, setProbeStatus] = useState<'idle' | 'probing' | 'invalid' | 'single' | 'universal'>('idle');
   const [probeModels, setProbeModels] = useState<string[]>([]);
   const [allDiscovered, setAllDiscovered] = useState<DiscoveredModel[]>([]);
+  const [capOverrideOpen, setCapOverrideOpen] = useState(false);
 
   // Load discovered models on mount (cached, fast)
   useEffect(() => {
@@ -79,6 +73,7 @@ export default function ConnectionsPage() {
       const conn = connections[selectedId];
       setForm({ ...EMPTY_CONN, ...conn });
       setIsNew(false);
+      setCapOverrideOpen(false);
       // Initialize probe state from stored connection
       const health = config.health[selectedId];
       if (health?.available_models && health.available_models.length > 0) {
@@ -97,6 +92,32 @@ export default function ConnectionsPage() {
     }
   }, [selectedId, connections]);
 
+  // Compute detected capabilities for the selected connection
+  const detectedCapsForConn = useMemo(() => {
+    const caps = new Set<string>();
+    if (!selectedId) return caps;
+    for (const m of allDiscovered.filter((m) => m.connection_id === selectedId)) {
+      if (m.supports_vision) caps.add("vision");
+      if (m.supports_audio) caps.add("specialized");
+      if (m.supports_embeddings) caps.add("embeddings");
+      if (m.supports_tts) caps.add("tts");
+      if (m.supports_tool_use) caps.add("tool_use");
+    }
+    return caps;
+  }, [selectedId, allDiscovered]);
+
+  // Effective capabilities = detected + overrides
+  const effectiveCaps = useMemo(
+    () => computeEffectiveCaps(form.capability_overrides, detectedCapsForConn),
+    [form.capability_overrides, detectedCapsForConn],
+  );
+
+  // Discovered models for the selected connection (for the model listbox)
+  const connDiscoveredModels = useMemo(
+    () => (selectedId ? allDiscovered.filter((m) => m.connection_id === selectedId) : []),
+    [selectedId, allDiscovered],
+  );
+
   const showToast = (msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3000);
@@ -114,32 +135,33 @@ export default function ConnectionsPage() {
     setTestResult(null);
     setProbeStatus('idle');
     setProbeModels([]);
+    setCapOverrideOpen(false);
   };
 
   const handleSave = async () => {
     setSaving(true);
 
+    // Compute effective capabilities from overrides + detected
+    const effective = computeEffectiveCaps(form.capability_overrides, detectedCapsForConn);
+
     // Ensure embedding_provider is always saved when embedding caps are present
-    const hasEmb =
-      form.capabilities?.includes("embeddings") ||
-      form.capabilities?.includes("multimodal_embeddings");
-    if (hasEmb && !form.embedding_provider) {
-      form.embedding_provider =
-        form.connection_type === "ollama" ? "ollama" : "openai";
+    const hasEmb = effective.includes("embeddings") || effective.includes("multimodal_embeddings");
+    const formToSave = { ...form, capabilities: effective };
+    if (hasEmb && !formToSave.embedding_provider) {
+      formToSave.embedding_provider =
+        formToSave.connection_type === "ollama" ? "ollama" : "openai";
     }
 
     try {
       if (isNew) {
-        const { connection_id } = await createConnection(form);
-        // Refresh health so the new connection gets checked immediately
+        const { connection_id } = await createConnection(formToSave);
         await refreshHealth();
         await reload();
         setSelectedId(connection_id);
         setIsNew(false);
         showToast("Connection created");
       } else if (selectedId) {
-        // Strip `id` to avoid polluting WS message payload
-        const { id: _dropped, ...cleanForm } = form as Connection;
+        const { id: _dropped, ...cleanForm } = formToSave as Connection;
         void _dropped;
         await updateConnection(selectedId, cleanForm);
         await reload();
@@ -178,7 +200,7 @@ export default function ConnectionsPage() {
       const result = await testConnection({
         base_url: form.base_url,
         api_key: form.api_key,
-        capabilities: form.capabilities,
+        capabilities: effectiveCaps,
         connection_type: form.connection_type,
       });
       setTestResult(result);
@@ -221,7 +243,7 @@ export default function ConnectionsPage() {
       const result = await testConnection({
         base_url: form.base_url,
         api_key: form.api_key,
-        capabilities: form.capabilities,
+        capabilities: effectiveCaps,
         connection_type: form.connection_type,
       });
       if (!result.reachable || !result.api_valid) {
@@ -241,24 +263,40 @@ export default function ConnectionsPage() {
     }
   };
 
-  const toggleCapability = (cap: string) => {
-    setForm((f) => ({
-      ...f,
-      capabilities: f.capabilities.includes(cap)
-        ? f.capabilities.filter((c) => c !== cap)
-        : [...f.capabilities, cap],
-    }));
+  const updateOverride = (cap: string, mode: "default" | "force_enable" | "force_disable") => {
+    setForm((f) => {
+      const overrides = { ...(f.capability_overrides || {}) };
+      if (mode === "default") {
+        delete overrides[cap];
+      } else {
+        overrides[cap] = mode;
+      }
+      return { ...f, capability_overrides: overrides };
+    });
   };
 
+  const overrideCount = Object.keys(form.capability_overrides || {}).length;
+
   const hasLlmCaps =
-    form.capabilities.includes("conversation") ||
-    form.capabilities.includes("tool_use") ||
-    form.capabilities.includes("external_llm");
-  const hasTtsCaps = form.capabilities.includes("tts");
-  const hasSttCaps = form.capabilities.includes("stt");
-  const hasEmbeddingCaps = form.capabilities.includes("embeddings");
+    effectiveCaps.includes("conversation") ||
+    effectiveCaps.includes("tool_use") ||
+    effectiveCaps.includes("external_llm");
+  const hasTtsCaps = effectiveCaps.includes("tts");
+  const hasSttCaps = effectiveCaps.includes("stt");
+  const hasEmbeddingCaps = effectiveCaps.includes("embeddings");
   const isClaude = form.connection_type === "claude_api" || form.connection_type === "claude_addon";
   const isOllama = form.connection_type === "ollama";
+
+  // Per-model capability helper for the model listbox
+  const getModelCaps = (m: DiscoveredModel): string[] => {
+    const caps: string[] = [];
+    if (m.supports_vision) caps.push("vision");
+    if (m.supports_tool_use) caps.push("tool_use");
+    if (m.supports_embeddings) caps.push("embeddings");
+    if (m.supports_tts) caps.push("tts");
+    if (m.supports_audio) caps.push("specialized");
+    return caps;
+  };
 
   return (
     <>
@@ -407,27 +445,54 @@ export default function ConnectionsPage() {
                       placeholder="Optional"
                     />
                   </label>
-                  {probeStatus === 'universal' && probeModels.length > 0 ? (
-                    <label className="form-control">
+
+                  {/* Model listbox — upgraded with per-model capability dots for universal endpoints */}
+                  {probeStatus === 'universal' && (probeModels.length > 0 || connDiscoveredModels.length > 0) ? (
+                    <div className="form-control md:col-span-2">
                       <div className="label">
                         <span className="label-text">Available Models</span>
                       </div>
-                      <select
-                        multiple
-                        className="select select-bordered select-sm h-auto min-h-[4rem] max-h-32 overflow-y-auto"
-                        disabled
-                        value={probeModels}
-                      >
-                        {probeModels.map(m => (
-                          <option key={m} value={m}>{m}</option>
-                        ))}
-                      </select>
+                      <div className="border border-base-300 rounded-lg max-h-40 overflow-y-auto bg-base-200/30">
+                        {connDiscoveredModels.length > 0
+                          ? connDiscoveredModels.map((m) => {
+                              const mCaps = getModelCaps(m);
+                              return (
+                                <div
+                                  key={m.id}
+                                  className="flex items-center justify-between px-3 py-1.5 border-b border-base-300/50 last:border-b-0 hover:bg-base-200/50"
+                                >
+                                  <span className="text-xs font-mono truncate flex-1">{m.id}</span>
+                                  <div className="flex gap-1 items-center ml-2 shrink-0">
+                                    {mCaps.map((cap) => {
+                                      const color = CAPABILITY_COLORS[cap]?.dot || "bg-base-content";
+                                      return (
+                                        <span
+                                          key={cap}
+                                          className={`w-2 h-2 rounded-full ${color} inline-block`}
+                                          title={CAPABILITY_LABELS[cap] || cap}
+                                        />
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })
+                          : probeModels.map((m) => (
+                              <div
+                                key={m}
+                                className="px-3 py-1.5 border-b border-base-300/50 last:border-b-0"
+                              >
+                                <span className="text-xs font-mono">{m}</span>
+                              </div>
+                            ))
+                        }
+                      </div>
                       <div className="label pt-0.5">
                         <span className="label-text-alt text-base-content/40">
-                          Universal endpoint — models listed for verification
+                          Universal endpoint — colored dots indicate per-model capabilities
                         </span>
                       </div>
-                    </label>
+                    </div>
                   ) : (
                     <label className="form-control">
                       <div className="label">
@@ -446,94 +511,102 @@ export default function ConnectionsPage() {
                   )}
                 </div>
 
-                {/* Capabilities */}
+                {/* Effective Capabilities display */}
                 <div className="form-control">
                   <div className="label">
                     <span className="label-text">Capabilities</span>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {ALL_CAPABILITIES.map((cap) => (
-                      <label key={cap} className="flex items-center gap-1.5">
-                        <input
-                          type="checkbox"
-                          className="checkbox checkbox-xs checkbox-primary"
-                          checked={form.capabilities.includes(cap)}
-                          onChange={() => toggleCapability(cap)}
-                        />
-                        <span className="text-xs">
-                          {CAPABILITY_LABELS[cap] || cap}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
-                  {/* Detected capabilities from model discovery */}
-                  {(() => {
-                    const connModels = selectedId
-                      ? allDiscovered.filter((m) => m.connection_id === selectedId)
-                      : [];
-                    if (connModels.length === 0) return null;
-                    const det: string[] = [];
-                    const has = (flag: boolean, name: string) => { if (flag) det.push(name); };
-                    for (const m of connModels) {
-                      has(m.supports_vision, "vision");
-                      has(m.supports_audio, "audio");
-                      has(m.supports_embeddings, "embeddings");
-                      has(m.supports_tts, "tts");
-                      has(m.supports_tool_use, "tool_use");
+                  <div className="flex flex-wrap gap-1.5">
+                    {effectiveCaps.length > 0
+                      ? effectiveCaps.map((cap) => {
+                          const color = CAPABILITY_COLORS[cap]?.badge || "badge-outline";
+                          return (
+                            <span key={cap} className={`badge badge-sm ${color}`}>
+                              {CAPABILITY_LABELS[cap] || cap}
+                            </span>
+                          );
+                        })
+                      : <span className="text-xs text-base-content/40">No capabilities detected — use overrides below to assign</span>
                     }
-                    const unique = [...new Set(det)];
-                    const missing = unique.filter((d) => !form.capabilities.includes(d));
-                    if (unique.length === 0) return null;
+                  </div>
 
-                    // Map detected capability names to ALL_CAPABILITIES entries
-                    const capMap: Record<string, string> = {
-                      vision: "vision",
-                      audio: "specialized",
-                      embeddings: "embeddings",
-                      tts: "tts",
-                      tool_use: "tool_use",
-                    };
-                    const detLabels: Record<string, string> = {
-                      vision: "Vision",
-                      audio: "Audio",
-                      embeddings: "Embeddings",
-                      tts: "TTS",
-                      tool_use: "Tool Use",
-                    };
+                  {/* Collapsible Model Capability Override panel */}
+                  <div className="mt-3">
+                    <button
+                      type="button"
+                      className="flex items-center gap-2 text-sm font-medium text-base-content/70 hover:text-base-content transition-colors"
+                      onClick={() => setCapOverrideOpen(!capOverrideOpen)}
+                    >
+                      <FontAwesomeIcon
+                        icon={capOverrideOpen ? faChevronDown : faChevronRight}
+                        className="text-xs"
+                      />
+                      Model Capability Override
+                      {overrideCount > 0 && (
+                        <span className="badge badge-xs badge-accent">{overrideCount}</span>
+                      )}
+                    </button>
 
-                    return (
-                      <div className="mt-2 flex items-center gap-2 flex-wrap">
-                        <span className="text-xs text-base-content/50">Detected:</span>
-                        {unique.map((d) => (
-                          <span
-                            key={d}
-                            className={`badge badge-xs ${
-                              form.capabilities.includes(capMap[d] || d)
-                                ? "badge-success"
-                                : "badge-accent badge-outline"
-                            }`}
-                          >
-                            {detLabels[d] || d}
-                          </span>
-                        ))}
-                        {missing.length > 0 && (
-                          <button
-                            type="button"
-                            className="btn btn-xs btn-accent btn-outline"
-                            onClick={() => {
-                              const toAdd = missing.map((d) => capMap[d] || d);
-                              setForm((f) => ({
-                                ...f,
-                                capabilities: [...new Set([...f.capabilities, ...toAdd])],
-                              }));
-                            }}
-                          >
-                            Apply detected
-                          </button>
-                        )}
+                    {capOverrideOpen && (
+                      <div className="mt-2 border border-base-300 rounded-lg p-3 space-y-1.5 bg-base-200/20">
+                        <p className="text-xs text-base-content/50 mb-2">
+                          Override auto-detected capabilities. Default uses detected values.
+                        </p>
+                        {ALL_CAPABILITIES.map((cap) => {
+                          const override = (form.capability_overrides || {})[cap];
+                          const isDetected = detectedCapsForConn.has(cap);
+                          const dotColor = CAPABILITY_COLORS[cap]?.dot || "bg-base-content";
+                          return (
+                            <div
+                              key={cap}
+                              className="flex items-center justify-between py-1"
+                            >
+                              <div className="flex items-center gap-2">
+                                <span className={`w-2.5 h-2.5 rounded-full ${dotColor} inline-block shrink-0`} />
+                                <span className="text-xs">{CAPABILITY_LABELS[cap] || cap}</span>
+                                {isDetected && (
+                                  <span className="badge badge-xs badge-success badge-outline">det</span>
+                                )}
+                              </div>
+                              <div className="join">
+                                <button
+                                  type="button"
+                                  className={`btn btn-xs join-item ${
+                                    !override ? "btn-active" : "btn-ghost"
+                                  }`}
+                                  onClick={() => updateOverride(cap, "default")}
+                                >
+                                  Default
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`btn btn-xs join-item ${
+                                    override === "force_enable"
+                                      ? "btn-success"
+                                      : "btn-ghost"
+                                  }`}
+                                  onClick={() => updateOverride(cap, "force_enable")}
+                                >
+                                  On
+                                </button>
+                                <button
+                                  type="button"
+                                  className={`btn btn-xs join-item ${
+                                    override === "force_disable"
+                                      ? "btn-error"
+                                      : "btn-ghost"
+                                  }`}
+                                  onClick={() => updateOverride(cap, "force_disable")}
+                                >
+                                  Off
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
-                    );
-                  })()}
+                    )}
+                  </div>
                 </div>
 
                 {/* LLM detail fields */}

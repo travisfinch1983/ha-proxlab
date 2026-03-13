@@ -199,6 +199,7 @@ export interface EntityScanStatus {
   collection_name: string;
   connected: boolean;
   capabilities: string[];
+  connection_id: string;
 }
 
 export interface ReindexProgress {

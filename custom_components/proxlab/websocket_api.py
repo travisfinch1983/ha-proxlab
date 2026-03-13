@@ -506,6 +506,7 @@ async def ws_connections_list(
         vol.Optional("tool_description"): str,
         vol.Optional("auto_include_context"): bool,
         vol.Optional("is_universal"): bool,
+        vol.Optional("capability_overrides", default={}): {str: str},
     }
 )
 @websocket_api.async_response
@@ -565,6 +566,7 @@ async def ws_connections_create(
         vol.Optional("tool_description"): str,
         vol.Optional("auto_include_context"): bool,
         vol.Optional("is_universal"): bool,
+        vol.Optional("capability_overrides"): {str: str},
     }
 )
 @websocket_api.async_response
@@ -1376,6 +1378,7 @@ def ws_entity_scan_status(
             "collection_name": live.get("collection_name", ""),
             "connected": live.get("connected", False),
             "capabilities": capabilities,
+            "connection_id": conn_id or "",
         },
     )
 

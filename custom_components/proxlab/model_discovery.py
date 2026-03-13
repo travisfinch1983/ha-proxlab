@@ -457,12 +457,15 @@ async def _discover_claude(
         return []
 
     for m in data.get("data", []):
+        model_id = m.get("id", "unknown")
+        supports_vision = "claude-3" in model_id or "claude-4" in model_id
         info = ModelInfo(
-            id=m.get("id", "unknown"),
+            id=model_id,
             connection_id=conn_id,
             connection_name=conn.get("name", ""),
             provider="claude",
             supports_tool_use=True,
+            supports_vision=supports_vision,
         )
         if m.get("display_name"):
             info.extras["display_name"] = m["display_name"]
