@@ -1319,9 +1319,18 @@ class ProxLabAgent(
             if flat_config is None:
                 flat_config = resolve_agent_to_flat_config(live_config, AGENT_CONVERSATION)
             if flat_config is None:
-                flat_config = {}
+                raise ValueError(
+                    f"No LLM connection configured for agent '{agent_id}'. "
+                    "Please assign a connection to this agent in the Agents tab, "
+                    "or create an Agent Profile with a connection."
+                )
 
         resolved_model = flat_config.get(CONF_LLM_MODEL) or live_config.get(CONF_LLM_MODEL, "unknown")
+        if not flat_config.get(CONF_LLM_BASE_URL):
+            raise ValueError(
+                f"Agent '{agent_id}' has a connection but no API URL configured. "
+                "Please check the connection settings."
+            )
 
         # Build system prompt
         if system_prompt_override:

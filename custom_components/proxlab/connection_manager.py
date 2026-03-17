@@ -266,10 +266,30 @@ def resolve_connection_to_flat_config(
     conn = connections.get(connection_id)
     if not conn:
         return None
+
+    # Only use model_override if it's non-empty and plausibly belongs to this
+    # connection.  A stale override from a previous connection (e.g. a
+    # koboldcpp model name sent to an Anthropic endpoint) causes 404 errors.
+    effective_model = conn.get("model", "")
+    if model_override:
+        conn_type = conn.get("connection_type", "")
+        conn_base = conn.get("base_url", "")
+        # Reject overrides that look like koboldcpp/proxy slugs on non-local connections
+        if conn_type in ("anthropic", "claude_code") or "anthropic" in conn_base:
+            if "/" in model_override and not model_override.startswith("claude"):
+                _LOGGER.warning(
+                    "Ignoring stale model_override '%s' for %s connection '%s'",
+                    model_override, conn_type, connection_id,
+                )
+            else:
+                effective_model = model_override
+        else:
+            effective_model = model_override
+
     return {
         CONF_LLM_BASE_URL: normalize_url(conn.get("base_url", "")),
         CONF_LLM_API_KEY: conn.get("api_key", ""),
-        CONF_LLM_MODEL: model_override or conn.get("model", ""),
+        CONF_LLM_MODEL: effective_model,
         CONF_LLM_TEMPERATURE: conn.get("temperature", DEFAULT_TEMPERATURE),
         CONF_LLM_MAX_TOKENS: conn.get("max_tokens", DEFAULT_MAX_TOKENS),
         CONF_LLM_TOP_P: conn.get("top_p", DEFAULT_TOP_P),

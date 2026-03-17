@@ -294,6 +294,7 @@ export interface AgentProfile {
   agent_id: string;
   connection_id: string;
   model_override?: string;
+  tool_set?: string;
   prompt_override: string;
   personality_enabled: boolean;
   personality: {

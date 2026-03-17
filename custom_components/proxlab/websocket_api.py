@@ -3486,7 +3486,9 @@ async def ws_card_invoke(
             flat_config_override = resolve_connection_to_flat_config(
                 config, connection_id, model_override=profile.get("model_override")
             )
-            agent_id = "conversation_agent"
+            # Use profile's tool_set to determine which agent's tools to provide,
+            # defaulting to worker_agent so profiles have basic HA tools
+            agent_id = profile.get("tool_set", "worker_agent")
         else:
             agent_id = profile.get("agent_id", "conversation_agent")
         prompt_override = profile.get("prompt_override", "")
@@ -3570,7 +3572,7 @@ async def ws_card_invoke_stream(
             flat_config_override = resolve_connection_to_flat_config(
                 config, connection_id, model_override=profile.get("model_override")
             )
-            agent_id = "conversation_agent"
+            agent_id = profile.get("tool_set", "worker_agent")
         else:
             agent_id = profile.get("agent_id", "conversation_agent")
         prompt_override = profile.get("prompt_override", "")
@@ -3695,7 +3697,7 @@ async def ws_group_invoke_stream(
             profile_config_override = resolve_connection_to_flat_config(
                 config, connection_id, model_override=profile.get("model_override")
             )
-            p_agent_id = "conversation_agent"
+            p_agent_id = profile.get("tool_set", "worker_agent")
         else:
             profile_config_override = None
             p_agent_id = profile.get("agent_id", "conversation_agent")
@@ -4099,7 +4101,7 @@ async def ws_group_invoke(
             profile_config_override = resolve_connection_to_flat_config(
                 config, connection_id, model_override=profile.get("model_override")
             )
-            agent_id = "conversation_agent"
+            agent_id = profile.get("tool_set", "worker_agent")
         else:
             profile_config_override = None
             agent_id = profile.get("agent_id", "conversation_agent")

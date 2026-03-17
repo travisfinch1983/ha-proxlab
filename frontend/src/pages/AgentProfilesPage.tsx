@@ -29,6 +29,7 @@ interface FormData {
   name: string;
   connection_id: string;
   model_override: string;
+  tool_set: string;
   avatar: string;
   prompt_override: string;
   personality_enabled: boolean;
@@ -48,10 +49,20 @@ interface FormData {
   memory_universal_access: boolean;
 }
 
+const TOOL_SET_OPTIONS = [
+  { value: "worker_agent", label: "Worker (HA Control + Query + Logs)" },
+  { value: "repairman_agent", label: "Repairman (Worker tools + SSH)" },
+  { value: "security_guard_agent", label: "Security Guard (Query + Camera)" },
+  { value: "cybersecurity_agent", label: "Cybersecurity (Query + SSH)" },
+  { value: "reporting_agent", label: "Reporting (Query + Logs)" },
+  { value: "conversation_agent", label: "Conversation Only (No tools)" },
+];
+
 const EMPTY_FORM: FormData = {
   name: "",
   connection_id: "",
   model_override: "",
+  tool_set: "worker_agent",
   avatar: "",
   prompt_override: "",
   personality_enabled: false,
@@ -76,6 +87,7 @@ function profileToForm(p: AgentProfile): FormData {
     name: p.name,
     connection_id: p.connection_id || "",
     model_override: p.model_override || "",
+    tool_set: p.tool_set || "worker_agent",
     avatar: p.avatar,
     prompt_override: p.prompt_override,
     personality_enabled: p.personality_enabled,
@@ -102,6 +114,7 @@ function formToProfile(form: FormData): Omit<AgentProfile, "profile_id"> {
     agent_id: "conversation_agent",
     connection_id: form.connection_id,
     model_override: form.model_override || undefined,
+    tool_set: form.tool_set || "worker_agent",
     avatar: form.avatar,
     prompt_override: form.prompt_override,
     personality_enabled: form.personality_enabled,
@@ -567,7 +580,7 @@ export default function AgentProfilesPage() {
                       className="select select-bordered select-sm"
                       value={form.connection_id}
                       onChange={(e) =>
-                        setForm({ ...form, connection_id: e.target.value })
+                        setForm({ ...form, connection_id: e.target.value, model_override: "" })
                       }
                     >
                       <option value="">Select a connection...</option>
@@ -611,6 +624,31 @@ export default function AgentProfilesPage() {
                       </div>
                     </div>
                   )}
+
+                  {/* Tool Set */}
+                  <div className="form-control">
+                    <div className="label">
+                      <span className="label-text font-medium">Tool Access</span>
+                    </div>
+                    <select
+                      className="select select-bordered select-sm"
+                      value={form.tool_set}
+                      onChange={(e) =>
+                        setForm({ ...form, tool_set: e.target.value })
+                      }
+                    >
+                      {TOOL_SET_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="label pt-0.5">
+                      <span className="label-text-alt text-base-content/40">
+                        Which tools this agent can use (read sensors, control devices, SSH, etc.)
+                      </span>
+                    </div>
+                  </div>
 
                   {/* Avatar — #17: "Select Profile Photo" label */}
                   <div className="form-control">
