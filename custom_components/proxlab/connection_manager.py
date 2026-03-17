@@ -230,16 +230,19 @@ def resolve_agent_to_flat_config(
     agent_cfg = agents_cfg.get(agent_id, {})
     model_override = agent_cfg.get("primary_model_override")
 
-    # Reject stale overrides that don't belong to this connection type
+    # Reject stale overrides from a different connection/provider
     effective_model = conn.get("model", "")
     if model_override:
-        conn_type = conn.get("connection_type", "")
-        conn_base = conn.get("base_url", "")
-        if conn_type in ("anthropic", "claude_code") or "anthropic" in conn_base:
-            if "/" in model_override and not model_override.startswith("claude"):
+        # If override has a provider prefix (e.g. "koboldcpp/Model") but the
+        # connection's own model doesn't share that prefix, it's stale.
+        if "/" in model_override:
+            override_prefix = model_override.split("/", 1)[0].lower()
+            conn_model = conn.get("model", "")
+            conn_prefix = conn_model.split("/", 1)[0].lower() if "/" in conn_model else ""
+            if override_prefix != conn_prefix:
                 _LOGGER.warning(
-                    "Ignoring stale model_override '%s' for %s connection (agent %s)",
-                    model_override, conn_type, agent_id,
+                    "Ignoring stale model_override '%s' (prefix '%s' != connection prefix '%s') for agent %s",
+                    model_override, override_prefix, conn_prefix or conn_model, agent_id,
                 )
             else:
                 effective_model = model_override
@@ -283,19 +286,17 @@ def resolve_connection_to_flat_config(
     if not conn:
         return None
 
-    # Only use model_override if it's non-empty and plausibly belongs to this
-    # connection.  A stale override from a previous connection (e.g. a
-    # koboldcpp model name sent to an Anthropic endpoint) causes 404 errors.
+    # Reject stale overrides from a different connection/provider
     effective_model = conn.get("model", "")
     if model_override:
-        conn_type = conn.get("connection_type", "")
-        conn_base = conn.get("base_url", "")
-        # Reject overrides that look like koboldcpp/proxy slugs on non-local connections
-        if conn_type in ("anthropic", "claude_code") or "anthropic" in conn_base:
-            if "/" in model_override and not model_override.startswith("claude"):
+        if "/" in model_override:
+            override_prefix = model_override.split("/", 1)[0].lower()
+            conn_model = conn.get("model", "")
+            conn_prefix = conn_model.split("/", 1)[0].lower() if "/" in conn_model else ""
+            if override_prefix != conn_prefix:
                 _LOGGER.warning(
-                    "Ignoring stale model_override '%s' for %s connection '%s'",
-                    model_override, conn_type, connection_id,
+                    "Ignoring stale model_override '%s' (prefix '%s' != connection prefix '%s') for connection %s",
+                    model_override, override_prefix, conn_prefix or conn_model, connection_id,
                 )
             else:
                 effective_model = model_override

@@ -3283,7 +3283,7 @@ const Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
         }
       ], this._cardConfig?.auto_tts && this._speakSegments(e.response_text || "");
     } catch (e) {
-      const i = e instanceof Error ? e.message : String(e);
+      const i = e instanceof Error ? e.message : e && typeof e == "object" && "message" in e ? String(e.message) : String(e);
       this._messages = [
         ...this._messages,
         {
@@ -3342,7 +3342,7 @@ const Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
         }
       );
     } catch (i) {
-      const s = i instanceof Error ? i.message : String(i);
+      const s = i instanceof Error ? i.message : i && typeof i == "object" && "message" in i ? String(i.message) : String(i);
       this._streaming = !1, this._loading = !1;
       const a = [...this._messages];
       a[e] = {

@@ -3524,7 +3524,7 @@ async def ws_card_invoke(
             flat_config_override = resolve_connection_to_flat_config(
                 config, connection_id, model_override=profile.get("model_override")
             )
-            agent_id = "worker_agent"
+            agent_id = "worker"
             profile_enabled_tools = profile.get("enabled_tools")
         else:
             agent_id = profile.get("agent_id", "conversation_agent")
@@ -3612,7 +3612,7 @@ async def ws_card_invoke_stream(
             flat_config_override = resolve_connection_to_flat_config(
                 config, connection_id, model_override=profile.get("model_override")
             )
-            agent_id = "worker_agent"
+            agent_id = "worker"
             profile_enabled_tools = profile.get("enabled_tools")
         else:
             agent_id = profile.get("agent_id", "conversation_agent")
@@ -3741,7 +3741,7 @@ async def ws_group_invoke_stream(
             profile_config_override = resolve_connection_to_flat_config(
                 config, connection_id, model_override=profile.get("model_override")
             )
-            p_agent_id = "worker_agent"
+            p_agent_id = "worker"
             p_enabled_tools = profile.get("enabled_tools")
         else:
             profile_config_override = None
@@ -4148,7 +4148,7 @@ async def ws_group_invoke(
             profile_config_override = resolve_connection_to_flat_config(
                 config, connection_id, model_override=profile.get("model_override")
             )
-            agent_id = "worker_agent"
+            agent_id = "worker"
             profile_tools = profile.get("enabled_tools")
         else:
             profile_config_override = None

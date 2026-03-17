@@ -560,7 +560,9 @@ export class ProxLabChatCard extends LitElement {
         this._speakSegments(result.response_text || "");
       }
     } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
+      const errMsg = err instanceof Error ? err.message
+        : (err && typeof err === "object" && "message" in err) ? String((err as any).message)
+        : String(err);
       this._messages = [
         ...this._messages,
         {
@@ -642,7 +644,9 @@ export class ProxLabChatCard extends LitElement {
         },
       );
     } catch (err: unknown) {
-      const errMsg = err instanceof Error ? err.message : String(err);
+      const errMsg = err instanceof Error ? err.message
+        : (err && typeof err === "object" && "message" in err) ? String((err as any).message)
+        : String(err);
       this._streaming = false;
       this._loading = false;
       const updated = [...this._messages];
