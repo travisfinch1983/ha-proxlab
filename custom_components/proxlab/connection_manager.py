@@ -230,10 +230,26 @@ def resolve_agent_to_flat_config(
     agent_cfg = agents_cfg.get(agent_id, {})
     model_override = agent_cfg.get("primary_model_override")
 
+    # Reject stale overrides that don't belong to this connection type
+    effective_model = conn.get("model", "")
+    if model_override:
+        conn_type = conn.get("connection_type", "")
+        conn_base = conn.get("base_url", "")
+        if conn_type in ("anthropic", "claude_code") or "anthropic" in conn_base:
+            if "/" in model_override and not model_override.startswith("claude"):
+                _LOGGER.warning(
+                    "Ignoring stale model_override '%s' for %s connection (agent %s)",
+                    model_override, conn_type, agent_id,
+                )
+            else:
+                effective_model = model_override
+        else:
+            effective_model = model_override
+
     return {
         CONF_LLM_BASE_URL: normalize_url(conn.get("base_url", "")),
         CONF_LLM_API_KEY: conn.get("api_key", ""),
-        CONF_LLM_MODEL: model_override or conn.get("model", ""),
+        CONF_LLM_MODEL: effective_model,
         CONF_LLM_TEMPERATURE: conn.get("temperature", DEFAULT_TEMPERATURE),
         CONF_LLM_MAX_TOKENS: conn.get("max_tokens", DEFAULT_MAX_TOKENS),
         CONF_LLM_TOP_P: conn.get("top_p", DEFAULT_TOP_P),

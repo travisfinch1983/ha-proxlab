@@ -995,6 +995,10 @@ async def ws_agents_update(
         if key in msg:
             agent_cfg[key] = msg[key]
 
+    # Auto-clear model override when connection changes (prevents stale model on wrong endpoint)
+    if "primary_connection" in msg and "primary_model_override" not in msg:
+        agent_cfg.pop("primary_model_override", None)
+
     new_agents[agent_id] = agent_cfg
     new_options[CONF_AGENTS] = new_agents
 
