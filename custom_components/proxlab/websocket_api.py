@@ -2124,6 +2124,7 @@ def ws_agent_available(
 
         result.append({
             "id": defn.id,
+            "agent_id": defn.id,
             "name": defn.name,
             "description": defn.description,
             "group": _agent_group(agent_id),
