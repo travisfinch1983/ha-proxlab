@@ -3524,11 +3524,10 @@ async def ws_card_invoke(
             flat_config_override = resolve_connection_to_flat_config(
                 config, connection_id, model_override=profile.get("model_override")
             )
-            agent_id = "worker"
             profile_enabled_tools = profile.get("enabled_tools")
         else:
-            agent_id = profile.get("agent_id", "conversation_agent")
             profile_enabled_tools = None
+        agent_id = profile.get("agent_id", "conversation_agent")
         prompt_override = profile.get("prompt_override", "")
         personality_enabled = profile.get("personality_enabled", False)
         personality = profile.get("personality", {})
@@ -3612,11 +3611,10 @@ async def ws_card_invoke_stream(
             flat_config_override = resolve_connection_to_flat_config(
                 config, connection_id, model_override=profile.get("model_override")
             )
-            agent_id = "worker"
             profile_enabled_tools = profile.get("enabled_tools")
         else:
-            agent_id = profile.get("agent_id", "conversation_agent")
             profile_enabled_tools = None
+        agent_id = profile.get("agent_id", "conversation_agent")
         prompt_override = profile.get("prompt_override", "")
         personality_enabled = profile.get("personality_enabled", False)
         personality = profile.get("personality", {})
@@ -3741,12 +3739,11 @@ async def ws_group_invoke_stream(
             profile_config_override = resolve_connection_to_flat_config(
                 config, connection_id, model_override=profile.get("model_override")
             )
-            p_agent_id = "worker"
             p_enabled_tools = profile.get("enabled_tools")
         else:
             profile_config_override = None
-            p_agent_id = profile.get("agent_id", "conversation_agent")
             p_enabled_tools = None
+        p_agent_id = profile.get("agent_id", "conversation_agent")
 
         system_prompt = _build_profile_system_prompt(
             personality_enabled, personality, prompt_override
@@ -4148,12 +4145,11 @@ async def ws_group_invoke(
             profile_config_override = resolve_connection_to_flat_config(
                 config, connection_id, model_override=profile.get("model_override")
             )
-            agent_id = "worker"
             profile_tools = profile.get("enabled_tools")
         else:
             profile_config_override = None
-            agent_id = profile.get("agent_id", "conversation_agent")
             profile_tools = None
+        agent_id = profile.get("agent_id", "conversation_agent")
 
         system_prompt = _build_profile_system_prompt(
             personality_enabled, personality, prompt_override

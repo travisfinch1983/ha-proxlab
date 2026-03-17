@@ -1523,7 +1523,10 @@ class ProxLabAgent(
                 "tool_breakdown": tool_breakdown,
                 "user_input": message,
                 "connection_type": conn_type,
-                "context_messages": [],
+                "context_messages": [
+                    {"role": m["role"], "content": m.get("content", "")[:100000]}
+                    for m in messages
+                ],
                 "tools": [d.get("function", d).get("name", "") for d in tool_definitions] if tool_definitions else [],
             }
             if cost is not None:

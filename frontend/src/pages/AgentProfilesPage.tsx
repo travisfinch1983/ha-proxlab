@@ -17,9 +17,11 @@ import {
   callWS,
   fetchModels,
   fetchAvailableTools,
+  listAgents,
+  getDefaultPrompt,
   type ToolCatalogEntry,
 } from "../api";
-import type { AgentProfile, Connection, ConnectionHealth } from "../types";
+import type { AgentProfile, AgentInfo, Connection, ConnectionHealth } from "../types";
 
 interface TtsVoice {
   id: string;
@@ -29,6 +31,7 @@ interface TtsVoice {
 
 interface FormData {
   name: string;
+  agent_template: string;
   connection_id: string;
   model_override: string;
   enabled_tools: string[];
@@ -53,9 +56,10 @@ interface FormData {
 
 const EMPTY_FORM: FormData = {
   name: "",
+  agent_template: "",
   connection_id: "",
   model_override: "",
-  enabled_tools: ["ha_control", "ha_query", "ha_system_log"],
+  enabled_tools: [],
   avatar: "",
   prompt_override: "",
   personality_enabled: false,
@@ -78,9 +82,10 @@ const EMPTY_FORM: FormData = {
 function profileToForm(p: AgentProfile): FormData {
   return {
     name: p.name,
+    agent_template: p.agent_id === "conversation_agent" ? "" : p.agent_id,
     connection_id: p.connection_id || "",
     model_override: p.model_override || "",
-    enabled_tools: p.enabled_tools ?? ["ha_control", "ha_query", "ha_system_log"],
+    enabled_tools: p.enabled_tools ?? [],
     avatar: p.avatar,
     prompt_override: p.prompt_override,
     personality_enabled: p.personality_enabled,
@@ -104,7 +109,7 @@ function profileToForm(p: AgentProfile): FormData {
 function formToProfile(form: FormData): Omit<AgentProfile, "profile_id"> {
   return {
     name: form.name,
-    agent_id: "conversation_agent",
+    agent_id: form.agent_template || "conversation_agent",
     connection_id: form.connection_id,
     model_override: form.model_override || undefined,
     enabled_tools: form.enabled_tools,
@@ -163,6 +168,10 @@ export default function AgentProfilesPage() {
   // Tool catalog for profile tool toggles
   const [profileTools, setProfileTools] = useState<ToolCatalogEntry[]>([]);
 
+  // Agent template dropdown state
+  const [agentTemplates, setAgentTemplates] = useState<AgentInfo[]>([]);
+  const [toolDefaults, setToolDefaults] = useState<Record<string, string[]>>({});
+
   // Character card detection state
   const [ccDetected, setCcDetected] = useState(false);
   const [pendingCcData, setPendingCcData] = useState<Record<string, string> | null>(null);
@@ -212,12 +221,19 @@ export default function AgentProfilesPage() {
     }
   }, [form.connection_id, connections]);
 
-  // Load available tools when modal opens
+  // Load available tools and agent templates when modal opens
   useEffect(() => {
     if (!modalOpen) return;
-    fetchAvailableTools()
-      .then((res) => setProfileTools(res.tools))
-      .catch(() => setProfileTools([]));
+    Promise.all([fetchAvailableTools(), listAgents()])
+      .then(([toolsRes, agents]) => {
+        setProfileTools(toolsRes.tools);
+        setToolDefaults(toolsRes.defaults);
+        setAgentTemplates(agents.filter((a) => a.has_prompt && a.group !== "system"));
+      })
+      .catch(() => {
+        setProfileTools([]);
+        setAgentTemplates([]);
+      });
   }, [modalOpen]);
 
   // Auto-expand textareas when switching to a tab with content
@@ -324,6 +340,16 @@ export default function AgentProfilesPage() {
   const llmConnections = Object.entries(connections).filter(([, c]) =>
     c.capabilities?.some((cap) => cap === "conversation" || cap === "tool_use")
   );
+
+  const handleTemplateChange = async (templateId: string) => {
+    if (!templateId) {
+      setForm((prev) => ({ ...prev, agent_template: "", prompt_override: "", enabled_tools: [] }));
+      return;
+    }
+    const prompt = await getDefaultPrompt(templateId);
+    const tools = toolDefaults[templateId] || [];
+    setForm((prev) => ({ ...prev, agent_template: templateId, prompt_override: prompt, enabled_tools: [...tools] }));
+  };
 
   const handleAvatarUpload = async (
     e: React.ChangeEvent<HTMLInputElement>
@@ -597,6 +623,30 @@ export default function AgentProfilesPage() {
                     <div className="label pt-0.5">
                       <span className="label-text-alt text-base-content/40">
                         LLM connection this profile uses for responses
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Agent Template */}
+                  <div className="form-control">
+                    <div className="label">
+                      <span className="label-text font-medium">Agent Template</span>
+                    </div>
+                    <select
+                      className="select select-bordered select-sm"
+                      value={form.agent_template}
+                      onChange={(e) => handleTemplateChange(e.target.value)}
+                    >
+                      <option value="">Custom</option>
+                      {agentTemplates.map((a) => (
+                        <option key={a.id} value={a.id}>
+                          {a.name}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="label pt-0.5">
+                      <span className="label-text-alt text-base-content/40">
+                        Pre-fill prompt and tools from a built-in agent, or choose Custom to start blank
                       </span>
                     </div>
                   </div>
