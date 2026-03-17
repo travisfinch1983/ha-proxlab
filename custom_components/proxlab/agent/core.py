@@ -1278,6 +1278,7 @@ class ProxLabAgent(
         include_history: bool = False,
         system_prompt_override: str | None = None,
         config_override: dict[str, Any] | None = None,
+        enabled_tools_override: list[str] | None = None,
     ) -> dict[str, Any]:
         """Directly invoke a specific agent, bypassing orchestrator routing.
 
@@ -1356,8 +1357,16 @@ class ProxLabAgent(
 
         messages.append({"role": "user", "content": message})
 
-        # Get tool definitions for this agent
-        tool_names = AGENT_TOOL_MAP.get(agent_id)
+        # Get tool definitions — profile override > stored agent config > defaults
+        if enabled_tools_override is not None:
+            tool_names = enabled_tools_override
+        else:
+            agents_tools_cfg = live_config.get(CONF_AGENTS, {}).get(agent_id, {})
+            stored_tools = agents_tools_cfg.get("enabled_tools")
+            if stored_tools is not None:
+                tool_names = stored_tools
+            else:
+                tool_names = AGENT_TOOL_MAP.get(agent_id)
         tool_definitions = self.tool_handler.get_tool_definitions_for_agent(tool_names)
 
         # Token tracking
@@ -1564,6 +1573,7 @@ class ProxLabAgent(
         include_history: bool = False,
         system_prompt_override: str | None = None,
         config_override: dict[str, Any] | None = None,
+        enabled_tools_override: list[str] | None = None,
     ) -> "AsyncGenerator[dict[str, Any], None]":
         """Invoke agent with streaming. Yields delta dicts.
 
@@ -1617,7 +1627,16 @@ class ProxLabAgent(
 
         messages.append({"role": "user", "content": message})
 
-        tool_names = AGENT_TOOL_MAP.get(agent_id)
+        # Get tool definitions — profile override > stored agent config > defaults
+        if enabled_tools_override is not None:
+            tool_names = enabled_tools_override
+        else:
+            agents_tools_cfg2 = live_config.get(CONF_AGENTS, {}).get(agent_id, {})
+            stored_tools2 = agents_tools_cfg2.get("enabled_tools")
+            if stored_tools2 is not None:
+                tool_names = stored_tools2
+            else:
+                tool_names = AGENT_TOOL_MAP.get(agent_id)
         tool_definitions = self.tool_handler.get_tool_definitions_for_agent(tool_names)
 
         total_prompt_tokens = 0

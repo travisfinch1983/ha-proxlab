@@ -16,6 +16,8 @@ import {
   listConnections,
   callWS,
   fetchModels,
+  fetchAvailableTools,
+  type ToolCatalogEntry,
 } from "../api";
 import type { AgentProfile, Connection, ConnectionHealth } from "../types";
 
@@ -29,7 +31,7 @@ interface FormData {
   name: string;
   connection_id: string;
   model_override: string;
-  tool_set: string;
+  enabled_tools: string[];
   avatar: string;
   prompt_override: string;
   personality_enabled: boolean;
@@ -49,20 +51,11 @@ interface FormData {
   memory_universal_access: boolean;
 }
 
-const TOOL_SET_OPTIONS = [
-  { value: "worker_agent", label: "Worker (HA Control + Query + Logs)" },
-  { value: "repairman_agent", label: "Repairman (Worker tools + SSH)" },
-  { value: "security_guard_agent", label: "Security Guard (Query + Camera)" },
-  { value: "cybersecurity_agent", label: "Cybersecurity (Query + SSH)" },
-  { value: "reporting_agent", label: "Reporting (Query + Logs)" },
-  { value: "conversation_agent", label: "Conversation Only (No tools)" },
-];
-
 const EMPTY_FORM: FormData = {
   name: "",
   connection_id: "",
   model_override: "",
-  tool_set: "worker_agent",
+  enabled_tools: ["ha_control", "ha_query", "ha_system_log"],
   avatar: "",
   prompt_override: "",
   personality_enabled: false,
@@ -87,7 +80,7 @@ function profileToForm(p: AgentProfile): FormData {
     name: p.name,
     connection_id: p.connection_id || "",
     model_override: p.model_override || "",
-    tool_set: p.tool_set || "worker_agent",
+    enabled_tools: p.enabled_tools ?? ["ha_control", "ha_query", "ha_system_log"],
     avatar: p.avatar,
     prompt_override: p.prompt_override,
     personality_enabled: p.personality_enabled,
@@ -114,7 +107,7 @@ function formToProfile(form: FormData): Omit<AgentProfile, "profile_id"> {
     agent_id: "conversation_agent",
     connection_id: form.connection_id,
     model_override: form.model_override || undefined,
-    tool_set: form.tool_set || "worker_agent",
+    enabled_tools: form.enabled_tools,
     avatar: form.avatar,
     prompt_override: form.prompt_override,
     personality_enabled: form.personality_enabled,
@@ -167,6 +160,9 @@ export default function AgentProfilesPage() {
   // Model override state
   const [connModels, setConnModels] = useState<string[]>([]);
 
+  // Tool catalog for profile tool toggles
+  const [profileTools, setProfileTools] = useState<ToolCatalogEntry[]>([]);
+
   // Character card detection state
   const [ccDetected, setCcDetected] = useState(false);
   const [pendingCcData, setPendingCcData] = useState<Record<string, string> | null>(null);
@@ -215,6 +211,14 @@ export default function AgentProfilesPage() {
         .catch(() => setConnModels([]));
     }
   }, [form.connection_id, connections]);
+
+  // Load available tools when modal opens
+  useEffect(() => {
+    if (!modalOpen) return;
+    fetchAvailableTools()
+      .then((res) => setProfileTools(res.tools))
+      .catch(() => setProfileTools([]));
+  }, [modalOpen]);
 
   // Auto-expand textareas when switching to a tab with content
   useEffect(() => {
@@ -625,27 +629,98 @@ export default function AgentProfilesPage() {
                     </div>
                   )}
 
-                  {/* Tool Set */}
+                  {/* Tool Access */}
                   <div className="form-control">
                     <div className="label">
-                      <span className="label-text font-medium">Tool Access</span>
+                      <span className="label-text font-medium">
+                        Tool Access
+                        {form.enabled_tools.length > 0 && (
+                          <span className="badge badge-xs badge-primary ml-2">
+                            {form.enabled_tools.length}
+                          </span>
+                        )}
+                      </span>
                     </div>
-                    <select
-                      className="select select-bordered select-sm"
-                      value={form.tool_set}
-                      onChange={(e) =>
-                        setForm({ ...form, tool_set: e.target.value })
-                      }
-                    >
-                      {TOOL_SET_OPTIONS.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="border border-base-300 rounded-lg p-2 max-h-48 overflow-y-auto space-y-0.5">
+                      {profileTools.length === 0 ? (
+                        <p className="text-xs text-base-content/50 py-2 text-center">
+                          Loading tools...
+                        </p>
+                      ) : (
+                        <>
+                          {profileTools
+                            .filter((t) => t.category === "builtin")
+                            .map((tool) => (
+                              <label
+                                key={tool.name}
+                                className="flex items-center gap-2 py-1 px-1 rounded hover:bg-base-200 cursor-pointer"
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="checkbox checkbox-xs checkbox-primary"
+                                  checked={form.enabled_tools.includes(tool.name)}
+                                  onChange={() => {
+                                    const cur = form.enabled_tools;
+                                    setForm({
+                                      ...form,
+                                      enabled_tools: cur.includes(tool.name)
+                                        ? cur.filter((t) => t !== tool.name)
+                                        : [...cur, tool.name],
+                                    });
+                                  }}
+                                />
+                                <div className="min-w-0">
+                                  <span className="text-xs font-medium">{tool.name}</span>
+                                  {tool.description && (
+                                    <p className="text-[10px] text-base-content/40 truncate">
+                                      {tool.description}
+                                    </p>
+                                  )}
+                                </div>
+                              </label>
+                            ))}
+                          {profileTools.filter((t) => t.category === "mcp").length > 0 && (
+                            <>
+                              <div className="divider my-1 text-[10px]">MCP</div>
+                              {profileTools
+                                .filter((t) => t.category === "mcp")
+                                .map((tool) => (
+                                  <label
+                                    key={tool.name}
+                                    className="flex items-center gap-2 py-1 px-1 rounded hover:bg-base-200 cursor-pointer"
+                                  >
+                                    <input
+                                      type="checkbox"
+                                      className="checkbox checkbox-xs checkbox-primary"
+                                      checked={form.enabled_tools.includes(tool.name)}
+                                      onChange={() => {
+                                        const cur = form.enabled_tools;
+                                        setForm({
+                                          ...form,
+                                          enabled_tools: cur.includes(tool.name)
+                                            ? cur.filter((t) => t !== tool.name)
+                                            : [...cur, tool.name],
+                                        });
+                                      }}
+                                    />
+                                    <div className="min-w-0">
+                                      <span className="text-xs font-medium">{tool.name}</span>
+                                      {tool.server_name && (
+                                        <span className="badge badge-ghost ml-1" style={{ fontSize: "9px", padding: "0 4px", height: "14px" }}>
+                                          {tool.server_name}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </label>
+                                ))}
+                            </>
+                          )}
+                        </>
+                      )}
+                    </div>
                     <div className="label pt-0.5">
                       <span className="label-text-alt text-base-content/40">
-                        Which tools this agent can use (read sensors, control devices, SSH, etc.)
+                        Toggle which tools this profile can use
                       </span>
                     </div>
                   </div>

@@ -114,9 +114,24 @@ export async function updateAgent(
     secondary_connection: string | null;
     system_prompt: string | null;
     primary_model_override: string | null;
+    enabled_tools: string[] | null;
   }>
 ): Promise<void> {
   return callWS("proxlab/agents/update", { agent_id: agentId, ...fields });
+}
+
+export interface ToolCatalogEntry {
+  name: string;
+  description: string;
+  category: "builtin" | "mcp";
+  server_name?: string;
+}
+
+export async function fetchAvailableTools(): Promise<{
+  tools: ToolCatalogEntry[];
+  defaults: Record<string, string[]>;
+}> {
+  return callWS("proxlab/tools/available");
 }
 
 export async function fetchModels(connectionId: string): Promise<string[]> {

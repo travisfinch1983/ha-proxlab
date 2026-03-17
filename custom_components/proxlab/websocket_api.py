@@ -198,6 +198,7 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_connections_fetch_models)
     websocket_api.async_register_command(hass, ws_agents_list)
     websocket_api.async_register_command(hass, ws_agents_update)
+    websocket_api.async_register_command(hass, ws_tools_available)
     websocket_api.async_register_command(hass, ws_agents_default_prompt)
     websocket_api.async_register_command(hass, ws_context_get)
     websocket_api.async_register_command(hass, ws_context_update)
@@ -967,6 +968,7 @@ async def ws_agents_list(
         vol.Optional("secondary_connection"): vol.Any(str, None),
         vol.Optional("system_prompt"): vol.Any(str, None),
         vol.Optional("primary_model_override"): vol.Any(str, None),
+        vol.Optional("enabled_tools"): vol.Any([str], None),
     }
 )
 @websocket_api.async_response
@@ -989,7 +991,7 @@ async def ws_agents_update(
     agent_cfg = dict(new_agents.get(agent_id, {}))
 
     # Apply updates
-    for key in ("enabled", "primary_connection", "secondary_connection", "system_prompt", "primary_model_override"):
+    for key in ("enabled", "primary_connection", "secondary_connection", "system_prompt", "primary_model_override", "enabled_tools"):
         if key in msg:
             agent_cfg[key] = msg[key]
 
@@ -999,6 +1001,37 @@ async def ws_agents_update(
     hass.config_entries.async_update_entry(entry, options=new_options)
 
     connection.send_result(msg["id"], {})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/tools/available",
+        vol.Optional("entry_id"): str,
+    }
+)
+@callback
+def ws_tools_available(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Return catalog of all available tools (built-in + MCP)."""
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+
+    entry_data = hass.data.get(DOMAIN, {}).get(entry.entry_id, {})
+    agent = entry_data.get("agent")
+
+    tools: list[dict] = []
+    if agent and hasattr(agent, "tool_handler"):
+        agent._ensure_tools_registered()
+        tools = agent.tool_handler.get_tool_catalog()
+
+    # Also include the AGENT_TOOL_MAP defaults so the frontend knows the seed
+    connection.send_result(msg["id"], {
+        "tools": tools,
+        "defaults": {k: v for k, v in AGENT_TOOL_MAP.items() if v is not None},
+    })
 
 
 @websocket_api.websocket_command(
@@ -3486,11 +3519,11 @@ async def ws_card_invoke(
             flat_config_override = resolve_connection_to_flat_config(
                 config, connection_id, model_override=profile.get("model_override")
             )
-            # Use profile's tool_set to determine which agent's tools to provide,
-            # defaulting to worker_agent so profiles have basic HA tools
-            agent_id = profile.get("tool_set", "worker_agent")
+            agent_id = "worker_agent"
+            profile_enabled_tools = profile.get("enabled_tools")
         else:
             agent_id = profile.get("agent_id", "conversation_agent")
+            profile_enabled_tools = None
         prompt_override = profile.get("prompt_override", "")
         personality_enabled = profile.get("personality_enabled", False)
         personality = profile.get("personality", {})
@@ -3499,6 +3532,7 @@ async def ws_card_invoke(
         prompt_override = card_config.get("prompt_override", "")
         personality_enabled = card_config.get("personality_enabled", False)
         personality = card_config.get("personality", {})
+        profile_enabled_tools = None
 
     # Build system prompt from card config (shared helper)
     card_system_prompt = _build_profile_system_prompt(
@@ -3516,6 +3550,7 @@ async def ws_card_invoke(
             include_history=True,
             system_prompt_override=card_system_prompt,
             config_override=flat_config_override,
+            enabled_tools_override=profile_enabled_tools,
         )
         # Attach first_mes if this was a new conversation
         result["first_mes"] = first_mes
@@ -3572,9 +3607,11 @@ async def ws_card_invoke_stream(
             flat_config_override = resolve_connection_to_flat_config(
                 config, connection_id, model_override=profile.get("model_override")
             )
-            agent_id = profile.get("tool_set", "worker_agent")
+            agent_id = "worker_agent"
+            profile_enabled_tools = profile.get("enabled_tools")
         else:
             agent_id = profile.get("agent_id", "conversation_agent")
+            profile_enabled_tools = None
         prompt_override = profile.get("prompt_override", "")
         personality_enabled = profile.get("personality_enabled", False)
         personality = profile.get("personality", {})
@@ -3583,6 +3620,7 @@ async def ws_card_invoke_stream(
         prompt_override = card_config.get("prompt_override", "")
         personality_enabled = card_config.get("personality_enabled", False)
         personality = card_config.get("personality", {})
+        profile_enabled_tools = None
 
     card_system_prompt = _build_profile_system_prompt(
         personality_enabled, personality, prompt_override
@@ -3602,6 +3640,7 @@ async def ws_card_invoke_stream(
             include_history=True,
             system_prompt_override=card_system_prompt,
             config_override=flat_config_override,
+            enabled_tools_override=profile_enabled_tools,
         ):
             connection.send_message(
                 websocket_api.event_message(msg["id"], chunk)
@@ -3697,10 +3736,12 @@ async def ws_group_invoke_stream(
             profile_config_override = resolve_connection_to_flat_config(
                 config, connection_id, model_override=profile.get("model_override")
             )
-            p_agent_id = profile.get("tool_set", "worker_agent")
+            p_agent_id = "worker_agent"
+            p_enabled_tools = profile.get("enabled_tools")
         else:
             profile_config_override = None
             p_agent_id = profile.get("agent_id", "conversation_agent")
+            p_enabled_tools = None
 
         system_prompt = _build_profile_system_prompt(
             personality_enabled, personality, prompt_override
@@ -3743,6 +3784,7 @@ async def ws_group_invoke_stream(
                 include_history=True,
                 system_prompt_override=system_prompt,
                 config_override=profile_config_override,
+                enabled_tools_override=p_enabled_tools,
             ):
                 if chunk["type"] == "delta":
                     connection.send_message(
@@ -4101,10 +4143,12 @@ async def ws_group_invoke(
             profile_config_override = resolve_connection_to_flat_config(
                 config, connection_id, model_override=profile.get("model_override")
             )
-            agent_id = profile.get("tool_set", "worker_agent")
+            agent_id = "worker_agent"
+            profile_tools = profile.get("enabled_tools")
         else:
             profile_config_override = None
             agent_id = profile.get("agent_id", "conversation_agent")
+            profile_tools = None
 
         system_prompt = _build_profile_system_prompt(
             personality_enabled, personality, prompt_override
@@ -4135,6 +4179,7 @@ async def ws_group_invoke(
                 include_history=True,
                 system_prompt_override=system_prompt,
                 config_override=profile_config_override,
+                enabled_tools_override=profile_tools,
             )
             duration_ms = int((_time.monotonic() - start) * 1000)
             return {

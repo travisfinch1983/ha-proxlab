@@ -69,6 +69,7 @@ export interface AgentConfig {
   secondary_connection: string | null;
   system_prompt: string | null;
   primary_model_override?: string | null;
+  enabled_tools?: string[] | null;
 }
 
 export interface AgentInfo extends AgentDefinition {
@@ -295,6 +296,7 @@ export interface AgentProfile {
   connection_id: string;
   model_override?: string;
   tool_set?: string;
+  enabled_tools?: string[];
   prompt_override: string;
   personality_enabled: boolean;
   personality: {

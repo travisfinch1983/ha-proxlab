@@ -157,6 +157,27 @@ class ToolHandler:
         _LOGGER.debug("Returning %d tool definitions", len(definitions))
         return definitions
 
+    def get_tool_catalog(self) -> list[dict[str, Any]]:
+        """Return a catalog of all registered tools with metadata.
+
+        Returns:
+            List of dicts with name, description, category (builtin/mcp), and
+            server_name (for MCP tools).
+        """
+        catalog: list[dict[str, Any]] = []
+        for tool_name, tool in self.tools.items():
+            entry: dict[str, Any] = {
+                "name": tool_name,
+                "description": getattr(tool, "description", ""),
+            }
+            if tool_name.startswith("mcp_"):
+                entry["category"] = "mcp"
+                entry["server_name"] = getattr(tool, "server_name", "")
+            else:
+                entry["category"] = "builtin"
+            catalog.append(entry)
+        return catalog
+
     def get_tool_definitions_for_agent(
         self, tool_names: list[str] | None
     ) -> list[dict[str, Any]]:

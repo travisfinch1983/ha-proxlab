@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faRotateLeft, faPlay } from "@fortawesome/free-solid-svg-icons";
+import { faRotateLeft, faPlay, faWrench } from "@fortawesome/free-solid-svg-icons";
 import NavBar from "../layout/NavBar";
 import { useStore } from "../store";
 import SaveButton from "../components/SaveButton";
@@ -9,7 +9,9 @@ import {
   getDefaultPrompt,
   fetchConfig,
   invokeAgent,
+  fetchAvailableTools,
   type AgentInvokeResult,
+  type ToolCatalogEntry,
   fetchModels,
 } from "../api";
 import type { AgentInfo } from "../types";
@@ -57,6 +59,39 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
+  // Tools config state
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const [allTools, setAllTools] = useState<ToolCatalogEntry[]>([]);
+  const [toolDefaults, setToolDefaults] = useState<Record<string, string[]>>({});
+  const [enabledTools, setEnabledTools] = useState<string[]>(
+    agent.config?.enabled_tools ?? []
+  );
+  const [toolsInitialized, setToolsInitialized] = useState(false);
+
+  const loadTools = useCallback(async () => {
+    try {
+      const result = await fetchAvailableTools();
+      setAllTools(result.tools);
+      setToolDefaults(result.defaults);
+      // If agent has no stored config, seed from defaults
+      if (!agent.config?.enabled_tools) {
+        const defaults = result.defaults[agent.id] ?? [];
+        setEnabledTools(defaults);
+      }
+      setToolsInitialized(true);
+    } catch {
+      // ignore
+    }
+  }, [agent.id, agent.config?.enabled_tools]);
+
+  const toggleTool = (toolName: string) => {
+    setEnabledTools((prev) =>
+      prev.includes(toolName)
+        ? prev.filter((t) => t !== toolName)
+        : [...prev, toolName]
+    );
+  };
+
   // Invoke test state
   const [invokeOpen, setInvokeOpen] = useState(false);
   const [invokeMsg, setInvokeMsg] = useState("");
@@ -86,6 +121,7 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
         secondary_connection: secondaryConn || null,
         system_prompt: prompt || null,
         primary_model_override: modelOverride || null,
+        enabled_tools: toolsInitialized ? enabledTools : null,
       });
       const cfg = await fetchConfig();
       useStore.getState().setConfig(cfg);
@@ -222,6 +258,24 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
               </label>
             )}
           </div>
+        )}
+
+        {/* Tools config */}
+        {enabled && (
+          <button
+            className="btn btn-ghost btn-xs"
+            onClick={() => {
+              if (!toolsInitialized) loadTools();
+              setToolsOpen(true);
+            }}
+          >
+            <FontAwesomeIcon icon={faWrench} /> Configure Tools
+            {enabledTools.length > 0 && (
+              <span className="badge badge-xs badge-primary ml-1">
+                {enabledTools.length}
+              </span>
+            )}
+          </button>
         )}
 
         {/* Prompt editor */}
@@ -386,6 +440,127 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
             method="dialog"
             className="modal-backdrop"
             onClick={() => !invoking && setInvokeOpen(false)}
+          >
+            <button>close</button>
+          </form>
+        </dialog>
+      )}
+
+      {/* Tools Config Modal */}
+      {toolsOpen && (
+        <dialog className="modal modal-open">
+          <div className="modal-box max-w-md">
+            <h3 className="font-bold text-lg">
+              Tools: {agent.name}
+            </h3>
+            <p className="text-xs text-base-content/50 mt-1">
+              Toggle which tools this agent can use during conversations.
+            </p>
+
+            {!toolsInitialized ? (
+              <div className="flex items-center gap-2 py-8 justify-center">
+                <span className="loading loading-spinner loading-sm" />
+                <span className="text-sm text-base-content/60">Loading tools...</span>
+              </div>
+            ) : allTools.length === 0 ? (
+              <p className="text-sm text-base-content/50 py-4">
+                No tools registered. Install MCP servers from the Tools tab to add more.
+              </p>
+            ) : (
+              <div className="mt-4 space-y-1 max-h-96 overflow-y-auto">
+                {/* Built-in tools */}
+                {allTools.filter((t) => t.category === "builtin").length > 0 && (
+                  <div className="mb-3">
+                    <h4 className="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-2">
+                      Built-in Tools
+                    </h4>
+                    {allTools
+                      .filter((t) => t.category === "builtin")
+                      .map((tool) => (
+                        <label
+                          key={tool.name}
+                          className="flex items-center gap-3 py-1.5 px-2 rounded hover:bg-base-200 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            className="checkbox checkbox-xs checkbox-primary"
+                            checked={enabledTools.includes(tool.name)}
+                            onChange={() => toggleTool(tool.name)}
+                          />
+                          <div className="min-w-0">
+                            <span className="text-sm font-medium">{tool.name}</span>
+                            {tool.description && (
+                              <p className="text-xs text-base-content/50 truncate">
+                                {tool.description}
+                              </p>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                  </div>
+                )}
+
+                {/* MCP tools */}
+                {allTools.filter((t) => t.category === "mcp").length > 0 && (
+                  <div>
+                    <h4 className="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-2">
+                      MCP Server Tools
+                    </h4>
+                    {allTools
+                      .filter((t) => t.category === "mcp")
+                      .map((tool) => (
+                        <label
+                          key={tool.name}
+                          className="flex items-center gap-3 py-1.5 px-2 rounded hover:bg-base-200 cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            className="checkbox checkbox-xs checkbox-primary"
+                            checked={enabledTools.includes(tool.name)}
+                            onChange={() => toggleTool(tool.name)}
+                          />
+                          <div className="min-w-0">
+                            <span className="text-sm font-medium">{tool.name}</span>
+                            {tool.server_name && (
+                              <span className="badge badge-xs badge-ghost ml-1">
+                                {tool.server_name}
+                              </span>
+                            )}
+                            {tool.description && (
+                              <p className="text-xs text-base-content/50 truncate">
+                                {tool.description}
+                              </p>
+                            )}
+                          </div>
+                        </label>
+                      ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="modal-action">
+              <button
+                className="btn btn-ghost btn-sm"
+                onClick={() => {
+                  // Reset to defaults
+                  setEnabledTools(toolDefaults[agent.id] ?? []);
+                }}
+              >
+                <FontAwesomeIcon icon={faRotateLeft} /> Reset Defaults
+              </button>
+              <button
+                className="btn btn-ghost"
+                onClick={() => setToolsOpen(false)}
+              >
+                Close
+              </button>
+            </div>
+          </div>
+          <form
+            method="dialog"
+            className="modal-backdrop"
+            onClick={() => setToolsOpen(false)}
           >
             <button>close</button>
           </form>
