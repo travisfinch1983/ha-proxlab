@@ -200,18 +200,14 @@ export default function AgentProfilesPage() {
     load();
   }, [load]);
 
-  // Fetch available models only for universal (multi-model) connections
+  // Fetch available models for the selected connection
   useEffect(() => {
     if (!form.connection_id) {
       setConnModels([]);
       return;
     }
     const conn = connections[form.connection_id];
-    if (!conn?.is_universal) {
-      setConnModels([]);
-      return;
-    }
-    const healthModels = conn.health?.available_models;
+    const healthModels = conn?.health?.available_models;
     if (healthModels && healthModels.length > 0) {
       setConnModels(healthModels);
     } else {

@@ -36,14 +36,9 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
   const [prompt, setPrompt] = useState(agent.config?.system_prompt ?? "");
   const [showPrompt, setShowPrompt] = useState(false);
 
-  // Load available models only for universal (multi-model) connections
+  // Load available models for the selected connection
   useEffect(() => {
     if (!primaryConn) {
-      setConnModels([]);
-      return;
-    }
-    const conn = connections[primaryConn];
-    if (!conn?.is_universal) {
       setConnModels([]);
       return;
     }
@@ -55,7 +50,7 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
         .then((models) => setConnModels(models))
         .catch(() => setConnModels([]));
     }
-  }, [primaryConn, config.health, connections]);
+  }, [primaryConn, config.health]);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
 
