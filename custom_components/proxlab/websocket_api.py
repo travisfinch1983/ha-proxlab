@@ -1049,8 +1049,16 @@ def ws_tools_available(
 def ws_agents_default_prompt(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    """Return the default system prompt for an agent."""
+    """Return the current system prompt for an agent (custom if set, else default)."""
     agent_id = msg["agent_id"]
+    # Check for a user-saved custom prompt first
+    entry = _get_entry(hass, msg)
+    if entry:
+        agents_cfg = dict(entry.options).get(CONF_AGENTS, {})
+        custom_prompt = agents_cfg.get(agent_id, {}).get("system_prompt")
+        if custom_prompt:
+            connection.send_result(msg["id"], {"prompt": custom_prompt})
+            return
     prompt = get_default_prompt(agent_id)
     connection.send_result(msg["id"], {"prompt": prompt})
 
