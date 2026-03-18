@@ -284,6 +284,10 @@ def resolve_connection_to_flat_config(
     connections = config.get(CONF_CONNECTIONS, {})
     conn = connections.get(connection_id)
     if not conn:
+        _LOGGER.warning(
+            "Connection '%s' not found in %d connections: %s",
+            connection_id, len(connections), list(connections.keys()),
+        )
         return None
 
     # Reject stale overrides from a different connection/provider
@@ -302,6 +306,11 @@ def resolve_connection_to_flat_config(
                 effective_model = model_override
         else:
             effective_model = model_override
+
+    _LOGGER.debug(
+        "Resolved connection '%s' → base_url=%s model=%s",
+        connection_id, conn.get("base_url", ""), effective_model,
+    )
 
     return {
         CONF_LLM_BASE_URL: normalize_url(conn.get("base_url", "")),

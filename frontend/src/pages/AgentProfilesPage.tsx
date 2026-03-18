@@ -201,20 +201,18 @@ export default function AgentProfilesPage() {
   }, [load]);
 
   // Fetch available models for the selected connection
+  // Show cached models immediately for fast UI, then fetch fresh in background
   useEffect(() => {
     if (!form.connection_id) {
       setConnModels([]);
       return;
     }
     const conn = connections[form.connection_id];
-    const healthModels = conn?.health?.available_models;
-    if (healthModels && healthModels.length > 0) {
-      setConnModels(healthModels);
-    } else {
-      fetchModels(form.connection_id)
-        .then((models) => setConnModels(models))
-        .catch(() => setConnModels([]));
-    }
+    const cached = conn?.health?.available_models;
+    if (cached?.length) setConnModels(cached);
+    fetchModels(form.connection_id)
+      .then((models) => { if (models.length) setConnModels(models); })
+      .catch(() => { if (!cached?.length) setConnModels([]); });
   }, [form.connection_id, connections]);
 
   // Load available tools and agent templates when modal opens

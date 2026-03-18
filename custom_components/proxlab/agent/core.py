@@ -1775,6 +1775,67 @@ class ProxLabAgent(
             )
 
         defn = AGENT_DEFINITIONS[agent_id]
+
+        # Fire conversation trace event (matches invoke_agent non-streaming path)
+        try:
+            from ..helpers import estimate_claude_cost
+
+            conn_type = (flat_config or {}).get("connection_type", "local")
+            llm_lat = duration_ms
+            tps = round(total_completion_tokens / (llm_lat / 1000), 1) if llm_lat > 0 else 0
+            cost = estimate_claude_cost(
+                resolved_model, total_prompt_tokens, total_completion_tokens
+            ) if conn_type == "claude_api" else None
+
+            tool_breakdown: dict[str, int] = {}
+            for tr in tool_results_list:
+                tn = tr.get("tool_name", "unknown")
+                tool_breakdown[tn] = tool_breakdown.get(tn, 0) + 1
+
+            step: dict[str, Any] = {
+                "agent_id": agent_id,
+                "agent_name": defn.name,
+                "model": resolved_model,
+                "duration_ms": duration_ms,
+                "tokens": {
+                    "prompt": total_prompt_tokens,
+                    "completion": total_completion_tokens,
+                    "total": total_prompt_tokens + total_completion_tokens,
+                },
+                "tokens_per_sec": tps,
+                "performance": {"llm_latency_ms": llm_lat, "tool_latency_ms": 0, "context_latency_ms": 0, "ttft_ms": 0},
+                "response_text": final_text,
+                "tool_calls": len(tool_results_list),
+                "tool_breakdown": tool_breakdown,
+                "user_input": message,
+                "connection_type": conn_type,
+                "context_messages": [
+                    {"role": m["role"], "content": m.get("content", "")[:100000]}
+                    for m in messages
+                ],
+                "tools": [d.get("function", d).get("name", "") for d in tool_definitions] if tool_definitions else [],
+            }
+            if cost is not None:
+                step["cost_estimate"] = round(cost, 6)
+
+            self.hass.bus.async_fire(EVENT_CONVERSATION_FINISHED, {
+                "conversation_id": conversation_id or f"invoke_{agent_id}",
+                "user_id": user_id,
+                "user_message": message,
+                "response_text": final_text,
+                "model": resolved_model,
+                "duration_ms": duration_ms,
+                "tokens": {"prompt": total_prompt_tokens, "completion": total_completion_tokens, "total": total_prompt_tokens + total_completion_tokens},
+                "performance": step["performance"],
+                "tool_calls": len(tool_results_list),
+                "tool_breakdown": tool_breakdown,
+                "steps": [step],
+                "routed_agent": agent_id,
+                "routing_reason": "direct_invoke_stream",
+            })
+        except Exception:
+            _LOGGER.debug("Failed to emit trace for invoke_agent_streaming", exc_info=True)
+
         yield {
             "type": "done",
             "response_text": final_text,

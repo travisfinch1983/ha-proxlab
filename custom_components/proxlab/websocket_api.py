@@ -3532,6 +3532,20 @@ async def ws_card_invoke(
             flat_config_override = resolve_connection_to_flat_config(
                 config, connection_id, model_override=profile.get("model_override")
             )
+            if flat_config_override is None:
+                _LOGGER.error(
+                    "Profile '%s' references connection '%s' which was not found. "
+                    "Available connections: %s",
+                    profile.get("name", profile_id),
+                    connection_id,
+                    list(config.get(CONF_CONNECTIONS, {}).keys()),
+                )
+                connection.send_error(
+                    msg["id"], "connection_not_found",
+                    f"Profile connection '{connection_id}' not found. "
+                    "Please edit the profile and re-select its connection."
+                )
+                return
             profile_enabled_tools = profile.get("enabled_tools")
         else:
             profile_enabled_tools = None
@@ -3619,6 +3633,20 @@ async def ws_card_invoke_stream(
             flat_config_override = resolve_connection_to_flat_config(
                 config, connection_id, model_override=profile.get("model_override")
             )
+            if flat_config_override is None:
+                _LOGGER.error(
+                    "Profile '%s' references connection '%s' which was not found. "
+                    "Available connections: %s",
+                    profile.get("name", profile_id),
+                    connection_id,
+                    list(config.get(CONF_CONNECTIONS, {}).keys()),
+                )
+                connection.send_error(
+                    msg["id"], "connection_not_found",
+                    f"Profile connection '{connection_id}' not found. "
+                    "Please edit the profile and re-select its connection."
+                )
+                return
             profile_enabled_tools = profile.get("enabled_tools")
         else:
             profile_enabled_tools = None

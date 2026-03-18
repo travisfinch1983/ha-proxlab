@@ -37,19 +37,17 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
   const [showPrompt, setShowPrompt] = useState(false);
 
   // Load available models for the selected connection
+  // Show cached models immediately for fast UI, then fetch fresh in background
   useEffect(() => {
     if (!primaryConn) {
       setConnModels([]);
       return;
     }
-    const healthModels = config.health[primaryConn]?.available_models;
-    if (healthModels && healthModels.length > 0) {
-      setConnModels(healthModels);
-    } else {
-      fetchModels(primaryConn)
-        .then((models) => setConnModels(models))
-        .catch(() => setConnModels([]));
-    }
+    const cached = config.health[primaryConn]?.available_models;
+    if (cached?.length) setConnModels(cached);
+    fetchModels(primaryConn)
+      .then((models) => { if (models.length) setConnModels(models); })
+      .catch(() => { if (!cached?.length) setConnModels([]); });
   }, [primaryConn, config.health]);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);

@@ -668,12 +668,13 @@ def is_ollama_backend(base_url: str) -> bool:
     return False
 
 
-def is_anthropic_backend(base_url: str) -> bool:
+def is_anthropic_backend(base_url: str, connection_type: str = "") -> bool:
     """Check if the LLM base URL points to Anthropic's Claude API.
 
     Detects Anthropic backends by checking for:
     1. 'anthropic.com' in the hostname
     2. 'anthropic' in the URL path (for proxied setups)
+    3. connection_type being 'claude_addon' or 'claude_api'
 
     This is used to conditionally omit parameters that Anthropic's
     OpenAI-compatible API does not support (e.g. sending both
@@ -681,6 +682,7 @@ def is_anthropic_backend(base_url: str) -> bool:
 
     Args:
         base_url: The LLM API base URL to check
+        connection_type: Optional connection type from config (e.g. 'claude_addon')
 
     Returns:
         True if the URL appears to be an Anthropic endpoint, False otherwise
@@ -690,6 +692,8 @@ def is_anthropic_backend(base_url: str) -> bool:
         True
         >>> is_anthropic_backend("http://localhost:5001/v1")
         False
+        >>> is_anthropic_backend("http://host:3000/v1", "claude_addon")
+        True
     """
     if not base_url:
         return False
@@ -701,6 +705,10 @@ def is_anthropic_backend(base_url: str) -> bool:
 
     # Catch proxied setups like /anthropic/v1
     if "/anthropic" in url_lower or "://anthropic" in url_lower:
+        return True
+
+    # Claude Code addon and direct Claude API connections use Anthropic SDK
+    if connection_type in ("claude_addon", "claude_api"):
         return True
 
     return False

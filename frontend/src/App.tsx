@@ -44,6 +44,13 @@ export default function App() {
       .catch((err) =>
         useStore.getState().setError(err?.message || "Failed to load config")
       );
+    // Poll for config updates (health, models) every 60s
+    const interval = setInterval(() => {
+      fetchConfig()
+        .then((cfg) => useStore.getState().setConfig(cfg))
+        .catch(() => {});
+    }, 60_000);
+    return () => clearInterval(interval);
   }, [hass]);
 
   // Waiting for HA connection

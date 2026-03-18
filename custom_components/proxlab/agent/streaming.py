@@ -253,7 +253,7 @@ class StreamingMixin:
 
         # Anthropic's API rejects requests with both temperature and top_p.
         # Only include top_p for non-Anthropic backends.
-        if not is_anthropic_backend(base_url):
+        if not is_anthropic_backend(base_url, cfg.get("connection_type", "")):
             payload["top_p"] = cfg.get(CONF_LLM_TOP_P, 1.0)
 
         # Only include keep_alive for Ollama backends (not supported by OpenAI, etc.)
@@ -268,7 +268,7 @@ class StreamingMixin:
             payload["tool_choice"] = "auto"
 
         # Request usage statistics in stream (not supported by Anthropic)
-        if not is_anthropic_backend(base_url):
+        if not is_anthropic_backend(base_url, cfg.get("connection_type", "")):
             payload["stream_options"] = {"include_usage": True}
 
         if cfg.get(CONF_DEBUG_LOGGING):
