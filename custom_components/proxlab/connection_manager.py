@@ -230,19 +230,19 @@ def resolve_agent_to_flat_config(
     agent_cfg = agents_cfg.get(agent_id, {})
     model_override = agent_cfg.get("primary_model_override")
 
-    # Reject stale overrides from a different connection/provider
+    # Reject stale overrides from a different connection/provider.
+    # Only compare prefixes when BOTH have a provider prefix (e.g. "koboldcpp/...").
+    # If the connection model has no prefix, accept the override as-is.
     effective_model = conn.get("model", "")
     if model_override:
-        # If override has a provider prefix (e.g. "koboldcpp/Model") but the
-        # connection's own model doesn't share that prefix, it's stale.
-        if "/" in model_override:
+        conn_model = conn.get("model", "")
+        if "/" in model_override and "/" in conn_model:
             override_prefix = model_override.split("/", 1)[0].lower()
-            conn_model = conn.get("model", "")
-            conn_prefix = conn_model.split("/", 1)[0].lower() if "/" in conn_model else ""
+            conn_prefix = conn_model.split("/", 1)[0].lower()
             if override_prefix != conn_prefix:
                 _LOGGER.warning(
                     "Ignoring stale model_override '%s' (prefix '%s' != connection prefix '%s') for agent %s",
-                    model_override, override_prefix, conn_prefix or conn_model, agent_id,
+                    model_override, override_prefix, conn_prefix, agent_id,
                 )
             else:
                 effective_model = model_override
@@ -290,17 +290,19 @@ def resolve_connection_to_flat_config(
         )
         return None
 
-    # Reject stale overrides from a different connection/provider
+    # Reject stale overrides from a different connection/provider.
+    # Only compare prefixes when BOTH have a provider prefix (e.g. "koboldcpp/...").
+    # If the connection model has no prefix, accept the override as-is.
     effective_model = conn.get("model", "")
     if model_override:
-        if "/" in model_override:
+        conn_model = conn.get("model", "")
+        if "/" in model_override and "/" in conn_model:
             override_prefix = model_override.split("/", 1)[0].lower()
-            conn_model = conn.get("model", "")
-            conn_prefix = conn_model.split("/", 1)[0].lower() if "/" in conn_model else ""
+            conn_prefix = conn_model.split("/", 1)[0].lower()
             if override_prefix != conn_prefix:
                 _LOGGER.warning(
                     "Ignoring stale model_override '%s' (prefix '%s' != connection prefix '%s') for connection %s",
-                    model_override, override_prefix, conn_prefix or conn_model, connection_id,
+                    model_override, override_prefix, conn_prefix, connection_id,
                 )
             else:
                 effective_model = model_override
