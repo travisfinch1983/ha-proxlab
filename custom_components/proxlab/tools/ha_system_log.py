@@ -90,7 +90,12 @@ class HomeAssistantSystemLogTool(BaseTool):
                 break
 
         if sys_log_handler is not None and hasattr(sys_log_handler, "records"):
-            records = list(sys_log_handler.records)
+            # records is an OrderedDict — iterate .values() for LogEntry objects
+            raw_records = sys_log_handler.records
+            if isinstance(raw_records, dict):
+                record_list = list(raw_records.values())
+            else:
+                record_list = list(raw_records)
 
             # Map severity filter to logging levels
             level_map = {
@@ -100,12 +105,14 @@ class HomeAssistantSystemLogTool(BaseTool):
             }
             min_level = level_map.get(severity, logging.WARNING)
 
-            for record in reversed(records):
+            for record in reversed(record_list):
                 if len(entries) >= max_entries:
                     break
 
-                # Filter by severity
-                level = record.get("level")
+                # LogEntry is a dataclass — use getattr for safe access
+                level = getattr(record, "level", None)
+                if level is None:
+                    level = record.get("level") if isinstance(record, dict) else 0
                 if isinstance(level, int) and level < min_level:
                     continue
                 elif isinstance(level, str):
@@ -113,25 +120,27 @@ class HomeAssistantSystemLogTool(BaseTool):
                     if numeric < min_level:
                         continue
 
-                message = record.get("message", "")
-                source = record.get("source", ["unknown"])
-                name = record.get("name", "")
+                message = getattr(record, "message", "") if not isinstance(record, dict) else record.get("message", "")
+                source = getattr(record, "source", ["unknown"]) if not isinstance(record, dict) else record.get("source", ["unknown"])
+                name = getattr(record, "name", "") if not isinstance(record, dict) else record.get("name", "")
+                timestamp = getattr(record, "timestamp", 0) if not isinstance(record, dict) else record.get("timestamp", 0)
+                count = getattr(record, "count", 1) if not isinstance(record, dict) else record.get("count", 1)
+                first_occurred = getattr(record, "first_occurred", None) if not isinstance(record, dict) else record.get("first_occurred")
 
                 # Filter by search term
-                combined = f"{message} {name} {' '.join(source) if isinstance(source, list) else source}"
+                source_str = " ".join(source) if isinstance(source, (list, tuple)) else str(source)
+                combined = f"{message} {name} {source_str}"
                 if search and search not in combined.lower():
                     continue
 
                 entries.append({
-                    "level": record.get("level", "UNKNOWN")
-                        if isinstance(record.get("level"), str)
-                        else logging.getLevelName(record.get("level", 0)),
-                    "source": source,
-                    "message": message[:1000],  # Cap very long messages
+                    "level": level if isinstance(level, str) else logging.getLevelName(level),
+                    "source": list(source) if isinstance(source, (list, tuple)) else [str(source)],
+                    "message": str(message)[:1000],  # Cap very long messages
                     "name": name,
-                    "timestamp": record.get("timestamp", 0),
-                    "count": record.get("count", 1),
-                    "first_occurred": record.get("first_occurred"),
+                    "timestamp": timestamp,
+                    "count": count,
+                    "first_occurred": first_occurred,
                 })
         else:
             # Method 2: Fallback — read the log file directly
