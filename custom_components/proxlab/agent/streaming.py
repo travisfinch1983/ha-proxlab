@@ -247,7 +247,7 @@ class StreamingMixin:
             "model": cfg[CONF_LLM_MODEL],
             "messages": messages,
             "temperature": cfg.get(CONF_LLM_TEMPERATURE, 0.7),
-            "max_tokens": cfg.get(CONF_LLM_MAX_TOKENS, 1000),
+            "max_tokens": cfg.get(CONF_LLM_MAX_TOKENS, 2048),
             "stream": True,  # Enable streaming!
         }
 

@@ -94,6 +94,8 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
             await self._session.close()
             self._session = None
 
+        old_data = self.data or {}
+
         data: dict[str, ConnectionCheckResult] = {}
         for conn_id, result in zip(tasks.keys(), results):
             if isinstance(result, Exception):
@@ -107,6 +109,28 @@ class ConnectionHealthCoordinator(DataUpdateCoordinator[dict[str, ConnectionChec
                 )
             else:
                 data[conn_id] = result
+
+        # Fire HA events on model state transitions
+        for conn_id, new_result in data.items():
+            old_result = old_data.get(conn_id)
+            if old_result is None:
+                continue
+            old_models = set(old_result.available_models or [])
+            new_models = set(new_result.available_models or [])
+
+            for model in old_models - new_models:
+                self.hass.bus.async_fire("proxlab_model_unloaded", {
+                    "connection_id": conn_id,
+                    "model": model,
+                })
+                _LOGGER.info("Model '%s' unloaded from connection '%s'", model, conn_id)
+
+            for model in new_models - old_models:
+                self.hass.bus.async_fire("proxlab_model_loaded", {
+                    "connection_id": conn_id,
+                    "model": model,
+                })
+                _LOGGER.info("Model '%s' loaded on connection '%s'", model, conn_id)
 
         return data
 

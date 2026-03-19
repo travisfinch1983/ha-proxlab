@@ -366,6 +366,16 @@ export const cardStyles = css`
     40% { transform: scale(1); opacity: 1; }
   }
 
+  /* Model unavailable warning */
+  .model-warning {
+    padding: 6px 12px;
+    background: rgba(255, 152, 0, 0.12);
+    color: #e65100;
+    font-size: 12px;
+    text-align: center;
+    border-top: 1px solid rgba(255, 152, 0, 0.3);
+  }
+
   /* Input bar */
   .input-bar {
     display: flex;

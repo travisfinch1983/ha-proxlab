@@ -28,6 +28,7 @@ from .const import (
     CONF_AGENTS,
     CONF_LLM_API_KEY,
     CONF_LLM_BASE_URL,
+    CONF_LLM_MODEL,
     CONF_CONNECTIONS,
     CONF_CONTEXT_FORMAT,
     CONF_CONTEXT_MODE,
@@ -3546,6 +3547,24 @@ async def ws_card_invoke(
                     "Please edit the profile and re-select its connection."
                 )
                 return
+
+            # Check model availability via health coordinator
+            resolved_model = flat_config_override.get(CONF_LLM_MODEL, "")
+            if resolved_model:
+                coordinator = entry_data.get("coordinator")
+                if coordinator and coordinator.data:
+                    health = coordinator.data.get(connection_id)
+                    if health and health.available_models is not None:
+                        if resolved_model not in health.available_models:
+                            avail = ", ".join(health.available_models) if health.available_models else "none"
+                            connection.send_error(
+                                msg["id"], "model_unavailable",
+                                f"Model '{resolved_model}' is not currently loaded on connection "
+                                f"'{connection_id}'. Available models: {avail}. "
+                                "Please load the model or select a different one."
+                            )
+                            return
+
             profile_enabled_tools = profile.get("enabled_tools")
         else:
             profile_enabled_tools = None
@@ -3647,6 +3666,24 @@ async def ws_card_invoke_stream(
                     "Please edit the profile and re-select its connection."
                 )
                 return
+
+            # Check model availability via health coordinator
+            resolved_model = flat_config_override.get(CONF_LLM_MODEL, "")
+            if resolved_model:
+                coordinator = entry_data.get("coordinator")
+                if coordinator and coordinator.data:
+                    health = coordinator.data.get(connection_id)
+                    if health and health.available_models is not None:
+                        if resolved_model not in health.available_models:
+                            avail = ", ".join(health.available_models) if health.available_models else "none"
+                            connection.send_error(
+                                msg["id"], "model_unavailable",
+                                f"Model '{resolved_model}' is not currently loaded on connection "
+                                f"'{connection_id}'. Available models: {avail}. "
+                                "Please load the model or select a different one."
+                            )
+                            return
+
             profile_enabled_tools = profile.get("enabled_tools")
         else:
             profile_enabled_tools = None

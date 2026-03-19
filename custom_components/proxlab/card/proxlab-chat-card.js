@@ -3,7 +3,7 @@
  * Copyright 2019 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const D = globalThis, N = D.ShadowRoot && (D.ShadyCSS === void 0 || D.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, F = Symbol(), K = /* @__PURE__ */ new WeakMap();
+const L = globalThis, N = L.ShadowRoot && (L.ShadyCSS === void 0 || L.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, F = Symbol(), K = /* @__PURE__ */ new WeakMap();
 let ct = class {
   constructor(t, e, i) {
     if (this._$cssResult$ = !0, i !== F) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
@@ -32,7 +32,7 @@ const mt = (n) => new ct(typeof n == "string" ? n : n + "", void 0, F), j = (n, 
 }, vt = (n, t) => {
   if (N) n.adoptedStyleSheets = t.map((e) => e instanceof CSSStyleSheet ? e : e.styleSheet);
   else for (const e of t) {
-    const i = document.createElement("style"), s = D.litNonce;
+    const i = document.createElement("style"), s = L.litNonce;
     s !== void 0 && i.setAttribute("nonce", s), i.textContent = e.cssText, n.appendChild(i);
   }
 }, Y = N ? (n) => n : (n) => n instanceof CSSStyleSheet ? ((t) => {
@@ -95,8 +95,8 @@ let $ = class extends HTMLElement {
       this[e] = o;
     } };
     return { get: s, set(o) {
-      const l = s?.call(this);
-      a?.call(this, o), this.requestUpdate(t, l, i);
+      const d = s?.call(this);
+      a?.call(this, o), this.requestUpdate(t, d, i);
     }, configurable: !0, enumerable: !0 };
   }
   static getPropertyOptions(t) {
@@ -181,8 +181,8 @@ let $ = class extends HTMLElement {
     if (s !== void 0 && this._$Em !== s) {
       const a = i.getPropertyOptions(s), o = typeof a.converter == "function" ? { fromAttribute: a.converter } : a.converter?.fromAttribute !== void 0 ? a.converter : R;
       this._$Em = s;
-      const l = o.fromAttribute(e, a.type);
-      this[s] = l ?? this._$Ej?.get(s) ?? l, this._$Em = null;
+      const d = o.fromAttribute(e, a.type);
+      this[s] = d ?? this._$Ej?.get(s) ?? d, this._$Em = null;
     }
   }
   requestUpdate(t, e, i, s = !1, a) {
@@ -218,8 +218,8 @@ let $ = class extends HTMLElement {
       }
       const i = this.constructor.elementProperties;
       if (i.size > 0) for (const [s, a] of i) {
-        const { wrapped: o } = a, l = this[s];
-        o !== !0 || this._$AL.has(s) || l === void 0 || this.C(s, void 0, a, l);
+        const { wrapped: o } = a, d = this[s];
+        o !== !0 || this._$AL.has(s) || d === void 0 || this.C(s, void 0, a, d);
       }
     }
     let t = !1;
@@ -262,7 +262,7 @@ $.elementStyles = [], $.shadowRootOptions = { mode: "open" }, $[S("elementProper
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const E = globalThis, J = (n) => n, V = E.trustedTypes, tt = V ? V.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, pt = "$lit$", f = `lit$${Math.random().toFixed(9).slice(2)}$`, ut = "?" + f, St = `<${ut}>`, y = document, M = () => y.createComment(""), T = (n) => n === null || typeof n != "object" && typeof n != "function", Q = Array.isArray, Et = (n) => Q(n) || typeof n?.[Symbol.iterator] == "function", O = `[ 	
+const E = globalThis, J = (n) => n, U = E.trustedTypes, tt = U ? U.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, pt = "$lit$", f = `lit$${Math.random().toFixed(9).slice(2)}$`, ut = "?" + f, St = `<${ut}>`, y = document, M = () => y.createComment(""), T = (n) => n === null || typeof n != "object" && typeof n != "function", Q = Array.isArray, Et = (n) => Q(n) || typeof n?.[Symbol.iterator] == "function", O = `[ 	
 \f\r]`, A = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, et = /-->/g, it = />/g, b = RegExp(`>|${O}(?:([^\\s"'>=/]+)(${O}*=${O}*(?:[^ 	
 \f\r"'\`<>=]|("|')|))|$)`, "g"), st = /'/g, at = /"/g, gt = /^(?:script|style|textarea|title)$/i, Pt = (n) => (t, ...e) => ({ _$litType$: n, strings: t, values: e }), r = Pt(1), w = Symbol.for("lit-noChange"), c = Symbol.for("lit-nothing"), rt = /* @__PURE__ */ new WeakMap(), x = y.createTreeWalker(y, 129);
 function _t(n, t) {
@@ -272,12 +272,12 @@ function _t(n, t) {
 const Mt = (n, t) => {
   const e = n.length - 1, i = [];
   let s, a = t === 2 ? "<svg>" : t === 3 ? "<math>" : "", o = A;
-  for (let l = 0; l < e; l++) {
-    const d = n[l];
+  for (let d = 0; d < e; d++) {
+    const l = n[d];
     let h, u, p = -1, g = 0;
-    for (; g < d.length && (o.lastIndex = g, u = o.exec(d), u !== null); ) g = o.lastIndex, o === A ? u[1] === "!--" ? o = et : u[1] !== void 0 ? o = it : u[2] !== void 0 ? (gt.test(u[2]) && (s = RegExp("</" + u[2], "g")), o = b) : u[3] !== void 0 && (o = b) : o === b ? u[0] === ">" ? (o = s ?? A, p = -1) : u[1] === void 0 ? p = -2 : (p = o.lastIndex - u[2].length, h = u[1], o = u[3] === void 0 ? b : u[3] === '"' ? at : st) : o === at || o === st ? o = b : o === et || o === it ? o = A : (o = b, s = void 0);
-    const _ = o === b && n[l + 1].startsWith("/>") ? " " : "";
-    a += o === A ? d + St : p >= 0 ? (i.push(h), d.slice(0, p) + pt + d.slice(p) + f + _) : d + f + (p === -2 ? l : _);
+    for (; g < l.length && (o.lastIndex = g, u = o.exec(l), u !== null); ) g = o.lastIndex, o === A ? u[1] === "!--" ? o = et : u[1] !== void 0 ? o = it : u[2] !== void 0 ? (gt.test(u[2]) && (s = RegExp("</" + u[2], "g")), o = b) : u[3] !== void 0 && (o = b) : o === b ? u[0] === ">" ? (o = s ?? A, p = -1) : u[1] === void 0 ? p = -2 : (p = o.lastIndex - u[2].length, h = u[1], o = u[3] === void 0 ? b : u[3] === '"' ? at : st) : o === at || o === st ? o = b : o === et || o === it ? o = A : (o = b, s = void 0);
+    const _ = o === b && n[d + 1].startsWith("/>") ? " " : "";
+    a += o === A ? l + St : p >= 0 ? (i.push(h), l.slice(0, p) + pt + l.slice(p) + f + _) : l + f + (p === -2 ? d : _);
   }
   return [_t(n, a + (n[e] || "<?>") + (t === 2 ? "</svg>" : t === 3 ? "</math>" : "")), i];
 };
@@ -286,29 +286,29 @@ class I {
     let s;
     this.parts = [];
     let a = 0, o = 0;
-    const l = t.length - 1, d = this.parts, [h, u] = Mt(t, e);
+    const d = t.length - 1, l = this.parts, [h, u] = Mt(t, e);
     if (this.el = I.createElement(h, i), x.currentNode = this.el.content, e === 2 || e === 3) {
       const p = this.el.content.firstChild;
       p.replaceWith(...p.childNodes);
     }
-    for (; (s = x.nextNode()) !== null && d.length < l; ) {
+    for (; (s = x.nextNode()) !== null && l.length < d; ) {
       if (s.nodeType === 1) {
         if (s.hasAttributes()) for (const p of s.getAttributeNames()) if (p.endsWith(pt)) {
           const g = u[o++], _ = s.getAttribute(p).split(f), B = /([.?@])?(.*)/.exec(g);
-          d.push({ type: 1, index: a, name: B[2], strings: _, ctor: B[1] === "." ? It : B[1] === "?" ? zt : B[1] === "@" ? Bt : H }), s.removeAttribute(p);
-        } else p.startsWith(f) && (d.push({ type: 6, index: a }), s.removeAttribute(p));
+          l.push({ type: 1, index: a, name: B[2], strings: _, ctor: B[1] === "." ? It : B[1] === "?" ? zt : B[1] === "@" ? Bt : H }), s.removeAttribute(p);
+        } else p.startsWith(f) && (l.push({ type: 6, index: a }), s.removeAttribute(p));
         if (gt.test(s.tagName)) {
           const p = s.textContent.split(f), g = p.length - 1;
           if (g > 0) {
-            s.textContent = V ? V.emptyScript : "";
-            for (let _ = 0; _ < g; _++) s.append(p[_], M()), x.nextNode(), d.push({ type: 2, index: ++a });
+            s.textContent = U ? U.emptyScript : "";
+            for (let _ = 0; _ < g; _++) s.append(p[_], M()), x.nextNode(), l.push({ type: 2, index: ++a });
             s.append(p[g], M());
           }
         }
-      } else if (s.nodeType === 8) if (s.data === ut) d.push({ type: 2, index: a });
+      } else if (s.nodeType === 8) if (s.data === ut) l.push({ type: 2, index: a });
       else {
         let p = -1;
-        for (; (p = s.data.indexOf(f, p + 1)) !== -1; ) d.push({ type: 7, index: a }), p += f.length - 1;
+        for (; (p = s.data.indexOf(f, p + 1)) !== -1; ) l.push({ type: 7, index: a }), p += f.length - 1;
       }
       a++;
     }
@@ -337,13 +337,13 @@ class Tt {
   u(t) {
     const { el: { content: e }, parts: i } = this._$AD, s = (t?.creationScope ?? y).importNode(e, !0);
     x.currentNode = s;
-    let a = x.nextNode(), o = 0, l = 0, d = i[0];
-    for (; d !== void 0; ) {
-      if (o === d.index) {
+    let a = x.nextNode(), o = 0, d = 0, l = i[0];
+    for (; l !== void 0; ) {
+      if (o === l.index) {
         let h;
-        d.type === 2 ? h = new z(a, a.nextSibling, this, t) : d.type === 1 ? h = new d.ctor(a, d.name, d.strings, this, t) : d.type === 6 && (h = new Dt(a, this, t)), this._$AV.push(h), d = i[++l];
+        l.type === 2 ? h = new z(a, a.nextSibling, this, t) : l.type === 1 ? h = new l.ctor(a, l.name, l.strings, this, t) : l.type === 6 && (h = new Lt(a, this, t)), this._$AV.push(h), l = i[++d];
       }
-      o !== d?.index && (a = x.nextNode(), o++);
+      o !== l?.index && (a = x.nextNode(), o++);
     }
     return x.currentNode = y, s;
   }
@@ -426,9 +426,9 @@ class H {
     let o = !1;
     if (a === void 0) t = C(this, t, e, 0), o = !T(t) || t !== this._$AH && t !== w, o && (this._$AH = t);
     else {
-      const l = t;
-      let d, h;
-      for (t = a[0], d = 0; d < a.length - 1; d++) h = C(this, l[i + d], e, d), h === w && (h = this._$AH[d]), o || (o = !T(h) || h !== this._$AH[d]), h === c ? t = c : t !== c && (t += (h ?? "") + a[d + 1]), this._$AH[d] = h;
+      const d = t;
+      let l, h;
+      for (t = a[0], l = 0; l < a.length - 1; l++) h = C(this, d[i + l], e, l), h === w && (h = this._$AH[l]), o || (o = !T(h) || h !== this._$AH[l]), h === c ? t = c : t !== c && (t += (h ?? "") + a[l + 1]), this._$AH[l] = h;
     }
     o && !s && this.j(t);
   }
@@ -465,7 +465,7 @@ class Bt extends H {
     typeof this._$AH == "function" ? this._$AH.call(this.options?.host ?? this.element, t) : this._$AH.handleEvent(t);
   }
 }
-class Dt {
+class Lt {
   constructor(t, e, i) {
     this.element = t, this.type = 6, this._$AN = void 0, this._$AM = e, this.options = i;
   }
@@ -476,9 +476,9 @@ class Dt {
     C(this, t);
   }
 }
-const Lt = E.litHtmlPolyfillSupport;
-Lt?.(I, z), (E.litHtmlVersions ?? (E.litHtmlVersions = [])).push("3.3.2");
-const Vt = (n, t, e) => {
+const Dt = E.litHtmlPolyfillSupport;
+Dt?.(I, z), (E.litHtmlVersions ?? (E.litHtmlVersions = [])).push("3.3.2");
+const Ut = (n, t, e) => {
   const i = e?.renderBefore ?? t;
   let s = i._$litPart$;
   if (s === void 0) {
@@ -504,7 +504,7 @@ class v extends $ {
   }
   update(t) {
     const e = this.render();
-    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(t), this._$Do = Vt(e, this.renderRoot, this.renderOptions);
+    this.hasUpdated || (this.renderOptions.isConnected = this.isConnected), super.update(t), this._$Do = Ut(e, this.renderRoot, this.renderOptions);
   }
   connectedCallback() {
     super.connectedCallback(), this._$Do?.setConnected(!0);
@@ -517,8 +517,8 @@ class v extends $ {
   }
 }
 v._$litElement$ = !0, v.finalized = !0, P.litElementHydrateSupport?.({ LitElement: v });
-const Ut = P.litElementPolyfillSupport;
-Ut?.({ LitElement: v });
+const Vt = P.litElementPolyfillSupport;
+Vt?.({ LitElement: v });
 (P.litElementVersions ?? (P.litElementVersions = [])).push("4.2.2");
 const Ht = j`
   :host {
@@ -884,6 +884,16 @@ const Ht = j`
   @keyframes bounce {
     0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
     40% { transform: scale(1); opacity: 1; }
+  }
+
+  /* Model unavailable warning */
+  .model-warning {
+    padding: 6px 12px;
+    background: rgba(255, 152, 0, 0.12);
+    color: #e65100;
+    font-size: 12px;
+    text-align: center;
+    border-top: 1px solid rgba(255, 152, 0, 0.3);
   }
 
   /* Input bar */
@@ -1617,7 +1627,7 @@ const Ht = j`
     font-size: 11px;
   }
 `;
-function U(n) {
+function V(n) {
   const t = [];
   let e = 0, i = "";
   const s = () => {
@@ -1995,7 +2005,7 @@ class W extends v {
         (a) => a.profile_id === this._cardConfig.profile_id
       );
       if (s) {
-        const a = s.tts_voices || { normal: "", narration: "", speech: "", thoughts: "" }, o = (l) => this._voices.find((d) => d.id === l)?.name ?? l ?? "None";
+        const a = s.tts_voices || { normal: "", narration: "", speech: "", thoughts: "" }, o = (d) => this._voices.find((l) => l.id === d)?.name ?? d ?? "None";
         return r`
           ${t}
           <div style="padding: 4px 0; opacity: 0.7; font-size: 13px; border-top: 1px solid var(--divider); margin-top: 8px; padding-top: 12px;">
@@ -2026,15 +2036,15 @@ class W extends v {
         <div class="sublabel" style="font-size:11px;color:var(--card-secondary);margin-bottom:2px">${a}</div>
         <select
           .value=${e[o]}
-          @change=${(l) => {
-      const d = l.target.value;
-      this._updateField("tts_voices", { ...e, [o]: d });
+          @change=${(d) => {
+      const l = d.target.value;
+      this._updateField("tts_voices", { ...e, [o]: l });
     }}
         >
           <option value="">Disabled</option>
           ${this._voices.map(
-      (l) => r`<option value=${l.id} ?selected=${e[o] === l.id}>
-              ${l.name}
+      (d) => r`<option value=${d.id} ?selected=${e[o] === d.id}>
+              ${d.name}
             </option>`
     )}
         </select>
@@ -2395,7 +2405,7 @@ customElements.define(
   "proxlab-group-chat-card-editor",
   q
 );
-const Rt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`, ot = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`, dt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`, Nt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`, Ft = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`, jt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`, Qt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>`, lt = [250, 160, 30, 340, 200, 80, 290, 120];
+const Rt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`, ot = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`, lt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`, Nt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`, Ft = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`, jt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`, Qt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>`, dt = [250, 160, 30, 340, 200, 80, 290, 120];
 class G extends v {
   constructor() {
     super(...arguments), this._profiles = [], this._messages = [], this._loading = !1, this._inputValue = "", this._configLoaded = !1, this._mentionOpen = !1, this._mentionFilter = "", this._editingIndex = -1, this._editValue = "", this._speakingIndex = -1, this._streaming = !1, this._audioQueue = [], this._audioPlaying = !1, this._onAudioQueueDone = null, this._ttsBuffer = "", this._streamingProfileId = "", this._ttsTextQueue = [], this._ttsProcessing = !1;
@@ -2546,7 +2556,7 @@ class G extends v {
                           ${ot}
                         </button>
                         <button class="msg-btn delete" title="Delete" @click=${() => this._deleteMessage(e)}>
-                          ${dt}
+                          ${lt}
                         </button>
                       `}
                 </div>
@@ -2554,8 +2564,8 @@ class G extends v {
         </div>
       `;
     const i = this._profiles.findIndex(
-      (l) => l.profile_id === t.profile_id
-    ), s = lt[i >= 0 ? i % lt.length : 0], a = e === this._findLastAgentIndex(), o = this._streaming && this._streamingProfileId === t.profile_id && e === this._messages.length - 1;
+      (d) => d.profile_id === t.profile_id
+    ), s = dt[i >= 0 ? i % dt.length : 0], a = e === this._findLastAgentIndex(), o = this._streaming && this._streamingProfileId === t.profile_id && e === this._messages.length - 1;
     return r`
       <div class="agent-msg ${this._editingIndex === e ? "editing" : ""}">
         ${t.avatar ? r`<img class="msg-avatar" src="${t.avatar}" alt="${t.profile_name}" />` : r`<div class="msg-avatar placeholder">${(t.profile_name ?? "?").charAt(0).toUpperCase()}</div>`}
@@ -2574,7 +2584,7 @@ class G extends v {
                           ${ot}
                         </button>
                         <button class="msg-btn delete" title="Delete" @click=${() => this._deleteMessage(e)}>
-                          ${dt}
+                          ${lt}
                         </button>
                         <button
                           class="msg-btn speak ${this._speakingIndex === e ? "speaking" : ""}"
@@ -2623,7 +2633,7 @@ class G extends v {
     return -1;
   }
   _formatContent(t) {
-    return U(t).map((i) => i.type === "normal" ? r`<span>${i.text}</span>` : r`<span class="text-${i.type}">${i.text}</span>`);
+    return V(t).map((i) => i.type === "normal" ? r`<span>${i.text}</span>` : r`<span class="text-${i.type}">${i.text}</span>`);
   }
   // ---- Input & Mention ----
   _onInput(t) {
@@ -2838,19 +2848,19 @@ class G extends v {
       i?.();
       return;
     }
-    const l = U(t).filter((d) => d.text.trim()).map((d) => ({ text: d.text, voice: s[d.type] || "" })).filter((d) => d.voice);
-    if (l.length === 0) {
+    const d = V(t).filter((l) => l.text.trim()).map((l) => ({ text: l.text, voice: s[l.type] || "" })).filter((l) => l.voice);
+    if (d.length === 0) {
       i?.();
       return;
     }
     try {
-      const d = await this.hass.callWS({
+      const l = await this.hass.callWS({
         type: "proxlab/card/tts/speak",
         card_id: this._config.card_id,
-        segments: l
+        segments: d
       });
-      if (d?.audio_segments?.length) {
-        for (const h of d.audio_segments) {
+      if (l?.audio_segments?.length) {
+        for (const h of l.audio_segments) {
           const u = h.url || h.data_url;
           u && this._audioQueue.push(u);
         }
@@ -2967,9 +2977,9 @@ window.customCards.push({
   description: "Multi-agent group chat card",
   preview: !1
 });
-const Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`, qt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>`, Gt = r`<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" opacity="0.4"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>`, Kt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`, Yt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`, Xt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`, Zt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>`, Jt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`, te = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`, k = class L extends v {
+const Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`, qt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>`, Gt = r`<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" opacity="0.4"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>`, Kt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`, Yt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`, Xt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`, Zt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>`, Jt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`, te = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`, k = class D extends v {
   constructor() {
-    super(...arguments), this._messages = [], this._loading = !1, this._inputValue = "", this._recording = !1, this._configLoaded = !1, this._portraitWidth = 0, this._editingIndex = -1, this._editValue = "", this._speakingIndex = -1, this._streaming = !1, this._audioChunks = [], this._lastAvatarUrl = "", this._audioQueue = [], this._audioPlaying = !1, this._ttsBuffer = "", this._ttsTextQueue = [], this._ttsProcessing = !1, this._speechDetected = !1, this._silenceStart = 0, this._recordingStart = 0, this._onAudioQueueDone = null;
+    super(...arguments), this._messages = [], this._loading = !1, this._inputValue = "", this._recording = !1, this._configLoaded = !1, this._portraitWidth = 0, this._editingIndex = -1, this._editValue = "", this._speakingIndex = -1, this._streaming = !1, this._modelUnavailable = null, this._audioChunks = [], this._lastAvatarUrl = "", this._audioQueue = [], this._audioPlaying = !1, this._ttsBuffer = "", this._ttsTextQueue = [], this._ttsProcessing = !1, this._speechDetected = !1, this._silenceStart = 0, this._recordingStart = 0, this._onAudioQueueDone = null;
   }
   // ---- Lovelace lifecycle ----
   setConfig(t) {
@@ -3019,7 +3029,18 @@ const Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
               type: "proxlab/profile/get",
               profile_id: t.profile_id
             });
-            e && (t.avatar = e.avatar || t.avatar, t.personality_enabled = e.personality_enabled, t.personality = e.personality, t.prompt_override = e.prompt_override, t.agent_id = e.agent_id, t.tts_voices = e.tts_voices, t.portrait_width = e.portrait_width, !t.title_override && e.personality?.name ? t.title_override = e.personality.name : !t.title_override && e.name && (t.title_override = e.name));
+            if (e)
+              if (t.avatar = e.avatar || t.avatar, t.personality_enabled = e.personality_enabled, t.personality = e.personality, t.prompt_override = e.prompt_override, t.agent_id = e.agent_id, t.tts_voices = e.tts_voices, t.portrait_width = e.portrait_width, !t.title_override && e.personality?.name ? t.title_override = e.personality.name : !t.title_override && e.name && (t.title_override = e.name), e.model_override && e.connection_id)
+                try {
+                  const a = (await this.hass.callWS({
+                    type: "proxlab/connections/list"
+                  }))?.[e.connection_id]?.health?.available_models || [];
+                  this._modelUnavailable = a.length > 0 && !a.includes(e.model_override) ? e.model_override : null;
+                } catch {
+                  this._modelUnavailable = null;
+                }
+              else
+                this._modelUnavailable = null;
           } catch {
           }
         this._cardConfig = t, t.avatar && t.avatar !== this._lastAvatarUrl && (this._lastAvatarUrl = t.avatar, this._measureAvatar(t.avatar, t.card_height ?? 500)), this._messages.length === 0 && t.personality_enabled && t.personality?.first_mes && (this._messages = [
@@ -3046,8 +3067,8 @@ const Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
     if (!this._config)
       return r`<ha-card><div class="not-configured">No configuration</div></ha-card>`;
     if (this._cardConfig?.allowed_users?.length) {
-      const l = this.hass?.user?.id;
-      if (l && !this._cardConfig.allowed_users.includes(l))
+      const d = this.hass?.user?.id;
+      if (d && !this._cardConfig.allowed_users.includes(d))
         return r``;
     }
     const t = this._cardConfig?.card_height ?? 500, e = this._cardConfig?.hide_header ?? !1, i = this._cardConfig?.avatar, s = !!i, a = this._resolveTitle(), o = this._resolveStatus();
@@ -3095,10 +3116,10 @@ const Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
     `;
   }
   _renderPortraitPanel(t, e, i) {
-    const s = this._cardConfig?.portrait_width ?? "auto", a = typeof s == "number" && s > 0, o = a ? s : this._portraitWidth, l = o ? `width: ${o}px; max-width: 50%;` : "width: 25%; max-width: 50%;", d = a ? "portrait-img-cover" : "portrait-img-contain", h = this._resolveAgentLabel();
+    const s = this._cardConfig?.portrait_width ?? "auto", a = typeof s == "number" && s > 0, o = a ? s : this._portraitWidth, d = o ? `width: ${o}px; max-width: 50%;` : "width: 25%; max-width: 50%;", l = a ? "portrait-img-cover" : "portrait-img-contain", h = this._resolveAgentLabel();
     return r`
-      <div class="portrait-panel" style="${l}">
-        <img class="${d}" src="${t}" alt="${e}" />
+      <div class="portrait-panel" style="${d}">
+        <img class="${l}" src="${t}" alt="${e}" />
         <div class="portrait-name">${e}</div>
         <div class="portrait-status">${i}</div>
         ${h ? r`<div class="portrait-agent">${h}</div>` : c}
@@ -3191,31 +3212,38 @@ const Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
     return -1;
   }
   _renderInputBar() {
+    const t = !!this._modelUnavailable;
     return r`
+      ${t ? r`
+        <div class="model-warning">
+          Model "${this._modelUnavailable}" is not currently loaded. Load the model or change the profile to chat.
+        </div>
+      ` : c}
       <div class="input-bar">
         <button
           class="btn-icon btn-mic ${this._recording ? "recording" : ""}"
           @click=${this._toggleRecording}
           title="Voice input"
+          ?disabled=${t}
         >
           ${qt}
         </button>
         <input
           type="text"
-          placeholder="Type a message..."
+          placeholder=${t ? "Model unavailable..." : "Type a message..."}
           .value=${this._inputValue}
-          @input=${(t) => {
-      this._inputValue = t.target.value;
+          @input=${(e) => {
+      this._inputValue = e.target.value;
     }}
-          @keydown=${(t) => {
-      t.key === "Enter" && !t.shiftKey && (t.preventDefault(), this._sendMessage());
+          @keydown=${(e) => {
+      e.key === "Enter" && !e.shiftKey && (e.preventDefault(), this._sendMessage());
     }}
-          ?disabled=${this._loading}
+          ?disabled=${this._loading || t}
         />
         <button
           class="btn-icon btn-send"
           @click=${this._sendMessage}
-          ?disabled=${this._loading || !this._inputValue.trim()}
+          ?disabled=${this._loading || t || !this._inputValue.trim()}
           title="Send"
         >
           ${Wt}
@@ -3400,7 +3428,7 @@ const Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
     });
   }
   _formatContent(t) {
-    return U(t).map((i) => i.type === "normal" ? r`<span>${i.text}</span>` : r`<span class="text-${i.type}">${i.text}</span>`);
+    return V(t).map((i) => i.type === "normal" ? r`<span>${i.text}</span>` : r`<span class="text-${i.type}">${i.text}</span>`);
   }
   _deleteMessage(t) {
     const e = [...this._messages];
@@ -3422,20 +3450,20 @@ const Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
       e?.();
       return;
     }
-    const o = U(t).filter((l) => l.text.trim()).map((l) => ({ text: l.text, voice: i[l.type] || "" })).filter((l) => l.voice);
+    const o = V(t).filter((d) => d.text.trim()).map((d) => ({ text: d.text, voice: i[d.type] || "" })).filter((d) => d.voice);
     if (o.length === 0) {
       e?.();
       return;
     }
     try {
-      const l = await this.hass.callWS({
+      const d = await this.hass.callWS({
         type: "proxlab/card/tts/speak",
         card_id: this._config.card_id,
         segments: o
       });
-      if (l?.audio_segments?.length) {
-        for (const d of l.audio_segments) {
-          const h = d.url || d.data_url;
+      if (d?.audio_segments?.length) {
+        for (const l of d.audio_segments) {
+          const h = l.url || l.data_url;
           h && this._audioQueue.push(h);
         }
         this._onAudioQueueDone = e ?? null, this._playAudioQueue();
@@ -3499,22 +3527,22 @@ const Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
         if (!this._analyserNode || !this._recording) return;
         this._analyserNode.getByteTimeDomainData(i);
         let s = 0;
-        for (let l = 0; l < i.length; l++) {
-          const d = (i[l] - 128) / 128;
-          s += d * d;
+        for (let d = 0; d < i.length; d++) {
+          const l = (i[d] - 128) / 128;
+          s += l * l;
         }
         const a = Math.sqrt(s / i.length) * 100, o = Date.now();
-        if (a > L.VAD_SPEECH_THRESHOLD)
+        if (a > D.VAD_SPEECH_THRESHOLD)
           this._speechDetected = !0, this._silenceStart = 0;
         else if (this._speechDetected) {
           if (this._silenceStart === 0)
             this._silenceStart = o;
-          else if (o - this._silenceStart > L.VAD_SILENCE_DURATION) {
+          else if (o - this._silenceStart > D.VAD_SILENCE_DURATION) {
             this._stopRecording();
             return;
           }
         }
-        o - this._recordingStart > L.VAD_MAX_DURATION && this._stopRecording();
+        o - this._recordingStart > D.VAD_MAX_DURATION && this._stopRecording();
       }, 100);
     } catch {
     }
@@ -3553,7 +3581,8 @@ k.properties = {
   _editingIndex: { state: !0 },
   _editValue: { state: !0 },
   _speakingIndex: { state: !0 },
-  _streaming: { state: !0 }
+  _streaming: { state: !0 },
+  _modelUnavailable: { state: !0 }
 };
 k.VAD_SPEECH_THRESHOLD = 15;
 k.VAD_SILENCE_DURATION = 1500;

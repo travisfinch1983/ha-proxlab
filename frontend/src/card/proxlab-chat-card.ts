@@ -42,6 +42,7 @@ export class ProxLabChatCard extends LitElement {
     _editValue: { state: true },
     _speakingIndex: { state: true },
     _streaming: { state: true },
+    _modelUnavailable: { state: true },
   };
 
   hass!: HomeAssistant;
@@ -57,6 +58,7 @@ export class ProxLabChatCard extends LitElement {
   _editValue = "";
   _speakingIndex = -1;
   _streaming = false;
+  _modelUnavailable: string | null = null;
 
   private _mediaRecorder?: MediaRecorder;
   private _audioChunks: Blob[] = [];
@@ -156,6 +158,25 @@ export class ProxLabChatCard extends LitElement {
               config.title_override = profile.personality.name;
             } else if (!config.title_override && profile.name) {
               config.title_override = profile.name;
+            }
+
+            // Check model availability
+            if (profile.model_override && profile.connection_id) {
+              try {
+                const conns = await this.hass.callWS<Record<string, any>>({
+                  type: "proxlab/connections/list",
+                });
+                const conn = conns?.[profile.connection_id];
+                const models: string[] = conn?.health?.available_models || [];
+                this._modelUnavailable =
+                  models.length > 0 && !models.includes(profile.model_override)
+                    ? profile.model_override
+                    : null;
+              } catch {
+                this._modelUnavailable = null;
+              }
+            } else {
+              this._modelUnavailable = null;
             }
           }
         } catch {
@@ -418,18 +439,25 @@ export class ProxLabChatCard extends LitElement {
   }
 
   private _renderInputBar() {
+    const blocked = !!this._modelUnavailable;
     return html`
+      ${blocked ? html`
+        <div class="model-warning">
+          Model "${this._modelUnavailable}" is not currently loaded. Load the model or change the profile to chat.
+        </div>
+      ` : nothing}
       <div class="input-bar">
         <button
           class="btn-icon btn-mic ${this._recording ? "recording" : ""}"
           @click=${this._toggleRecording}
           title="Voice input"
+          ?disabled=${blocked}
         >
           ${micIcon}
         </button>
         <input
           type="text"
-          placeholder="Type a message..."
+          placeholder=${blocked ? "Model unavailable..." : "Type a message..."}
           .value=${this._inputValue}
           @input=${(e: Event) => {
             this._inputValue = (e.target as HTMLInputElement).value;
@@ -440,12 +468,12 @@ export class ProxLabChatCard extends LitElement {
               this._sendMessage();
             }
           }}
-          ?disabled=${this._loading}
+          ?disabled=${this._loading || blocked}
         />
         <button
           class="btn-icon btn-send"
           @click=${this._sendMessage}
-          ?disabled=${this._loading || !this._inputValue.trim()}
+          ?disabled=${this._loading || blocked || !this._inputValue.trim()}
           title="Send"
         >
           ${sendIcon}

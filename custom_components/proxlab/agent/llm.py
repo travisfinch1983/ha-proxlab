@@ -242,7 +242,7 @@ class LLMMixin:
                 else cfg.get(CONF_LLM_TEMPERATURE, 0.7)
             ),
             "max_tokens": (
-                max_tokens if max_tokens is not None else cfg.get(CONF_LLM_MAX_TOKENS, 500)
+                max_tokens if max_tokens is not None else cfg.get(CONF_LLM_MAX_TOKENS, 2048)
             ),
         }
 

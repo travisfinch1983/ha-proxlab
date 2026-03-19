@@ -330,6 +330,15 @@ export default function AgentProfilesPage() {
     return conn?.name ?? id;
   };
 
+  /** Check if a profile's model_override is available on its connection */
+  const isModelAvailable = (profile: AgentProfile): boolean | null => {
+    if (!profile.connection_id || !profile.model_override) return null;
+    const conn = connections[profile.connection_id];
+    const models = conn?.health?.available_models;
+    if (!models) return null; // health data not loaded
+    return models.includes(profile.model_override);
+  };
+
   /** LLM-capable connections (conversation or tool_use) */
   const llmConnections = Object.entries(connections).filter(([, c]) =>
     c.capabilities?.some((cap) => cap === "conversation" || cap === "tool_use")
@@ -514,6 +523,11 @@ export default function AgentProfilesPage() {
                           {p.personality.name}
                         </span>
                       )}
+                      {isModelAvailable(p) === false && (
+                        <span className="badge badge-sm badge-warning mt-1 gap-1">
+                          Model offline
+                        </span>
+                      )}
                     </div>
                   </div>
                   <div className="flex justify-end gap-2 mt-2">
@@ -645,8 +659,8 @@ export default function AgentProfilesPage() {
                     </div>
                   </div>
 
-                  {/* Model Override */}
-                  {form.connection_id && connModels.length > 0 && (
+                  {/* Model Override — always show when connection is set */}
+                  {form.connection_id && (
                     <div className="form-control">
                       <div className="label">
                         <span className="label-text font-medium">Model</span>
@@ -659,6 +673,12 @@ export default function AgentProfilesPage() {
                         }
                       >
                         <option value="">Connection default</option>
+                        {/* Show saved model_override even if not in available models */}
+                        {form.model_override && !connModels.includes(form.model_override) && (
+                          <option value={form.model_override}>
+                            {form.model_override} (unavailable)
+                          </option>
+                        )}
                         {connModels.map((m) => (
                           <option key={m} value={m}>
                             {m}
@@ -670,6 +690,13 @@ export default function AgentProfilesPage() {
                           Override the connection's default model for this profile
                         </span>
                       </div>
+                      {form.model_override && !connModels.includes(form.model_override) && connModels.length > 0 && (
+                        <div className="label pt-0">
+                          <span className="label-text-alt text-warning">
+                            Model is currently unavailable on this connection
+                          </span>
+                        </div>
+                      )}
                     </div>
                   )}
 
