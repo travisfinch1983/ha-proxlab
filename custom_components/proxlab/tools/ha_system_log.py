@@ -128,14 +128,14 @@ class HomeAssistantSystemLogTool(BaseTool):
                 first_occurred = getattr(record, "first_occurred", None) if not isinstance(record, dict) else record.get("first_occurred")
 
                 # Filter by search term
-                source_str = " ".join(source) if isinstance(source, (list, tuple)) else str(source)
+                source_str = " ".join(str(s) for s in source) if isinstance(source, (list, tuple)) else str(source)
                 combined = f"{message} {name} {source_str}"
                 if search and search not in combined.lower():
                     continue
 
                 entries.append({
                     "level": level if isinstance(level, str) else logging.getLevelName(level),
-                    "source": list(source) if isinstance(source, (list, tuple)) else [str(source)],
+                    "source": [str(s) for s in source] if isinstance(source, (list, tuple)) else [str(source)],
                     "message": str(message)[:1000],  # Cap very long messages
                     "name": name,
                     "timestamp": timestamp,
