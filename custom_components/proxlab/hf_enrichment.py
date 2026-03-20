@@ -422,6 +422,114 @@ async def search_gguf_repo(
 
 
 # ---------------------------------------------------------------------------
+# HuggingFace search fallback for unmapped models
+# ---------------------------------------------------------------------------
+
+# Minimum token-overlap score to accept a search result
+_SEARCH_MIN_SCORE = 0.5
+
+
+def _clean_model_name_for_search(
+    model_id: str, provider: str, extras: dict | None = None
+) -> str:
+    """Extract a clean, searchable model name from a raw provider ID."""
+    extras = extras or {}
+
+    # For KoboldCpp, prefer the GGUF filename
+    if provider == "koboldcpp":
+        name = extras.get("gguf_file") or model_id
+    else:
+        name = model_id
+
+    # Strip provider prefixes like "koboldcpp/"
+    if "/" in name:
+        prefix, rest = name.split("/", 1)
+        if prefix.lower() in ("koboldcpp", "openai", "lmstudio", "llamacpp"):
+            name = rest
+
+    # Strip .gguf extension
+    name = re.sub(r"\.gguf$", "", name, flags=re.IGNORECASE)
+    # Strip quant suffixes (Q4_K_M, IQ4_XS, F16, etc.)
+    name = _QUANT_PATTERN.sub("", name).rstrip("-_")
+    # Strip split indicators (-00001-of-00003)
+    name = re.sub(r"-\d{5}-of-\d{5}$", "", name).rstrip("-_")
+
+    return name
+
+
+def _score_search_result(query_name: str, result_id: str) -> float:
+    """Score how well a search result matches the query (0.0-1.0)."""
+    q_tokens = set(re.split(r"[-_./]", query_name.lower()))
+    q_tokens.discard("")
+    r_tokens = set(re.split(r"[-_./]", result_id.lower()))
+    r_tokens.discard("")
+
+    if not q_tokens:
+        return 0.0
+
+    overlap = q_tokens & r_tokens
+    query_coverage = len(overlap) / len(q_tokens)
+    return query_coverage
+
+
+async def search_hf_slug(
+    session: aiohttp.ClientSession,
+    model_id: str,
+    provider: str,
+    extras: dict | None = None,
+) -> str | None:
+    """Search HuggingFace API for a model when static resolution fails."""
+    clean_name = _clean_model_name_for_search(model_id, provider, extras)
+    if not clean_name or len(clean_name) < 3:
+        return None
+
+    url = "https://huggingface.co/api/models"
+    params = {
+        "search": clean_name,
+        "sort": "likes",
+        "direction": "-1",
+        "limit": "5",
+    }
+    try:
+        async with session.get(
+            url, params=params, timeout=aiohttp.ClientTimeout(total=_HF_TIMEOUT)
+        ) as resp:
+            if resp.status != 200:
+                return None
+            results = await resp.json()
+    except Exception as err:
+        _LOGGER.debug("HF search error for '%s': %s", clean_name, err)
+        return None
+
+    if not results:
+        return None
+
+    # Score each result, pick best above threshold
+    best_slug = None
+    best_score = 0.0
+    for r in results:
+        rid = r.get("id", r.get("_id", ""))
+        if not rid:
+            continue
+        # Skip GGUF quant repos — we want the base model
+        if rid.lower().endswith("-gguf"):
+            continue
+        score = _score_search_result(clean_name, rid)
+        if score > best_score:
+            best_score = score
+            best_slug = rid
+
+    if best_score >= _SEARCH_MIN_SCORE and best_slug:
+        _LOGGER.debug(
+            "HF search matched '%s' -> '%s' (score=%.2f)",
+            clean_name, best_slug, best_score,
+        )
+        return best_slug
+
+    return None
+
+
+# ---------------------------------------------------------------------------
 # On-demand README + GGUF info for a single model
 # ---------------------------------------------------------------------------
 
@@ -445,15 +553,20 @@ async def fetch_model_readmes(
         }
     """
     slug = resolve_hf_slug(model_id, provider, family, extras)
-    if not slug:
-        return {
-            "base_repo": None,
-            "base_readme": "",
-            "quant_repo": None,
-            "quant_readme": "",
-        }
 
     async with aiohttp.ClientSession() as session:
+        # Search fallback if static resolution failed
+        if not slug:
+            slug = await search_hf_slug(session, model_id, provider, extras)
+
+        if not slug:
+            return {
+                "base_repo": None,
+                "base_readme": "",
+                "quant_repo": None,
+                "quant_readme": "",
+            }
+
         # Fetch base README
         base_readme = await fetch_readme(session, slug)
 
@@ -526,8 +639,49 @@ async def enrich_models(
 
         to_fetch[slug] = unique_key
 
-    if to_fetch:
-        async with aiohttp.ClientSession() as session:
+    # --- Search fallback for unmapped models ---
+    unmapped_keys = [k for k, v in result.items() if v.get("status") == "unmapped"]
+
+    async with aiohttp.ClientSession() as session:
+        # Search HF API for unmapped models
+        if unmapped_keys:
+            for unique_key in unmapped_keys:
+                # Check negative cache
+                neg_key = f"_search_miss:{unique_key}"
+                neg_cached = cache.get(neg_key)
+                if neg_cached and (now - neg_cached.get("fetched_at", 0)) < _CACHE_TTL:
+                    continue
+
+                # Find the original model dict
+                m_data = next(
+                    (m for m in models
+                     if f"{m.get('connection_id', '')}:{m.get('id', '')}" == unique_key),
+                    None,
+                )
+                if not m_data:
+                    continue
+
+                async with sem:
+                    found_slug = await search_hf_slug(
+                        session,
+                        m_data.get("id", ""),
+                        m_data.get("provider", "unknown"),
+                        m_data.get("extras", {}),
+                    )
+
+                if found_slug:
+                    slug_map[unique_key] = found_slug
+                    if found_slug not in cache or cache[found_slug].get("status") in (
+                        "not_found", "error",
+                    ):
+                        to_fetch[found_slug] = unique_key
+                    else:
+                        result[unique_key] = cache[found_slug]
+                else:
+                    cache[neg_key] = {"status": "search_miss", "fetched_at": now}
+
+        # Fetch metadata for all slugs that need it
+        if to_fetch:
             async def _fetch(slug: str) -> tuple[str, HfModelInfo]:
                 async with sem:
                     return slug, await fetch_hf_info(session, slug)
@@ -535,20 +689,22 @@ async def enrich_models(
             tasks = [_fetch(slug) for slug in to_fetch]
             fetched = await asyncio.gather(*tasks, return_exceptions=True)
 
-        for item in fetched:
-            if isinstance(item, Exception):
-                _LOGGER.debug("HF fetch error: %s", item)
-                continue
-            slug, info = item
-            info_dict = asdict(info)
-            cache[slug] = info_dict
+            for item in fetched:
+                if isinstance(item, Exception):
+                    _LOGGER.debug("HF fetch error: %s", item)
+                    continue
+                slug, info = item
+                info_dict = asdict(info)
+                cache[slug] = info_dict
 
     for unique_key, slug in slug_map.items():
         if unique_key in result:
-            continue
+            # Skip if already resolved (but not if still "unmapped")
+            if result[unique_key].get("status") != "unmapped":
+                continue
         if slug and slug in cache:
             result[unique_key] = cache[slug]
-        else:
+        elif unique_key not in result:
             result[unique_key] = asdict(HfModelInfo(status="error", fetched_at=now))
 
     hf_data["models"] = cache
