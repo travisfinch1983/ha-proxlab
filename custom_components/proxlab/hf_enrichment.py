@@ -89,8 +89,15 @@ _SIZE_PATTERN = re.compile(
 )
 
 # Quant suffixes to strip from GGUF filenames
+# Uses lookahead so it matches at end-of-string, before delimiters, or before .gguf
 _QUANT_PATTERN = re.compile(
-    r"[-_](?:Q\d+_K(?:_[SML])?|IQ\d+_\w+|F(?:16|32)|BF16|FP16)(?:[-_]|\.gguf$)",
+    r"[-_](?:Q\d+_K(?:_[SMLX]{1,2})?|Q\d+_\d|IQ\d+_\w+|F(?:16|32)|BF16|FP16)(?=[-_.]|$)",
+    re.IGNORECASE,
+)
+
+# Quant-method suffixes appended by quantisers (not part of the base model name)
+_QUANT_METHOD_PATTERN = re.compile(
+    r"[-_](?:UD|i1|EXL2|AWQ|GPTQ|AQLM)$",
     re.IGNORECASE,
 )
 
@@ -138,9 +145,15 @@ def _find_org(name_lower: str) -> str | None:
 
 
 def _build_hf_slug(org: str, name: str, size: str | None) -> str:
-    """Construct a likely HF repo slug from org + model name + size."""
-    parts = name.replace(".", "-").replace("_", "-").split("-")
-    pretty = "-".join(p.capitalize() if not p[0].isdigit() else p for p in parts if p)
+    """Construct a likely HF repo slug from org + model name + size.
+
+    Preserves dots (version separators like 2.5, 3.2) — only normalises
+    underscores to dashes.  Used mainly for Ollama names that are lowercase.
+    """
+    parts = name.replace("_", "-").split("-")
+    pretty = "-".join(
+        p.capitalize() if p and not p[0].isdigit() else p for p in parts if p
+    )
     if size:
         pretty = f"{pretty}-{size}"
     return f"{org}/{pretty}"
@@ -180,8 +193,17 @@ def resolve_hf_slug(
 
     if provider == "koboldcpp":
         filename = extras.get("gguf_file") or model_id
+        # Strip provider prefix (koboldcpp/ from /v1/models IDs)
+        if "/" in filename:
+            prefix, rest = filename.split("/", 1)
+            if prefix.lower() in ("koboldcpp", "openai", "lmstudio", "llamacpp"):
+                filename = rest
         base = re.sub(r"\.gguf$", "", filename, flags=re.IGNORECASE)
         base = _QUANT_PATTERN.sub("", base).rstrip("-_")
+        base = _QUANT_METHOD_PATTERN.sub("", base).rstrip("-_")
+        # Strip split indicators (-00001-of-00003)
+        base = re.sub(r"-\d{5}-of-\d{5}$", "", base).rstrip("-_")
+        # If still has "/" it might be a real org/model slug
         if "/" in base:
             return base
         org = _find_org(base.lower())
@@ -207,14 +229,17 @@ def resolve_hf_slug(
     cleaned = re.sub(r"\.gguf$", "", model_id, flags=re.IGNORECASE)
     cleaned = _QUANT_PATTERN.sub("", cleaned).rstrip("-_")
     cleaned = re.sub(r"-\d{5}-of-\d{5}$", "", cleaned).rstrip("-_")
+    cleaned = _QUANT_METHOD_PATTERN.sub("", cleaned).rstrip("-_")
 
     if family:
         org = _find_org(family.lower())
         if org:
-            return _build_hf_slug(org, cleaned, None)
+            # Use cleaned name directly — it already has correct casing/dots
+            # from provider model IDs (KoboldCpp filenames, vLLM slugs, etc.)
+            return f"{org}/{cleaned}"
     org = _find_org(cleaned.lower())
     if org:
-        return _build_hf_slug(org, cleaned, None)
+        return f"{org}/{cleaned}"
     return None
 
 
@@ -453,6 +478,8 @@ def _clean_model_name_for_search(
     name = _QUANT_PATTERN.sub("", name).rstrip("-_")
     # Strip split indicators (-00001-of-00003)
     name = re.sub(r"-\d{5}-of-\d{5}$", "", name).rstrip("-_")
+    # Strip quant-method suffixes (UD, i1, EXL2, AWQ, GPTQ)
+    name = _QUANT_METHOD_PATTERN.sub("", name).rstrip("-_")
 
     return name
 
@@ -696,6 +723,53 @@ async def enrich_models(
                 slug, info = item
                 info_dict = asdict(info)
                 cache[slug] = info_dict
+
+        # --- Search fallback for not_found slugs ---
+        # When static resolution produced a slug that 404'd on HF, try search
+        not_found_keys = [
+            (uk, sl) for uk, sl in slug_map.items()
+            if sl and sl in cache and cache[sl].get("status") == "not_found"
+        ]
+        search_to_fetch: dict[str, str] = {}
+        for unique_key, old_slug in not_found_keys:
+            neg_key = f"_search_miss:{unique_key}"
+            neg_cached = cache.get(neg_key)
+            if neg_cached and (now - neg_cached.get("fetched_at", 0)) < _CACHE_TTL:
+                continue
+            m_data = next(
+                (m for m in models
+                 if f"{m.get('connection_id', '')}:{m.get('id', '')}" == unique_key),
+                None,
+            )
+            if not m_data:
+                continue
+            async with sem:
+                found_slug = await search_hf_slug(
+                    session,
+                    m_data.get("id", ""),
+                    m_data.get("provider", "unknown"),
+                    m_data.get("extras", {}),
+                )
+            if found_slug and found_slug != old_slug:
+                slug_map[unique_key] = found_slug
+                if found_slug not in cache or cache[found_slug].get("status") in (
+                    "not_found", "error",
+                ):
+                    search_to_fetch[found_slug] = unique_key
+                else:
+                    result[unique_key] = cache[found_slug]
+            else:
+                cache[neg_key] = {"status": "search_miss", "fetched_at": now}
+
+        # Fetch metadata for search-discovered slugs
+        if search_to_fetch:
+            tasks = [_fetch(slug) for slug in search_to_fetch]
+            fetched = await asyncio.gather(*tasks, return_exceptions=True)
+            for item in fetched:
+                if isinstance(item, Exception):
+                    continue
+                slug, info = item
+                cache[slug] = asdict(info)
 
     for unique_key, slug in slug_map.items():
         if unique_key in result:
