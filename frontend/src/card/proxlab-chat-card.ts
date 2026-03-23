@@ -7,6 +7,7 @@ import type {
   CardChatMessage,
   CardInvokeResponse,
   AgentProfile,
+  PermissionRequest,
 } from "./types";
 import { parseFormattedText } from "./format-parser";
 
@@ -349,6 +350,34 @@ export class ProxLabChatCard extends LitElement {
       <div class="messages">
         ${this._messages.map(
           (msg, idx) => {
+            // Permission request card
+            if (msg.role === "permission" && msg.permissionRequest) {
+              const pr = msg.permissionRequest;
+              const decided = msg.permissionDecision !== "pending";
+              return html`
+                <div class="message permission">
+                  <div class="permission-card ${decided ? "decided" : ""}">
+                    <div class="permission-header">Permission Required</div>
+                    <div class="permission-tool">${pr.display_name || pr.tool_name}</div>
+                    ${pr.description ? html`<div class="permission-description">${pr.description}</div>` : nothing}
+                    ${pr.input_summary ? html`<code class="permission-input">${pr.input_summary}</code>` : nothing}
+                    ${!decided
+                      ? html`
+                          <div class="permission-actions">
+                            <button class="btn-allow" @click=${() => this._handlePermissionResponse(pr.request_id, pr.run_id, "allow")}>Allow</button>
+                            <button class="btn-deny" @click=${() => this._handlePermissionResponse(pr.request_id, pr.run_id, "deny")}>Deny</button>
+                          </div>
+                        `
+                      : html`
+                          <div class="permission-decided ${msg.permissionDecision}">
+                            ${msg.permissionDecision === "allow" ? "Allowed" : "Denied"}
+                          </div>
+                        `}
+                  </div>
+                </div>
+              `;
+            }
+
             const isStreamingMsg = this._streaming && msg.role === "assistant" && idx === this._messages.length - 1;
             return html`
             <div class="message ${msg.role} ${this._editingIndex === idx ? "editing" : ""}">
@@ -606,6 +635,11 @@ export class ProxLabChatCard extends LitElement {
   }
 
   private async _doSendStreaming(text: string): Promise<void> {
+    // Route to agent streaming if use_agent_tools is enabled
+    if (this._cardConfig?.use_agent_tools) {
+      return this._doSendStreamingAgent(text);
+    }
+
     this._loading = true;
     this._streaming = true;
     this._ttsBuffer = "";
@@ -685,6 +719,167 @@ export class ProxLabChatCard extends LitElement {
       this._messages = updated;
       this._scrollToBottom();
     }
+  }
+
+  /**
+   * Agent-mode streaming: uses Claude Code addon's SDK-based agent endpoint.
+   * Supports interactive permission prompts for MCP/unknown tools.
+   */
+  private async _doSendStreamingAgent(text: string): Promise<void> {
+    this._loading = true;
+    this._streaming = true;
+    this._ttsBuffer = "";
+    this._scrollToBottom();
+
+    // Add placeholder assistant message
+    const msgIdx = this._messages.length;
+    this._messages = [
+      ...this._messages,
+      { role: "assistant" as const, content: "", timestamp: Date.now() },
+    ];
+
+    try {
+      const unsub = await (this.hass as any).connection.subscribeMessage(
+        (event: any) => {
+          if (event.type === "delta") {
+            // Streaming text delta
+            const updated = [...this._messages];
+            updated[msgIdx] = {
+              ...updated[msgIdx],
+              content: (updated[msgIdx].content || "") + event.text,
+            };
+            this._messages = updated;
+            this._scrollToBottom();
+
+            this._ttsBuffer += event.text;
+            this._checkTtsChunk();
+
+          } else if (event.type === "permission_request") {
+            // Insert permission card into chat
+            this._messages = [
+              ...this._messages,
+              {
+                role: "permission" as const,
+                content: "",
+                timestamp: Date.now(),
+                permissionRequest: {
+                  request_id: event.request_id,
+                  run_id: event.run_id,
+                  tool_name: event.tool_name,
+                  input_summary: event.input_summary,
+                  title: event.title,
+                  display_name: event.display_name,
+                  description: event.description,
+                },
+                permissionDecision: "pending",
+              },
+            ];
+            this._scrollToBottom();
+
+          } else if (event.type === "text") {
+            // Full text block (after streaming is done) — ignore if we already have content from deltas
+
+          } else if (event.type === "tool_use") {
+            // Tool being used — show as system info
+            const toolInfo = `Using tool: ${event.tool_name}`;
+            const updated = [...this._messages];
+            const current = updated[msgIdx].content || "";
+            if (!current.includes(toolInfo)) {
+              updated[msgIdx] = {
+                ...updated[msgIdx],
+                content: current + (current ? "\n" : "") + toolInfo + "...\n",
+              };
+              this._messages = updated;
+              this._scrollToBottom();
+            }
+
+          } else if (event.type === "tool_result") {
+            // Tool result received — can optionally show
+
+          } else if (event.type === "done") {
+            this._streaming = false;
+            this._loading = false;
+            const updated = [...this._messages];
+            updated[msgIdx] = {
+              ...updated[msgIdx],
+              content: event.response_text || updated[msgIdx].content,
+              metadata: {
+                agent_name: "Claude Code",
+                tokens: event.usage?.input_tokens
+                  ? (event.usage.input_tokens + (event.usage.output_tokens || 0))
+                  : undefined,
+                model: event.usage?.model,
+              },
+            };
+            this._messages = updated;
+            this._flushTtsBuffer();
+            this._scrollToBottom();
+            unsub();
+
+          } else if (event.type === "error") {
+            this._streaming = false;
+            this._loading = false;
+            const updated = [...this._messages];
+            updated[msgIdx] = {
+              ...updated[msgIdx],
+              content: updated[msgIdx].content
+                ? updated[msgIdx].content + `\n\nError: ${event.error || event.message}`
+                : `Error: ${event.error || event.message}`,
+            };
+            this._messages = updated;
+            this._scrollToBottom();
+            unsub();
+          }
+          // Ignore: run_start, system
+        },
+        {
+          type: "proxlab/card/invoke_stream_agent",
+          card_id: this._config!.card_id,
+          message: text,
+          conversation_id: `card_${this._config!.card_id}`,
+        },
+      );
+    } catch (err: unknown) {
+      const errMsg = err instanceof Error ? err.message
+        : (err && typeof err === "object" && "message" in err) ? String((err as any).message)
+        : String(err);
+      this._streaming = false;
+      this._loading = false;
+      const updated = [...this._messages];
+      updated[msgIdx] = {
+        ...updated[msgIdx],
+        content: `Error: ${errMsg}`,
+      };
+      this._messages = updated;
+      this._scrollToBottom();
+    }
+  }
+
+  /**
+   * Handle Allow/Deny button clicks on permission request cards.
+   */
+  private async _handlePermissionResponse(
+    requestId: string,
+    runId: string,
+    decision: "allow" | "deny",
+  ): Promise<void> {
+    try {
+      await this.hass!.callWS({
+        type: "proxlab/card/permission_response",
+        run_id: runId,
+        request_id: requestId,
+        decision,
+      });
+    } catch (err) {
+      console.error("Permission response failed:", err);
+    }
+
+    // Update the permission message to show the decision
+    this._messages = this._messages.map((m) =>
+      m.permissionRequest?.request_id === requestId
+        ? { ...m, permissionDecision: decision }
+        : m,
+    );
   }
 
   // ---- TTS Chunking (Streaming) ----

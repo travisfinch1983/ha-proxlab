@@ -3,7 +3,7 @@
  * Copyright 2019 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const L = globalThis, N = L.ShadowRoot && (L.ShadyCSS === void 0 || L.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, F = Symbol(), K = /* @__PURE__ */ new WeakMap();
+const D = globalThis, N = D.ShadowRoot && (D.ShadyCSS === void 0 || D.ShadyCSS.nativeShadow) && "adoptedStyleSheets" in Document.prototype && "replace" in CSSStyleSheet.prototype, F = Symbol(), K = /* @__PURE__ */ new WeakMap();
 let ct = class {
   constructor(t, e, i) {
     if (this._$cssResult$ = !0, i !== F) throw Error("CSSResult is not constructable. Use `unsafeCSS` or `css` instead.");
@@ -32,7 +32,7 @@ const mt = (n) => new ct(typeof n == "string" ? n : n + "", void 0, F), j = (n, 
 }, vt = (n, t) => {
   if (N) n.adoptedStyleSheets = t.map((e) => e instanceof CSSStyleSheet ? e : e.styleSheet);
   else for (const e of t) {
-    const i = document.createElement("style"), s = L.litNonce;
+    const i = document.createElement("style"), s = D.litNonce;
     s !== void 0 && i.setAttribute("nonce", s), i.textContent = e.cssText, n.appendChild(i);
   }
 }, Y = N ? (n) => n : (n) => n instanceof CSSStyleSheet ? ((t) => {
@@ -45,10 +45,10 @@ const mt = (n) => new ct(typeof n == "string" ? n : n + "", void 0, F), j = (n, 
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const { is: bt, defineProperty: xt, getOwnPropertyDescriptor: yt, getOwnPropertyNames: $t, getOwnPropertySymbols: wt, getPrototypeOf: Ct } = Object, m = globalThis, X = m.trustedTypes, kt = X ? X.emptyScript : "", At = m.reactiveElementPolyfillSupport, S = (n, t) => n, R = { toAttribute(n, t) {
+const { is: bt, defineProperty: xt, getOwnPropertyDescriptor: yt, getOwnPropertyNames: $t, getOwnPropertySymbols: wt, getPrototypeOf: kt } = Object, m = globalThis, X = m.trustedTypes, Ct = X ? X.emptyScript : "", At = m.reactiveElementPolyfillSupport, S = (n, t) => n, O = { toAttribute(n, t) {
   switch (t) {
     case Boolean:
-      n = n ? kt : null;
+      n = n ? Ct : null;
       break;
     case Object:
     case Array:
@@ -73,7 +73,7 @@ const { is: bt, defineProperty: xt, getOwnPropertyDescriptor: yt, getOwnProperty
       }
   }
   return e;
-} }, ht = (n, t) => !bt(n, t), Z = { attribute: !0, type: String, converter: R, reflect: !1, useDefault: !1, hasChanged: ht };
+} }, ht = (n, t) => !bt(n, t), Z = { attribute: !0, type: String, converter: O, reflect: !1, useDefault: !1, hasChanged: ht };
 Symbol.metadata ?? (Symbol.metadata = Symbol("metadata")), m.litPropertyMetadata ?? (m.litPropertyMetadata = /* @__PURE__ */ new WeakMap());
 let $ = class extends HTMLElement {
   static addInitializer(t) {
@@ -104,7 +104,7 @@ let $ = class extends HTMLElement {
   }
   static _$Ei() {
     if (this.hasOwnProperty(S("elementProperties"))) return;
-    const t = Ct(this);
+    const t = kt(this);
     t.finalize(), t.l !== void 0 && (this.l = [...t.l]), this.elementProperties = new Map(t.elementProperties);
   }
   static finalize() {
@@ -172,14 +172,14 @@ let $ = class extends HTMLElement {
   _$ET(t, e) {
     const i = this.constructor.elementProperties.get(t), s = this.constructor._$Eu(t, i);
     if (s !== void 0 && i.reflect === !0) {
-      const a = (i.converter?.toAttribute !== void 0 ? i.converter : R).toAttribute(e, i.type);
+      const a = (i.converter?.toAttribute !== void 0 ? i.converter : O).toAttribute(e, i.type);
       this._$Em = t, a == null ? this.removeAttribute(s) : this.setAttribute(s, a), this._$Em = null;
     }
   }
   _$AK(t, e) {
     const i = this.constructor, s = i._$Eh.get(t);
     if (s !== void 0 && this._$Em !== s) {
-      const a = i.getPropertyOptions(s), o = typeof a.converter == "function" ? { fromAttribute: a.converter } : a.converter?.fromAttribute !== void 0 ? a.converter : R;
+      const a = i.getPropertyOptions(s), o = typeof a.converter == "function" ? { fromAttribute: a.converter } : a.converter?.fromAttribute !== void 0 ? a.converter : O;
       this._$Em = s;
       const d = o.fromAttribute(e, a.type);
       this[s] = d ?? this._$Ej?.get(s) ?? d, this._$Em = null;
@@ -262,8 +262,8 @@ $.elementStyles = [], $.shadowRootOptions = { mode: "open" }, $[S("elementProper
  * Copyright 2017 Google LLC
  * SPDX-License-Identifier: BSD-3-Clause
  */
-const E = globalThis, J = (n) => n, U = E.trustedTypes, tt = U ? U.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, pt = "$lit$", f = `lit$${Math.random().toFixed(9).slice(2)}$`, ut = "?" + f, St = `<${ut}>`, y = document, M = () => y.createComment(""), T = (n) => n === null || typeof n != "object" && typeof n != "function", Q = Array.isArray, Et = (n) => Q(n) || typeof n?.[Symbol.iterator] == "function", O = `[ 	
-\f\r]`, A = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, et = /-->/g, it = />/g, b = RegExp(`>|${O}(?:([^\\s"'>=/]+)(${O}*=${O}*(?:[^ 	
+const E = globalThis, J = (n) => n, U = E.trustedTypes, tt = U ? U.createPolicy("lit-html", { createHTML: (n) => n }) : void 0, pt = "$lit$", f = `lit$${Math.random().toFixed(9).slice(2)}$`, ut = "?" + f, St = `<${ut}>`, y = document, M = () => y.createComment(""), T = (n) => n === null || typeof n != "object" && typeof n != "function", Q = Array.isArray, Et = (n) => Q(n) || typeof n?.[Symbol.iterator] == "function", H = `[ 	
+\f\r]`, A = /<(?:(!--|\/[^a-zA-Z])|(\/?[a-zA-Z][^>\s]*)|(\/?$))/g, et = /-->/g, it = />/g, b = RegExp(`>|${H}(?:([^\\s"'>=/]+)(${H}*=${H}*(?:[^ 	
 \f\r"'\`<>=]|("|')|))|$)`, "g"), st = /'/g, at = /"/g, gt = /^(?:script|style|textarea|title)$/i, Pt = (n) => (t, ...e) => ({ _$litType$: n, strings: t, values: e }), r = Pt(1), w = Symbol.for("lit-noChange"), c = Symbol.for("lit-nothing"), rt = /* @__PURE__ */ new WeakMap(), x = y.createTreeWalker(y, 129);
 function _t(n, t) {
   if (!Q(n) || !n.hasOwnProperty("raw")) throw Error("invalid template strings array");
@@ -295,7 +295,7 @@ class I {
       if (s.nodeType === 1) {
         if (s.hasAttributes()) for (const p of s.getAttributeNames()) if (p.endsWith(pt)) {
           const g = u[o++], _ = s.getAttribute(p).split(f), B = /([.?@])?(.*)/.exec(g);
-          l.push({ type: 1, index: a, name: B[2], strings: _, ctor: B[1] === "." ? It : B[1] === "?" ? zt : B[1] === "@" ? Bt : H }), s.removeAttribute(p);
+          l.push({ type: 1, index: a, name: B[2], strings: _, ctor: B[1] === "." ? It : B[1] === "?" ? zt : B[1] === "@" ? Bt : R }), s.removeAttribute(p);
         } else p.startsWith(f) && (l.push({ type: 6, index: a }), s.removeAttribute(p));
         if (gt.test(s.tagName)) {
           const p = s.textContent.split(f), g = p.length - 1;
@@ -318,11 +318,11 @@ class I {
     return i.innerHTML = t, i;
   }
 }
-function C(n, t, e = n, i) {
+function k(n, t, e = n, i) {
   if (t === w) return t;
   let s = i !== void 0 ? e._$Co?.[i] : e._$Cl;
   const a = T(t) ? void 0 : t._$litDirective$;
-  return s?.constructor !== a && (s?._$AO?.(!1), a === void 0 ? s = void 0 : (s = new a(n), s._$AT(n, e, i)), i !== void 0 ? (e._$Co ?? (e._$Co = []))[i] = s : e._$Cl = s), s !== void 0 && (t = C(n, s._$AS(n, t.values), s, i)), t;
+  return s?.constructor !== a && (s?._$AO?.(!1), a === void 0 ? s = void 0 : (s = new a(n), s._$AT(n, e, i)), i !== void 0 ? (e._$Co ?? (e._$Co = []))[i] = s : e._$Cl = s), s !== void 0 && (t = k(n, s._$AS(n, t.values), s, i)), t;
 }
 class Tt {
   constructor(t, e) {
@@ -341,7 +341,7 @@ class Tt {
     for (; l !== void 0; ) {
       if (o === l.index) {
         let h;
-        l.type === 2 ? h = new z(a, a.nextSibling, this, t) : l.type === 1 ? h = new l.ctor(a, l.name, l.strings, this, t) : l.type === 6 && (h = new Lt(a, this, t)), this._$AV.push(h), l = i[++d];
+        l.type === 2 ? h = new z(a, a.nextSibling, this, t) : l.type === 1 ? h = new l.ctor(a, l.name, l.strings, this, t) : l.type === 6 && (h = new Dt(a, this, t)), this._$AV.push(h), l = i[++d];
       }
       o !== l?.index && (a = x.nextNode(), o++);
     }
@@ -371,7 +371,7 @@ class z {
     return this._$AB;
   }
   _$AI(t, e = this) {
-    t = C(this, t, e), T(t) ? t === c || t == null || t === "" ? (this._$AH !== c && this._$AR(), this._$AH = c) : t !== this._$AH && t !== w && this._(t) : t._$litType$ !== void 0 ? this.$(t) : t.nodeType !== void 0 ? this.T(t) : Et(t) ? this.k(t) : this._(t);
+    t = k(this, t, e), T(t) ? t === c || t == null || t === "" ? (this._$AH !== c && this._$AR(), this._$AH = c) : t !== this._$AH && t !== w && this._(t) : t._$litType$ !== void 0 ? this.$(t) : t.nodeType !== void 0 ? this.T(t) : Et(t) ? this.k(t) : this._(t);
   }
   O(t) {
     return this._$AA.parentNode.insertBefore(t, this._$AB);
@@ -411,7 +411,7 @@ class z {
     this._$AM === void 0 && (this._$Cv = t, this._$AP?.(t));
   }
 }
-class H {
+class R {
   get tagName() {
     return this.element.tagName;
   }
@@ -424,11 +424,11 @@ class H {
   _$AI(t, e = this, i, s) {
     const a = this.strings;
     let o = !1;
-    if (a === void 0) t = C(this, t, e, 0), o = !T(t) || t !== this._$AH && t !== w, o && (this._$AH = t);
+    if (a === void 0) t = k(this, t, e, 0), o = !T(t) || t !== this._$AH && t !== w, o && (this._$AH = t);
     else {
       const d = t;
       let l, h;
-      for (t = a[0], l = 0; l < a.length - 1; l++) h = C(this, d[i + l], e, l), h === w && (h = this._$AH[l]), o || (o = !T(h) || h !== this._$AH[l]), h === c ? t = c : t !== c && (t += (h ?? "") + a[l + 1]), this._$AH[l] = h;
+      for (t = a[0], l = 0; l < a.length - 1; l++) h = k(this, d[i + l], e, l), h === w && (h = this._$AH[l]), o || (o = !T(h) || h !== this._$AH[l]), h === c ? t = c : t !== c && (t += (h ?? "") + a[l + 1]), this._$AH[l] = h;
     }
     o && !s && this.j(t);
   }
@@ -436,7 +436,7 @@ class H {
     t === c ? this.element.removeAttribute(this.name) : this.element.setAttribute(this.name, t ?? "");
   }
 }
-class It extends H {
+class It extends R {
   constructor() {
     super(...arguments), this.type = 3;
   }
@@ -444,7 +444,7 @@ class It extends H {
     this.element[this.name] = t === c ? void 0 : t;
   }
 }
-class zt extends H {
+class zt extends R {
   constructor() {
     super(...arguments), this.type = 4;
   }
@@ -452,12 +452,12 @@ class zt extends H {
     this.element.toggleAttribute(this.name, !!t && t !== c);
   }
 }
-class Bt extends H {
+class Bt extends R {
   constructor(t, e, i, s, a) {
     super(t, e, i, s, a), this.type = 5;
   }
   _$AI(t, e = this) {
-    if ((t = C(this, t, e, 0) ?? c) === w) return;
+    if ((t = k(this, t, e, 0) ?? c) === w) return;
     const i = this._$AH, s = t === c && i !== c || t.capture !== i.capture || t.once !== i.once || t.passive !== i.passive, a = t !== c && (i === c || s);
     s && this.element.removeEventListener(this.name, this, i), a && this.element.addEventListener(this.name, this, t), this._$AH = t;
   }
@@ -465,7 +465,7 @@ class Bt extends H {
     typeof this._$AH == "function" ? this._$AH.call(this.options?.host ?? this.element, t) : this._$AH.handleEvent(t);
   }
 }
-class Lt {
+class Dt {
   constructor(t, e, i) {
     this.element = t, this.type = 6, this._$AN = void 0, this._$AM = e, this.options = i;
   }
@@ -473,11 +473,11 @@ class Lt {
     return this._$AM._$AU;
   }
   _$AI(t) {
-    C(this, t);
+    k(this, t);
   }
 }
-const Dt = E.litHtmlPolyfillSupport;
-Dt?.(I, z), (E.litHtmlVersions ?? (E.litHtmlVersions = [])).push("3.3.2");
+const Lt = E.litHtmlPolyfillSupport;
+Lt?.(I, z), (E.litHtmlVersions ?? (E.litHtmlVersions = [])).push("3.3.2");
 const Ut = (n, t, e) => {
   const i = e?.renderBefore ?? t;
   let s = i._$litPart$;
@@ -520,7 +520,7 @@ v._$litElement$ = !0, v.finalized = !0, P.litElementHydrateSupport?.({ LitElemen
 const Vt = P.litElementPolyfillSupport;
 Vt?.({ LitElement: v });
 (P.litElementVersions ?? (P.litElementVersions = [])).push("4.2.2");
-const Ht = j`
+const Rt = j`
   :host {
     --card-bg: var(--card-background-color, #fff);
     --card-text: var(--primary-text-color, #212121);
@@ -1012,6 +1012,121 @@ const Ht = j`
     0%, 100% { opacity: 1; }
     50% { opacity: 0; }
   }
+
+  /* Permission request card */
+  .message.permission {
+    align-self: center;
+    max-width: 90%;
+    width: 100%;
+  }
+
+  .permission-card {
+    border: 2px solid #f59e0b;
+    border-radius: 12px;
+    padding: 12px 16px;
+    background: var(--card-bg);
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.15);
+  }
+
+  .permission-card.decided {
+    opacity: 0.7;
+    border-color: var(--divider);
+    box-shadow: none;
+  }
+
+  .permission-header {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #f59e0b;
+    margin-bottom: 6px;
+  }
+
+  .permission-tool {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--card-text);
+    margin-bottom: 4px;
+  }
+
+  .permission-description {
+    font-size: 0.85rem;
+    color: var(--card-secondary);
+    margin-bottom: 8px;
+  }
+
+  .permission-input {
+    display: block;
+    font-family: monospace;
+    font-size: 0.8rem;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 120px;
+    overflow-y: auto;
+    color: var(--card-text);
+  }
+
+  .permission-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  .permission-actions .btn-allow,
+  .permission-actions .btn-deny {
+    border: none;
+    border-radius: 8px;
+    padding: 6px 18px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+
+  .permission-actions .btn-allow {
+    background: #22c55e;
+    color: #fff;
+  }
+
+  .permission-actions .btn-deny {
+    background: #ef4444;
+    color: #fff;
+  }
+
+  .permission-actions .btn-allow:hover,
+  .permission-actions .btn-deny:hover {
+    opacity: 0.85;
+  }
+
+  .permission-decided {
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-align: right;
+    padding-top: 4px;
+  }
+
+  .permission-decided.allow {
+    color: #22c55e;
+  }
+
+  .permission-decided.deny {
+    color: #ef4444;
+  }
+
+  @keyframes pulse-border {
+    0%, 100% { border-color: #f59e0b; }
+    50% { border-color: #fbbf24; }
+  }
+
+  .permission-card:not(.decided) {
+    animation: pulse-border 2s ease-in-out infinite;
+  }
 `, ft = j`
   :host {
     --card-bg: var(--card-background-color, #fff);
@@ -1181,7 +1296,7 @@ const Ht = j`
     align-items: center;
     gap: 12px;
   }
-`, Ot = j`
+`, Ht = j`
   :host {
     --card-bg: var(--card-background-color, #fff);
     --card-text: var(--primary-text-color, #212121);
@@ -1659,7 +1774,7 @@ function V(n) {
   }
   return s(), t;
 }
-const nt = {
+const ot = {
   card_id: "",
   agent_id: "conversation_agent",
   prompt_override: "",
@@ -1692,11 +1807,12 @@ const nt = {
   portrait_width: "auto",
   use_profile: !1,
   profile_id: "",
-  streaming_enabled: !1
+  streaming_enabled: !1,
+  use_agent_tools: !1
 };
 class W extends v {
   constructor() {
-    super(...arguments), this._cardConfig = { ...nt }, this._tab = "general", this._agents = [], this._voices = [], this._profiles = [], this._loaded = !1, this._defaultPrompt = "";
+    super(...arguments), this._cardConfig = { ...ot }, this._tab = "general", this._agents = [], this._voices = [], this._profiles = [], this._loaded = !1, this._defaultPrompt = "";
   }
   setConfig(t) {
     this._config = t, this._loaded = !1;
@@ -1724,7 +1840,7 @@ class W extends v {
           thoughts: ""
         }, delete t.tts_voice), t.tts_voices || (t.tts_voices = { normal: "", narration: "", speech: "", thoughts: "" }), t.use_profile === void 0 && (t.use_profile = !1), t.profile_id || (t.profile_id = ""), this._cardConfig = t;
       } else
-        this._cardConfig = { ...nt, card_id: this._config.card_id };
+        this._cardConfig = { ...ot, card_id: this._config.card_id };
       this._agents = e || [], this._voices = i || [], this._profiles = s || [], this._cardConfig.use_profile || this._loadAgentPrompt(this._cardConfig.agent_id);
     } catch {
     }
@@ -2102,6 +2218,20 @@ class W extends v {
           <span class="slider"></span>
         </label>
       </div>
+      <div class="toggle-row">
+        <div>
+          <label>Agent Tools (Claude Code)</label>
+          <div class="sublabel">Use Claude Code addon's agent endpoint with interactive tool permissions</div>
+        </div>
+        <label class="switch">
+          <input
+            type="checkbox"
+            .checked=${this._cardConfig.use_agent_tools ?? !1}
+            @change=${(t) => this._updateField("use_agent_tools", t.target.checked)}
+          />
+          <span class="slider"></span>
+        </label>
+      </div>
       <div class="field">
         <label>Card ID</label>
         <input type="text" .value=${this._cardConfig.card_id} disabled />
@@ -2405,7 +2535,7 @@ customElements.define(
   "proxlab-group-chat-card-editor",
   q
 );
-const Rt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`, ot = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`, lt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`, Nt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`, Ft = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`, jt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`, Qt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>`, dt = [250, 160, 30, 340, 200, 80, 290, 120];
+const Ot = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`, nt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`, dt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`, Nt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`, Ft = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`, jt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`, Qt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>`, lt = [250, 160, 30, 340, 200, 80, 290, 120];
 class G extends v {
   constructor() {
     super(...arguments), this._profiles = [], this._messages = [], this._loading = !1, this._inputValue = "", this._configLoaded = !1, this._mentionOpen = !1, this._mentionFilter = "", this._editingIndex = -1, this._editValue = "", this._speakingIndex = -1, this._streaming = !1, this._audioQueue = [], this._audioPlaying = !1, this._onAudioQueueDone = null, this._ttsBuffer = "", this._streamingProfileId = "", this._ttsTextQueue = [], this._ttsProcessing = !1;
@@ -2506,7 +2636,7 @@ class G extends v {
               @click=${this._sendMessage}
               ?disabled=${this._loading || !this._inputValue.trim()}
             >
-              ${Rt}
+              ${Ot}
             </button>
           </div>
         </div>
@@ -2553,10 +2683,10 @@ class G extends v {
                 <div class="msg-actions">
                   ${this._loading ? c : r`
                         <button class="msg-btn" title="Edit" @click=${() => this._startEdit(e)}>
-                          ${ot}
+                          ${nt}
                         </button>
                         <button class="msg-btn delete" title="Delete" @click=${() => this._deleteMessage(e)}>
-                          ${lt}
+                          ${dt}
                         </button>
                       `}
                 </div>
@@ -2565,7 +2695,7 @@ class G extends v {
       `;
     const i = this._profiles.findIndex(
       (d) => d.profile_id === t.profile_id
-    ), s = dt[i >= 0 ? i % dt.length : 0], a = e === this._findLastAgentIndex(), o = this._streaming && this._streamingProfileId === t.profile_id && e === this._messages.length - 1;
+    ), s = lt[i >= 0 ? i % lt.length : 0], a = e === this._findLastAgentIndex(), o = this._streaming && this._streamingProfileId === t.profile_id && e === this._messages.length - 1;
     return r`
       <div class="agent-msg ${this._editingIndex === e ? "editing" : ""}">
         ${t.avatar ? r`<img class="msg-avatar" src="${t.avatar}" alt="${t.profile_name}" />` : r`<div class="msg-avatar placeholder">${(t.profile_name ?? "?").charAt(0).toUpperCase()}</div>`}
@@ -2581,10 +2711,10 @@ class G extends v {
                       </span>` : c}
                   ${this._loading ? c : r`
                         <button class="msg-btn" title="Edit" @click=${() => this._startEdit(e)}>
-                          ${ot}
+                          ${nt}
                         </button>
                         <button class="msg-btn delete" title="Delete" @click=${() => this._deleteMessage(e)}>
-                          ${lt}
+                          ${dt}
                         </button>
                         <button
                           class="msg-btn speak ${this._speakingIndex === e ? "speaking" : ""}"
@@ -2952,7 +3082,7 @@ class G extends v {
     });
   }
 }
-G.styles = Ot;
+G.styles = Ht;
 G.properties = {
   hass: { attribute: !1 },
   _config: { state: !0 },
@@ -2977,7 +3107,7 @@ window.customCards.push({
   description: "Multi-agent group chat card",
   preview: !1
 });
-const Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`, qt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>`, Gt = r`<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" opacity="0.4"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>`, Kt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`, Yt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`, Xt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`, Zt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>`, Jt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`, te = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`, k = class D extends v {
+const Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>`, qt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/></svg>`, Gt = r`<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" opacity="0.4"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H6l-2 2V4h16v12z"/></svg>`, Kt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>`, Yt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>`, Xt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41L9 16.17z"/></svg>`, Zt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41z"/></svg>`, Jt = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>`, te = r`<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/></svg>`, C = class L extends v {
   constructor() {
     super(...arguments), this._messages = [], this._loading = !1, this._inputValue = "", this._recording = !1, this._configLoaded = !1, this._portraitWidth = 0, this._editingIndex = -1, this._editValue = "", this._speakingIndex = -1, this._streaming = !1, this._modelUnavailable = null, this._audioChunks = [], this._lastAvatarUrl = "", this._audioQueue = [], this._audioPlaying = !1, this._ttsBuffer = "", this._ttsTextQueue = [], this._ttsProcessing = !1, this._speechDetected = !1, this._silenceStart = 0, this._recordingStart = 0, this._onAudioQueueDone = null;
   }
@@ -3141,6 +3271,29 @@ const Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
       <div class="messages">
         ${this._messages.map(
       (e, i) => {
+        if (e.role === "permission" && e.permissionRequest) {
+          const a = e.permissionRequest, o = e.permissionDecision !== "pending";
+          return r`
+                <div class="message permission">
+                  <div class="permission-card ${o ? "decided" : ""}">
+                    <div class="permission-header">Permission Required</div>
+                    <div class="permission-tool">${a.display_name || a.tool_name}</div>
+                    ${a.description ? r`<div class="permission-description">${a.description}</div>` : c}
+                    ${a.input_summary ? r`<code class="permission-input">${a.input_summary}</code>` : c}
+                    ${o ? r`
+                          <div class="permission-decided ${e.permissionDecision}">
+                            ${e.permissionDecision === "allow" ? "Allowed" : "Denied"}
+                          </div>
+                        ` : r`
+                          <div class="permission-actions">
+                            <button class="btn-allow" @click=${() => this._handlePermissionResponse(a.request_id, a.run_id, "allow")}>Allow</button>
+                            <button class="btn-deny" @click=${() => this._handlePermissionResponse(a.request_id, a.run_id, "deny")}>Deny</button>
+                          </div>
+                        `}
+                  </div>
+                </div>
+              `;
+        }
         const s = this._streaming && e.role === "assistant" && i === this._messages.length - 1;
         return r`
             <div class="message ${e.role} ${this._editingIndex === i ? "editing" : ""}">
@@ -3325,6 +3478,8 @@ const Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
     }
   }
   async _doSendStreaming(t) {
+    if (this._cardConfig?.use_agent_tools)
+      return this._doSendStreamingAgent(t);
     this._loading = !0, this._streaming = !0, this._ttsBuffer = "", this._scrollToBottom();
     const e = this._messages.length;
     this._messages = [
@@ -3378,6 +3533,115 @@ const Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
         content: `Error: ${s}`
       }, this._messages = a, this._scrollToBottom();
     }
+  }
+  /**
+   * Agent-mode streaming: uses Claude Code addon's SDK-based agent endpoint.
+   * Supports interactive permission prompts for MCP/unknown tools.
+   */
+  async _doSendStreamingAgent(t) {
+    this._loading = !0, this._streaming = !0, this._ttsBuffer = "", this._scrollToBottom();
+    const e = this._messages.length;
+    this._messages = [
+      ...this._messages,
+      { role: "assistant", content: "", timestamp: Date.now() }
+    ];
+    try {
+      const i = await this.hass.connection.subscribeMessage(
+        (s) => {
+          if (s.type === "delta") {
+            const a = [...this._messages];
+            a[e] = {
+              ...a[e],
+              content: (a[e].content || "") + s.text
+            }, this._messages = a, this._scrollToBottom(), this._ttsBuffer += s.text, this._checkTtsChunk();
+          } else if (s.type === "permission_request")
+            this._messages = [
+              ...this._messages,
+              {
+                role: "permission",
+                content: "",
+                timestamp: Date.now(),
+                permissionRequest: {
+                  request_id: s.request_id,
+                  run_id: s.run_id,
+                  tool_name: s.tool_name,
+                  input_summary: s.input_summary,
+                  title: s.title,
+                  display_name: s.display_name,
+                  description: s.description
+                },
+                permissionDecision: "pending"
+              }
+            ], this._scrollToBottom();
+          else if (s.type !== "text") {
+            if (s.type === "tool_use") {
+              const a = `Using tool: ${s.tool_name}`, o = [...this._messages], d = o[e].content || "";
+              d.includes(a) || (o[e] = {
+                ...o[e],
+                content: d + (d ? `
+` : "") + a + `...
+`
+              }, this._messages = o, this._scrollToBottom());
+            } else if (s.type !== "tool_result") {
+              if (s.type === "done") {
+                this._streaming = !1, this._loading = !1;
+                const a = [...this._messages];
+                a[e] = {
+                  ...a[e],
+                  content: s.response_text || a[e].content,
+                  metadata: {
+                    agent_name: "Claude Code",
+                    tokens: s.usage?.input_tokens ? s.usage.input_tokens + (s.usage.output_tokens || 0) : void 0,
+                    model: s.usage?.model
+                  }
+                }, this._messages = a, this._flushTtsBuffer(), this._scrollToBottom(), i();
+              } else if (s.type === "error") {
+                this._streaming = !1, this._loading = !1;
+                const a = [...this._messages];
+                a[e] = {
+                  ...a[e],
+                  content: a[e].content ? a[e].content + `
+
+Error: ${s.error || s.message}` : `Error: ${s.error || s.message}`
+                }, this._messages = a, this._scrollToBottom(), i();
+              }
+            }
+          }
+        },
+        {
+          type: "proxlab/card/invoke_stream_agent",
+          card_id: this._config.card_id,
+          message: t,
+          conversation_id: `card_${this._config.card_id}`
+        }
+      );
+    } catch (i) {
+      const s = i instanceof Error ? i.message : i && typeof i == "object" && "message" in i ? String(i.message) : String(i);
+      this._streaming = !1, this._loading = !1;
+      const a = [...this._messages];
+      a[e] = {
+        ...a[e],
+        content: `Error: ${s}`
+      }, this._messages = a, this._scrollToBottom();
+    }
+  }
+  /**
+   * Handle Allow/Deny button clicks on permission request cards.
+   */
+  async _handlePermissionResponse(t, e, i) {
+    try {
+      await this.hass.callWS({
+        type: "proxlab/card/permission_response",
+        run_id: e,
+        request_id: t,
+        decision: i
+      });
+    } catch (s) {
+      console.error("Permission response failed:", s);
+    }
+    this._messages = this._messages.map(
+      (s) => s.permissionRequest?.request_id === t ? { ...s, permissionDecision: i } : s
+    );
   }
   // ---- TTS Chunking (Streaming) ----
   // Text chunks are queued and processed sequentially to avoid overwhelming
@@ -3532,17 +3796,17 @@ const Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
           s += l * l;
         }
         const a = Math.sqrt(s / i.length) * 100, o = Date.now();
-        if (a > D.VAD_SPEECH_THRESHOLD)
+        if (a > L.VAD_SPEECH_THRESHOLD)
           this._speechDetected = !0, this._silenceStart = 0;
         else if (this._speechDetected) {
           if (this._silenceStart === 0)
             this._silenceStart = o;
-          else if (o - this._silenceStart > D.VAD_SILENCE_DURATION) {
+          else if (o - this._silenceStart > L.VAD_SILENCE_DURATION) {
             this._stopRecording();
             return;
           }
         }
-        o - this._recordingStart > D.VAD_MAX_DURATION && this._stopRecording();
+        o - this._recordingStart > L.VAD_MAX_DURATION && this._stopRecording();
       }, 100);
     } catch {
     }
@@ -3567,8 +3831,8 @@ const Wt = r`<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"
     }
   }
 };
-k.styles = Ht;
-k.properties = {
+C.styles = Rt;
+C.properties = {
   hass: { attribute: !1 },
   _config: { state: !0 },
   _cardConfig: { state: !0 },
@@ -3584,10 +3848,10 @@ k.properties = {
   _streaming: { state: !0 },
   _modelUnavailable: { state: !0 }
 };
-k.VAD_SPEECH_THRESHOLD = 15;
-k.VAD_SILENCE_DURATION = 1500;
-k.VAD_MAX_DURATION = 3e4;
-let ee = k;
+C.VAD_SPEECH_THRESHOLD = 15;
+C.VAD_SILENCE_DURATION = 1500;
+C.VAD_MAX_DURATION = 3e4;
+let ee = C;
 customElements.define("proxlab-chat-card", ee);
 window.customCards = window.customCards || [];
 window.customCards.push({

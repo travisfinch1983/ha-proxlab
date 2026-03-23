@@ -40,6 +40,8 @@ export interface ProxLabChatCardConfig {
   profile_id: string;
   /** When true, stream text progressively from the LLM */
   streaming_enabled: boolean;
+  /** When true, use Claude Code addon agent endpoint with interactive permissions */
+  use_agent_tools: boolean;
 }
 
 /** Character Card V3 personality fields (SillyTavern-compatible) */
@@ -57,9 +59,20 @@ export interface CharacterCardV3 {
   creator_notes: string;
 }
 
+/** Permission request from Claude Code addon */
+export interface PermissionRequest {
+  request_id: string;
+  run_id: string;
+  tool_name: string;
+  input_summary: string;
+  title: string;
+  description: string;
+  display_name: string;
+}
+
 /** A single chat message */
 export interface CardChatMessage {
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant" | "system" | "permission";
   content: string;
   timestamp: number;
   metadata?: {
@@ -69,6 +82,8 @@ export interface CardChatMessage {
     model?: string;
     tool_results?: unknown[];
   };
+  permissionRequest?: PermissionRequest;
+  permissionDecision?: "allow" | "deny" | "pending";
 }
 
 /** Response from proxlab/card/invoke */
@@ -224,4 +239,5 @@ export const DEFAULT_CARD_CONFIG: ProxLabChatCardConfig = {
   use_profile: false,
   profile_id: "",
   streaming_enabled: false,
+  use_agent_tools: false,
 };

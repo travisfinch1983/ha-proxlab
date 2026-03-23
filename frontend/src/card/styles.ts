@@ -492,6 +492,121 @@ export const cardStyles = css`
     0%, 100% { opacity: 1; }
     50% { opacity: 0; }
   }
+
+  /* Permission request card */
+  .message.permission {
+    align-self: center;
+    max-width: 90%;
+    width: 100%;
+  }
+
+  .permission-card {
+    border: 2px solid #f59e0b;
+    border-radius: 12px;
+    padding: 12px 16px;
+    background: var(--card-bg);
+    box-shadow: 0 2px 8px rgba(245, 158, 11, 0.15);
+  }
+
+  .permission-card.decided {
+    opacity: 0.7;
+    border-color: var(--divider);
+    box-shadow: none;
+  }
+
+  .permission-header {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #f59e0b;
+    margin-bottom: 6px;
+  }
+
+  .permission-tool {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--card-text);
+    margin-bottom: 4px;
+  }
+
+  .permission-description {
+    font-size: 0.85rem;
+    color: var(--card-secondary);
+    margin-bottom: 8px;
+  }
+
+  .permission-input {
+    display: block;
+    font-family: monospace;
+    font-size: 0.8rem;
+    background: rgba(0, 0, 0, 0.05);
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 10px;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-all;
+    max-height: 120px;
+    overflow-y: auto;
+    color: var(--card-text);
+  }
+
+  .permission-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+
+  .permission-actions .btn-allow,
+  .permission-actions .btn-deny {
+    border: none;
+    border-radius: 8px;
+    padding: 6px 18px;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+
+  .permission-actions .btn-allow {
+    background: #22c55e;
+    color: #fff;
+  }
+
+  .permission-actions .btn-deny {
+    background: #ef4444;
+    color: #fff;
+  }
+
+  .permission-actions .btn-allow:hover,
+  .permission-actions .btn-deny:hover {
+    opacity: 0.85;
+  }
+
+  .permission-decided {
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-align: right;
+    padding-top: 4px;
+  }
+
+  .permission-decided.allow {
+    color: #22c55e;
+  }
+
+  .permission-decided.deny {
+    color: #ef4444;
+  }
+
+  @keyframes pulse-border {
+    0%, 100% { border-color: #f59e0b; }
+    50% { border-color: #fbbf24; }
+  }
+
+  .permission-card:not(.decided) {
+    animation: pulse-border 2s ease-in-out infinite;
+  }
 `;
 
 export const editorStyles = css`

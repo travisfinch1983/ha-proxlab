@@ -498,6 +498,20 @@ export class ProxLabChatCardEditor extends LitElement {
           <span class="slider"></span>
         </label>
       </div>
+      <div class="toggle-row">
+        <div>
+          <label>Agent Tools (Claude Code)</label>
+          <div class="sublabel">Use Claude Code addon's agent endpoint with interactive tool permissions</div>
+        </div>
+        <label class="switch">
+          <input
+            type="checkbox"
+            .checked=${this._cardConfig.use_agent_tools ?? false}
+            @change=${(e: Event) => this._updateField("use_agent_tools", (e.target as HTMLInputElement).checked)}
+          />
+          <span class="slider"></span>
+        </label>
+      </div>
       <div class="field">
         <label>Card ID</label>
         <input type="text" .value=${this._cardConfig.card_id} disabled />

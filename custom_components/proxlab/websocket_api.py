@@ -30,6 +30,7 @@ from .const import (
     CONF_LLM_BASE_URL,
     CONF_LLM_MODEL,
     CONF_CONNECTIONS,
+    CONNECTION_TYPE_CLAUDE_ADDON,
     CONF_CONTEXT_FORMAT,
     CONF_CONTEXT_MODE,
     CONF_DEBUG_LOGGING,
@@ -267,6 +268,8 @@ def async_register_websocket_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_card_avatar_upload)
     websocket_api.async_register_command(hass, ws_card_invoke)
     websocket_api.async_register_command(hass, ws_card_invoke_stream)
+    websocket_api.async_register_command(hass, ws_card_invoke_stream_agent)
+    websocket_api.async_register_command(hass, ws_card_permission_response)
     websocket_api.async_register_command(hass, ws_card_agent_prompt)
     websocket_api.async_register_command(hass, ws_card_tts_speak)
     websocket_api.async_register_command(hass, ws_card_stt_transcribe)
@@ -3726,6 +3729,232 @@ async def ws_card_invoke_stream(
         connection.send_message(
             websocket_api.event_message(msg["id"], {"type": "error", "error": str(err)})
         )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/card/invoke_stream_agent",
+        vol.Optional("entry_id"): str,
+        vol.Required("card_id"): str,
+        vol.Required("message"): str,
+        vol.Optional("conversation_id"): str,
+        vol.Optional("model"): str,
+        vol.Optional("max_turns"): int,
+    }
+)
+@websocket_api.async_response
+async def ws_card_invoke_stream_agent(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Invoke Claude Code addon agent with SSE streaming + interactive permissions."""
+    import aiohttp
+
+    entry = _get_entry(hass, msg)
+    if not entry:
+        connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
+        return
+
+    # Resolve addon connection URL from card profile or find claude_addon connection
+    cards_data, _ = _get_chat_cards(hass)
+    card_config = cards_data.get("cards", {}).get(msg["card_id"], {})
+
+    # Find claude_addon connection
+    config = dict(entry.data) | dict(entry.options)
+    all_conns = config.get(CONF_CONNECTIONS, {})
+    addon_base_url = None
+
+    # If card has a profile with a claude_addon connection, use that
+    use_profile = card_config.get("use_profile", False)
+    profile_id = card_config.get("profile_id", "")
+    if use_profile and profile_id:
+        profiles_data, _ = _get_agent_profiles(hass)
+        profile = profiles_data.get("profiles", {}).get(profile_id, {})
+        conn_id = profile.get("connection_id", "")
+        conn = all_conns.get(conn_id, {})
+        if conn.get("connection_type") == CONNECTION_TYPE_CLAUDE_ADDON:
+            # base_url is like http://host:3000/v1 — strip /v1
+            raw = conn.get("base_url", "")
+            addon_base_url = raw.rstrip("/").removesuffix("/v1")
+
+    # Fallback: find any claude_addon connection
+    if not addon_base_url:
+        for _cid, conn in all_conns.items():
+            if conn.get("connection_type") == CONNECTION_TYPE_CLAUDE_ADDON:
+                raw = conn.get("base_url", "")
+                addon_base_url = raw.rstrip("/").removesuffix("/v1")
+                break
+
+    if not addon_base_url:
+        connection.send_error(
+            msg["id"], "not_configured",
+            "No Claude Code add-on connection found. "
+            "Discover the add-on first in ProxLab settings.",
+        )
+        return
+
+    # Build request payload for addon /api/agent/query
+    payload = {
+        "prompt": msg["message"],
+    }
+    if msg.get("model"):
+        payload["model"] = msg["model"]
+    if msg.get("max_turns"):
+        payload["maxTurns"] = msg["max_turns"]
+
+    # Build system prompt from profile/card personality
+    if use_profile and profile_id:
+        profiles_data, _ = _get_agent_profiles(hass)
+        profile = profiles_data.get("profiles", {}).get(profile_id, {})
+        prompt_override = profile.get("prompt_override", "")
+        personality_enabled = profile.get("personality_enabled", False)
+        personality = profile.get("personality", {})
+    else:
+        prompt_override = card_config.get("prompt_override", "")
+        personality_enabled = card_config.get("personality_enabled", False)
+        personality = card_config.get("personality", {})
+
+    system_prompt = _build_profile_system_prompt(
+        personality_enabled, personality, prompt_override
+    )
+    if system_prompt:
+        payload["systemPrompt"] = system_prompt
+
+    # Send subscription confirmation before starting async work
+    connection.send_result(msg["id"])
+    connection.subscriptions[msg["id"]] = lambda: None
+
+    # Store active run mapping for permission responses
+    active_runs = hass.data.setdefault(DOMAIN, {}).setdefault("active_claude_runs", {})
+
+    agent_url = f"{addon_base_url}/api/agent/query"
+    run_id = None
+
+    try:
+        timeout = aiohttp.ClientTimeout(total=600, sock_read=120)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(
+                agent_url,
+                json=payload,
+                headers={"Accept": "text/event-stream"},
+            ) as resp:
+                if resp.status != 200:
+                    body = await resp.text()
+                    connection.send_message(
+                        websocket_api.event_message(
+                            msg["id"],
+                            {"type": "error", "error": f"Addon returned HTTP {resp.status}: {body[:500]}"},
+                        )
+                    )
+                    return
+
+                # Read SSE stream
+                buffer = ""
+                async for raw_chunk in resp.content.iter_any():
+                    buffer += raw_chunk.decode("utf-8", errors="replace")
+                    while "\n\n" in buffer:
+                        event_str, buffer = buffer.split("\n\n", 1)
+                        for line in event_str.split("\n"):
+                            line = line.strip()
+                            if line.startswith("data: "):
+                                data_str = line[6:]
+                                try:
+                                    event = __import__("json").loads(data_str)
+                                except (ValueError, TypeError):
+                                    continue
+
+                                # Track run_id for permission responses
+                                if event.get("type") == "run_start":
+                                    run_id = event.get("run_id")
+                                    if run_id:
+                                        active_runs[run_id] = addon_base_url
+
+                                # Forward event to frontend
+                                connection.send_message(
+                                    websocket_api.event_message(msg["id"], event)
+                                )
+
+                                # Cleanup on done/error
+                                if event.get("type") in ("done", "error"):
+                                    if run_id and run_id in active_runs:
+                                        del active_runs[run_id]
+
+    except asyncio.CancelledError:
+        # Client disconnected — cancel the run
+        if run_id:
+            try:
+                async with aiohttp.ClientSession() as session:
+                    await session.post(
+                        f"{addon_base_url}/api/agent/{run_id}/cancel",
+                        timeout=aiohttp.ClientTimeout(total=5),
+                    )
+            except Exception:
+                pass
+            if run_id in active_runs:
+                del active_runs[run_id]
+    except Exception as err:
+        _LOGGER.error("Agent stream invoke failed: %s", err, exc_info=True)
+        connection.send_message(
+            websocket_api.event_message(
+                msg["id"], {"type": "error", "error": str(err)}
+            )
+        )
+        if run_id and run_id in active_runs:
+            del active_runs[run_id]
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "proxlab/card/permission_response",
+        vol.Required("run_id"): str,
+        vol.Required("request_id"): str,
+        vol.Required("decision"): vol.In(["allow", "deny"]),
+        vol.Optional("message"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_card_permission_response(
+    hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
+) -> None:
+    """Forward a permission decision to the Claude Code addon."""
+    import aiohttp
+
+    active_runs = hass.data.get(DOMAIN, {}).get("active_claude_runs", {})
+    run_id = msg["run_id"]
+    addon_base_url = active_runs.get(run_id)
+
+    if not addon_base_url:
+        connection.send_error(
+            msg["id"], "not_found",
+            f"No active agent run '{run_id}' found (may have completed or timed out).",
+        )
+        return
+
+    try:
+        payload = {
+            "run_id": run_id,
+            "request_id": msg["request_id"],
+            "decision": msg["decision"],
+        }
+        if msg.get("message"):
+            payload["message"] = msg["message"]
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                f"{addon_base_url}/api/agent/permission-response",
+                json=payload,
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                result = await resp.json()
+                if resp.status == 200:
+                    connection.send_result(msg["id"], result)
+                else:
+                    connection.send_error(
+                        msg["id"], "permission_error",
+                        result.get("error", f"HTTP {resp.status}"),
+                    )
+    except Exception as err:
+        _LOGGER.error("Permission response failed: %s", err, exc_info=True)
+        connection.send_error(msg["id"], "permission_error", str(err))
 
 
 @websocket_api.websocket_command(
