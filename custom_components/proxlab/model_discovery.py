@@ -151,6 +151,14 @@ async def _detect_provider(
 _TTS_NAME_HINTS = {"tts", "kokoro", "piper", "coqui", "bark", "parler", "speech"}
 _STT_NAME_HINTS = {"whisper", "faster-whisper", "transcri"}
 
+# URL path fragments that indicate endpoint type (e.g. /api/proxy/tts/v1)
+_URL_CAPABILITY_PATTERNS = {
+    "/embed": "embeddings",
+    "/tts": "tts",
+    "/stt": "stt",
+    "/rerank": "reranker",
+}
+
 
 def _apply_name_heuristics(info: ModelInfo) -> None:
     """Infer capability flags from a model's ID when the backend provides no metadata."""
@@ -163,6 +171,21 @@ def _apply_name_heuristics(info: ModelInfo) -> None:
         info.supports_tts = True
     if any(hint in mid for hint in _STT_NAME_HINTS):
         info.supports_stt = True
+
+
+def _apply_url_heuristics(models: list[ModelInfo], base_url: str) -> None:
+    """Infer capability flags from the connection's base URL path.
+
+    Proxy URLs like /api/proxy/tts/v1 or /api/proxy/embed/v1 explicitly
+    declare the endpoint type. This is the most reliable signal for
+    connections behind aggregating proxies.
+    """
+    url_lower = base_url.lower()
+    for fragment, capability in _URL_CAPABILITY_PATTERNS.items():
+        if fragment in url_lower:
+            for m in models:
+                setattr(m, f"supports_{capability}", True)
+            break
 
 
 # ---------------------------------------------------------------------------
@@ -590,11 +613,12 @@ async def discover_connection_models(
     if native_base.endswith("/v1"):
         native_base = native_base[:-3]
 
+    models: list[ModelInfo] = []
     try:
         if connection_type in (CONNECTION_TYPE_CLAUDE, CONNECTION_TYPE_CLAUDE_ADDON):
-            return await _discover_claude(session, conn_id, conn, base_url)
+            models = await _discover_claude(session, conn_id, conn, base_url)
         elif connection_type == CONNECTION_TYPE_OLLAMA:
-            return await _discover_ollama(session, conn_id, conn, native_base)
+            models = await _discover_ollama(session, conn_id, conn, native_base)
         elif connection_type in (
             CONNECTION_TYPE_OPENAI,
             CONNECTION_TYPE_LOCAL,
@@ -603,24 +627,24 @@ async def discover_connection_models(
             # Auto-detect the actual provider behind this endpoint
             provider = await _detect_provider(session, native_base)
             if provider == "koboldcpp":
-                return await _discover_koboldcpp(session, conn_id, conn, native_base)
+                models = await _discover_koboldcpp(session, conn_id, conn, native_base)
             elif provider == "vllm":
-                return await _discover_vllm(session, conn_id, conn, native_base)
+                models = await _discover_vllm(session, conn_id, conn, native_base)
             elif provider == "ollama":
-                return await _discover_ollama(session, conn_id, conn, native_base)
+                models = await _discover_ollama(session, conn_id, conn, native_base)
             else:
-                return await _discover_openai_generic(session, conn_id, conn, base_url)
+                models = await _discover_openai_generic(session, conn_id, conn, base_url)
         else:
             # Unknown connection type — try auto-detect then generic OpenAI
             provider = await _detect_provider(session, native_base)
             if provider == "koboldcpp":
-                return await _discover_koboldcpp(session, conn_id, conn, native_base)
+                models = await _discover_koboldcpp(session, conn_id, conn, native_base)
             elif provider == "vllm":
-                return await _discover_vllm(session, conn_id, conn, native_base)
+                models = await _discover_vllm(session, conn_id, conn, native_base)
             elif provider == "ollama":
-                return await _discover_ollama(session, conn_id, conn, native_base)
+                models = await _discover_ollama(session, conn_id, conn, native_base)
             else:
-                return await _discover_openai_generic(session, conn_id, conn, base_url)
+                models = await _discover_openai_generic(session, conn_id, conn, base_url)
     except Exception as err:
         _LOGGER.warning(
             "Model discovery failed for connection %s (%s): %s",
@@ -628,7 +652,7 @@ async def discover_connection_models(
             conn.get("name", ""),
             err,
         )
-        return [
+        models = [
             ModelInfo(
                 id=conn.get("model", "unknown"),
                 connection_id=conn_id,
@@ -638,6 +662,13 @@ async def discover_connection_models(
                 error=str(err),
             )
         ]
+
+    # Post-processing: infer capabilities from the base URL path.
+    # Proxy URLs like /api/proxy/tts/v1 explicitly declare the endpoint type
+    # and are the most reliable signal for connections behind proxies.
+    _apply_url_heuristics(models, base_url)
+
+    return models
 
 
 async def discover_all_models(
