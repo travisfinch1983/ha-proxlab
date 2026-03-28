@@ -217,15 +217,34 @@ async def _discover_koboldcpp(
         model.id = conn.get("model") or "koboldcpp-model"
 
     # /props — capability flags, context size
+    # KoboldCpp's /props has has_multimodal/has_audio/has_embeddings/has_tts.
+    # Newer versions (or llama.cpp) use modalities.vision/modalities.audio instead.
+    # Only override capabilities that are explicitly present to avoid clobbering
+    # values already set by /api/extra/version above.
     try:
         async with session.get(f"{url}/props") as resp:
             if resp.status == 200:
                 data = await resp.json()
-                model.context_length = data.get("default_gen_params", {}).get("max_length") or data.get("total_slots")
-                model.supports_vision = data.get("has_multimodal", False)
-                model.supports_audio = data.get("has_audio", False)
-                model.supports_embeddings = data.get("has_embeddings", False)
-                model.supports_tts = data.get("has_tts", False)
+                ctx = data.get("default_gen_params", {}).get("max_length")
+                if ctx:
+                    model.context_length = ctx
+                elif data.get("n_ctx"):
+                    model.context_length = data["n_ctx"]
+                # KoboldCpp-style flags (only set if key exists)
+                if "has_multimodal" in data:
+                    model.supports_vision = data["has_multimodal"]
+                if "has_audio" in data:
+                    model.supports_audio = data["has_audio"]
+                if "has_embeddings" in data:
+                    model.supports_embeddings = data["has_embeddings"]
+                if "has_tts" in data:
+                    model.supports_tts = data["has_tts"]
+                # llama.cpp modalities fallback
+                modalities = data.get("modalities", {})
+                if modalities.get("vision") and not model.supports_vision:
+                    model.supports_vision = True
+                if modalities.get("audio") and not model.supports_audio:
+                    model.supports_audio = True
                 model.extras["props"] = data
     except Exception as err:
         _LOGGER.debug("KoboldCpp /props failed: %s", err)
@@ -254,6 +273,9 @@ async def _discover_koboldcpp(
                 model.extras["perf"] = data
     except Exception as err:
         _LOGGER.debug("KoboldCpp /api/extra/perf failed: %s", err)
+
+    # Final fallback: infer capabilities from model name
+    _apply_name_heuristics(model)
 
     return [model]
 
