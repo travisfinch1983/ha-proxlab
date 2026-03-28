@@ -13,10 +13,12 @@ import {
   type AgentInvokeResult,
   type ToolCatalogEntry,
   fetchModels,
+  discoverModels,
 } from "../api";
-import type { AgentInfo } from "../types";
+import type { AgentInfo, DiscoveredModel } from "../types";
+import { getConnectionEffectiveCaps } from "../types";
 
-function AgentCard({ agent }: { agent: AgentInfo }) {
+function AgentCard({ agent, discoveredModels }: { agent: AgentInfo; discoveredModels: DiscoveredModel[] }) {
   const config = useStore((s) => s.config)!;
   const connections = config.connections;
 
@@ -94,10 +96,12 @@ function AgentCard({ agent }: { agent: AgentInfo }) {
   );
 
   // Filter eligible connections based on agent's required capabilities
+  // Uses effective caps (detected from models + stored + overrides)
   const eligibleConnections = Object.entries(connections).filter(
-    ([, conn]) => {
+    ([connId, conn]) => {
+      const effectiveCaps = getConnectionEffectiveCaps(conn, connId, discoveredModels);
       for (const capGroup of agent.required_capabilities) {
-        if (capGroup.every((cap) => conn.capabilities.includes(cap))) {
+        if (capGroup.every((cap) => effectiveCaps.includes(cap))) {
           return true;
         }
       }
@@ -567,6 +571,12 @@ export default function AgentsPage() {
   const config = useStore((s) => s.config)!;
   const agents = config.agents || [];
 
+  // Fetch discovered models so eligibility checks can use detected capabilities
+  const [discoveredModels, setDiscoveredModels] = useState<DiscoveredModel[]>([]);
+  useEffect(() => {
+    discoverModels().then(setDiscoveredModels).catch(() => {});
+  }, []);
+
   const primary = agents.filter((a) => a.group === "primary");
   const optional = agents.filter((a) => a.group === "optional");
   const system = agents.filter((a) => a.group === "system");
@@ -580,7 +590,7 @@ export default function AgentsPage() {
           <h2 className="text-lg font-semibold mb-3">Primary Agents</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
             {primary.map((a) => (
-              <AgentCard key={a.id} agent={a} />
+              <AgentCard key={a.id} agent={a} discoveredModels={discoveredModels} />
             ))}
           </div>
         </section>
@@ -590,7 +600,7 @@ export default function AgentsPage() {
           <h2 className="text-lg font-semibold mb-3">Optional Agents</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
             {optional.map((a) => (
-              <AgentCard key={a.id} agent={a} />
+              <AgentCard key={a.id} agent={a} discoveredModels={discoveredModels} />
             ))}
           </div>
         </section>
@@ -600,7 +610,7 @@ export default function AgentsPage() {
           <h2 className="text-lg font-semibold mb-3">System Agents</h2>
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
             {system.map((a) => (
-              <AgentCard key={a.id} agent={a} />
+              <AgentCard key={a.id} agent={a} discoveredModels={discoveredModels} />
             ))}
           </div>
         </section>

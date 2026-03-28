@@ -444,3 +444,38 @@ export function computeEffectiveCaps(
 export function cleanStoredCaps(caps: string[]): string[] {
   return caps.filter((c) => !RETIRED_CAPABILITIES.has(c));
 }
+
+/**
+ * Compute the full effective capabilities for a connection by merging:
+ * 1. Auto-detected capabilities from discovered models
+ * 2. User-assigned stored capabilities
+ * 3. Capability overrides (force_enable / force_disable)
+ */
+export function getConnectionEffectiveCaps(
+  conn: Connection,
+  connId: string,
+  discoveredModels: DiscoveredModel[],
+): string[] {
+  const detectedSet = new Set<string>();
+  const models = discoveredModels.filter((m) => m.connection_id === connId);
+  let hasConversationalModel = false;
+  for (const m of models) {
+    if (m.supports_vision) detectedSet.add("vision");
+    if (m.supports_audio) detectedSet.add("specialized");
+    if (m.supports_embeddings) detectedSet.add("embeddings");
+    if (m.supports_reranker) detectedSet.add("reranker");
+    if (m.supports_tts) detectedSet.add("tts");
+    if (m.supports_stt) detectedSet.add("stt");
+    if (m.supports_tool_use) detectedSet.add("tool_use");
+    const isUtilityModel =
+      m.supports_embeddings || m.supports_reranker || m.supports_tts || m.supports_stt;
+    if (!isUtilityModel) {
+      hasConversationalModel = true;
+    }
+  }
+  if (hasConversationalModel) detectedSet.add("conversation");
+  for (const cap of cleanStoredCaps(conn.capabilities)) {
+    detectedSet.add(cap);
+  }
+  return computeEffectiveCaps(conn.capability_overrides, detectedSet);
+}

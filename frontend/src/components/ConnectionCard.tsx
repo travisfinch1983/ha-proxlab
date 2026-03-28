@@ -2,8 +2,7 @@ import type { Connection, ConnectionHealth, DiscoveredModel } from "../types";
 import {
   CAPABILITY_LABELS,
   CAPABILITY_COLORS,
-  cleanStoredCaps,
-  computeEffectiveCaps,
+  getConnectionEffectiveCaps,
   getHealthStatus,
   healthBadgeClass,
   healthLabel,
@@ -34,36 +33,9 @@ export default function ConnectionCard({
         ? "border-error"
         : "border-warning";
 
-  // Aggregate detected capabilities from discovered models for this connection
-  const detectedSet = new Set<string>();
+  // Compute effective capabilities (detected + stored + overrides)
   const models = (discoveredModels ?? []).filter((m) => m.connection_id === id);
-  let hasConversationalModel = false;
-  for (const m of models) {
-    if (m.supports_vision) detectedSet.add("vision");
-    if (m.supports_audio) detectedSet.add("specialized");
-    if (m.supports_embeddings) detectedSet.add("embeddings");
-    if (m.supports_reranker) detectedSet.add("reranker");
-    if (m.supports_tts) detectedSet.add("tts");
-    if (m.supports_stt) detectedSet.add("stt");
-    if (m.supports_tool_use) detectedSet.add("tool_use");
-    // A model is conversational only if it's not a utility model
-    // (embedding, reranker, TTS, or STT). Vision/tool_use on an embedding
-    // model means multimodal embeddings, not conversation.
-    const isUtilityModel =
-      m.supports_embeddings || m.supports_reranker || m.supports_tts || m.supports_stt;
-    if (!isUtilityModel) {
-      hasConversationalModel = true;
-    }
-  }
-  if (hasConversationalModel) detectedSet.add("conversation");
-
-  // Merge user-assigned capabilities into detected set (strip retired caps)
-  for (const cap of cleanStoredCaps(connection.capabilities)) {
-    detectedSet.add(cap);
-  }
-
-  // Apply overrides to get effective capabilities
-  const effectiveCaps = computeEffectiveCaps(connection.capability_overrides, detectedSet);
+  const effectiveCaps = getConnectionEffectiveCaps(connection, id, discoveredModels ?? []);
 
   // Provider tag from first model
   const provider = models[0]?.provider;
