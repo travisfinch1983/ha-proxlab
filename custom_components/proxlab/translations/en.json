@@ -32,17 +32,12 @@
     "step": {
       "init": {
         "title": "Configure ProxLab",
-        "description": "Manage your ProxLab configuration.",
-        "menu_options": {
-          "connections": "Connections",
-          "agents": "Agents",
-          "proxlab_settings": "ProxLab Discovery",
-          "context_settings": "Context Settings",
-          "vector_db_settings": "Vector Database",
-          "history_settings": "Conversation History",
-          "memory_settings": "Memory System",
-          "tool_settings": "Tool Configuration",
-          "debug_settings": "Debug Settings"
+        "description": "Update the ProxLab server URL below. For connections, agents, and other settings, use the **ProxLab** sidebar panel ([{panel_url}]({panel_url})).",
+        "data": {
+          "proxlab_url": "ProxLab URL"
+        },
+        "data_description": {
+          "proxlab_url": "ProxLab DV-Lab URL (e.g., http://10.0.0.140:7777). Leave empty to disable discovery."
         }
       },
       "connections": {

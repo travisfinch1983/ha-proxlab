@@ -198,7 +198,7 @@ class ProxLabAgentConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type:
 
 
 class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
-    """Minimal options flow that redirects to the sidebar panel."""
+    """Options flow — allows editing ProxLab URL and directs to sidebar for the rest."""
 
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         """Initialize the options flow."""
@@ -207,13 +207,43 @@ class ProxLabAgentOptionsFlow(config_entries.OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> config_entries.ConfigFlowResult:
-        """Show message directing users to the sidebar panel."""
+        """Show ProxLab URL field and link to sidebar panel."""
+        errors: dict[str, str] = {}
+
         if user_input is not None:
-            return self.async_create_entry(data=self._config_entry.options)
+            new_url = user_input.get(CONF_PROXLAB_URL, "").strip().rstrip("/")
+
+            # Validate URL if provided
+            if new_url:
+                parsed = urlparse(new_url)
+                if parsed.scheme not in ("http", "https") or not parsed.hostname:
+                    errors["base"] = "invalid_url"
+
+            if not errors:
+                # Update the config entry data with the new URL
+                new_data = dict(self._config_entry.data)
+                if new_url:
+                    new_data[CONF_PROXLAB_URL] = new_url
+                elif CONF_PROXLAB_URL in new_data:
+                    del new_data[CONF_PROXLAB_URL]
+                self.hass.config_entries.async_update_entry(
+                    self._config_entry, data=new_data
+                )
+                return self.async_create_entry(data=self._config_entry.options)
+
+        current_url = dict(self._config_entry.data).get(CONF_PROXLAB_URL, "")
 
         return self.async_show_form(
             step_id="init",
-            data_schema=vol.Schema({}),
+            data_schema=vol.Schema(
+                {
+                    vol.Optional(
+                        CONF_PROXLAB_URL,
+                        description={"suggested_value": current_url},
+                    ): str,
+                }
+            ),
+            errors=errors,
             description_placeholders={
                 "panel_url": "/proxlab",
             },

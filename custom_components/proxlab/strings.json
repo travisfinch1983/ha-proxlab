@@ -31,8 +31,14 @@
   "options": {
     "step": {
       "init": {
-        "title": "ProxLab Configuration",
-        "description": "ProxLab is configured through its dedicated sidebar panel.\n\nClick **ProxLab** in the sidebar (robot icon) or navigate to [{panel_url}]({panel_url}) to manage connections, agents, and all settings."
+        "title": "Configure ProxLab",
+        "description": "Update the ProxLab server URL below. For connections, agents, and other settings, use the **ProxLab** sidebar panel ([{panel_url}]({panel_url})).",
+        "data": {
+          "proxlab_url": "ProxLab URL"
+        },
+        "data_description": {
+          "proxlab_url": "ProxLab DV-Lab URL (e.g., http://10.0.0.140:7777). Leave empty to disable discovery."
+        }
       },
       "connections": {
         "title": "Connections",
