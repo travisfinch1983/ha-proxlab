@@ -666,7 +666,27 @@ async def discover_connection_models(
     # Post-processing: infer capabilities from the base URL path.
     # Proxy URLs like /api/proxy/tts/v1 explicitly declare the endpoint type
     # and are the most reliable signal for connections behind proxies.
-    _apply_url_heuristics(models, base_url)
+    if models:
+        _apply_url_heuristics(models, base_url)
+    else:
+        # No models discovered — create a synthetic placeholder if URL
+        # heuristics match so the capability is still surfaced.
+        placeholder = ModelInfo(
+            id=conn.get("model") or "unknown",
+            connection_id=conn_id,
+            connection_name=conn.get("name", ""),
+            provider="proxy",
+        )
+        _apply_url_heuristics([placeholder], base_url)
+        _apply_name_heuristics(placeholder)
+        # Only return the placeholder if a capability was detected
+        if (
+            placeholder.supports_embeddings
+            or placeholder.supports_reranker
+            or placeholder.supports_tts
+            or placeholder.supports_stt
+        ):
+            models = [placeholder]
 
     return models
 
