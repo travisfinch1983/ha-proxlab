@@ -171,7 +171,7 @@ class ProxLabAgentConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):  # type:
                     vol.Optional(CONF_CONNECT_PROXLAB, default=False): bool,
                     vol.Optional(
                         CONF_PROXLAB_URL,
-                        description={"suggested_value": "http://10.0.0.233:7777"},
+                        description={"suggested_value": "http://10.0.0.140:7777"},
                     ): str,
                 }
             ),

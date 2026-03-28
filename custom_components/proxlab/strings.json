@@ -12,7 +12,7 @@
         "data_description": {
           "name": "A friendly name for this ProxLab instance",
           "connect_proxlab": "Enable automatic service discovery through ProxLab",
-          "proxlab_url": "ProxLab DV-Lab URL (e.g., http://10.0.0.233:7777)"
+          "proxlab_url": "ProxLab DV-Lab URL (e.g., http://10.0.0.140:7777)"
         }
       }
     },
@@ -213,7 +213,7 @@
           "proxlab_url": "ProxLab URL"
         },
         "data_description": {
-          "proxlab_url": "ProxLab DV-Lab URL (e.g., http://10.0.0.233:7777). Leave empty to disable discovery."
+          "proxlab_url": "ProxLab DV-Lab URL (e.g., http://10.0.0.140:7777). Leave empty to disable discovery."
         }
       },
       "context_settings": {

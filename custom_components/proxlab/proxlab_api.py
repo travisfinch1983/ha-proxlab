@@ -70,7 +70,7 @@ async def discover_services(
     """Query ProxLab active-services API to discover running services.
 
     Args:
-        proxlab_url: Base URL for ProxLab (e.g., http://10.0.0.233:7777).
+        proxlab_url: Base URL for ProxLab (e.g., http://10.0.0.140:7777).
 
     Returns:
         List of discovered ProxLabService objects.
@@ -170,7 +170,7 @@ async def swap_model(
     """Hot-swap model on a running KoboldCpp service via ProxLab API.
 
     Args:
-        proxlab_url: Base URL for ProxLab (e.g., http://10.0.0.233:7777).
+        proxlab_url: Base URL for ProxLab (e.g., http://10.0.0.140:7777).
         service_id: The active-service ID.
         model_family: Model family name (e.g., "Qwen3.5").
         model_variant: Model variant (e.g., "4B").

@@ -90,7 +90,7 @@ export default function SettingsPage() {
                   className="input input-bordered input-sm"
                   value={proxlabUrl}
                   onChange={(e) => setProxlabUrl(e.target.value)}
-                  placeholder="http://10.0.0.233:7777"
+                  placeholder="http://10.0.0.140:7777"
                 />
               </label>
               <button
