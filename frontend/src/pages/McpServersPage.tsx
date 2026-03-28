@@ -8,8 +8,10 @@ import {
   faChevronDown,
   faChevronRight,
   faPlus,
+  faToggleOn,
+  faToggleOff,
 } from "@fortawesome/free-solid-svg-icons";
-import type { McpServer } from "../types";
+import type { McpServer, McpToolDef } from "../types";
 import {
   listMcpServers,
   updateMcpServer,
@@ -42,6 +44,130 @@ function transportBadge(transport: string) {
     default:
       return "badge-ghost";
   }
+}
+
+/** Group tools by server-name prefix (MCPJungle uses server__tool naming). */
+function groupTools(tools: McpToolDef[]): Record<string, McpToolDef[]> {
+  const groups: Record<string, McpToolDef[]> = {};
+  for (const t of tools) {
+    const sep = t.name.indexOf("__");
+    const prefix = sep > 0 ? t.name.substring(0, sep) : "";
+    const key = prefix || "(ungrouped)";
+    (groups[key] ??= []).push(t);
+  }
+  return groups;
+}
+
+function ToolToggleList({
+  server,
+  onUpdate,
+}: {
+  server: McpServer;
+  onUpdate: () => void;
+}) {
+  const disabled = new Set(server.disabled_tools ?? []);
+  const [saving, setSaving] = useState(false);
+
+  const toggle = async (toolName: string) => {
+    const next = new Set(disabled);
+    if (next.has(toolName)) next.delete(toolName);
+    else next.add(toolName);
+    setSaving(true);
+    try {
+      await updateMcpServer(server.id, { disabled_tools: [...next] });
+      onUpdate();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const toggleAll = async (enable: boolean) => {
+    const next = enable ? [] : server.tools.map((t) => t.name);
+    setSaving(true);
+    try {
+      await updateMcpServer(server.id, { disabled_tools: next });
+      onUpdate();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const groups = groupTools(server.tools);
+  const groupKeys = Object.keys(groups).sort();
+  const hasGroups = groupKeys.length > 1 || (groupKeys.length === 1 && groupKeys[0] !== "(ungrouped)");
+  const enabledCount = server.tools.length - disabled.size;
+
+  return (
+    <div className="mt-3 border-t border-base-300 pt-3">
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-xs font-semibold text-base-content/60">
+          Tools ({enabledCount}/{server.tools.length} enabled)
+        </p>
+        <div className="flex gap-1">
+          <button
+            className="btn btn-ghost btn-xs"
+            disabled={saving}
+            onClick={() => toggleAll(true)}
+            title="Enable all"
+          >
+            <FontAwesomeIcon icon={faToggleOn} className="text-success" /> All
+          </button>
+          <button
+            className="btn btn-ghost btn-xs"
+            disabled={saving}
+            onClick={() => toggleAll(false)}
+            title="Disable all"
+          >
+            <FontAwesomeIcon icon={faToggleOff} className="text-base-content/30" /> None
+          </button>
+        </div>
+      </div>
+      <div className="max-h-80 overflow-y-auto space-y-3">
+        {groupKeys.map((group) => (
+          <div key={group}>
+            {hasGroups && (
+              <h4 className="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-1 sticky top-0 bg-base-100 py-0.5">
+                {group}
+              </h4>
+            )}
+            <div className="grid gap-1">
+              {groups[group].map((t) => {
+                const isDisabled = disabled.has(t.name);
+                return (
+                  <label
+                    key={t.name}
+                    className={`flex items-start gap-2 text-xs rounded px-2 py-1.5 cursor-pointer hover:bg-base-200 ${
+                      isDisabled ? "opacity-50" : "bg-base-200"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="checkbox checkbox-xs checkbox-primary mt-0.5 shrink-0"
+                      checked={!isDisabled}
+                      disabled={saving}
+                      onChange={() => toggle(t.name)}
+                    />
+                    <div className="min-w-0">
+                      <code className="font-mono text-primary text-xs">
+                        {hasGroups && t.name.includes("__")
+                          ? t.name.substring(t.name.indexOf("__") + 2)
+                          : t.name}
+                      </code>
+                      {t.description && (
+                        <p className="text-base-content/60 truncate">
+                          {t.description}
+                        </p>
+                      )}
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export default function McpServersPage() {
@@ -304,28 +430,9 @@ export default function McpServersPage() {
                   </div>
                 </div>
 
-                {/* Expanded: tool list */}
+                {/* Expanded: tool list with toggles */}
                 {expanded[s.id] && s.tools.length > 0 && (
-                  <div className="mt-3 border-t border-base-300 pt-3">
-                    <p className="text-xs font-semibold text-base-content/60 mb-2">
-                      Available Tools
-                    </p>
-                    <div className="grid gap-1.5">
-                      {s.tools.map((t) => (
-                        <div
-                          key={t.name}
-                          className="flex items-start gap-2 text-xs bg-base-200 rounded px-2 py-1.5"
-                        >
-                          <code className="font-mono text-primary shrink-0">
-                            {t.name}
-                          </code>
-                          <span className="text-base-content/60">
-                            {t.description}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                  <ToolToggleList server={s} onUpdate={refresh} />
                 )}
 
                 {/* Expanded: config details */}

@@ -101,7 +101,7 @@ from .const import (
     ROUTABLE_AGENTS,
     SYSTEM_AGENTS,
 )
-from .proxlab_api import discover_services, fetch_proxy_mcp_tools
+from .proxlab_api import discover_services
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -1017,11 +1017,11 @@ async def ws_agents_update(
         vol.Optional("entry_id"): str,
     }
 )
-@websocket_api.async_response
-async def ws_tools_available(
+@callback
+def ws_tools_available(
     hass: HomeAssistant, connection: websocket_api.ActiveConnection, msg: dict
 ) -> None:
-    """Return catalog of all available tools (built-in + MCP + proxy)."""
+    """Return catalog of all available tools (built-in + MCP)."""
     entry = _get_entry(hass, msg)
     if not entry:
         connection.send_error(msg["id"], "not_found", "No ProxLab config entry found")
@@ -1034,12 +1034,6 @@ async def ws_tools_available(
     if agent and hasattr(agent, "tool_handler"):
         agent._ensure_tools_registered()
         tools = agent.tool_handler.get_tool_catalog()
-
-    # Fetch proxy-injected MCP tools from ProxLab URL
-    proxlab_url = dict(entry.data).get(CONF_PROXLAB_URL, "")
-    if proxlab_url:
-        proxy_tools = await fetch_proxy_mcp_tools(proxlab_url)
-        tools.extend(proxy_tools)
 
     # Also include the AGENT_TOOL_MAP defaults so the frontend knows the seed
     connection.send_result(msg["id"], {
@@ -2958,6 +2952,7 @@ async def ws_mcp_servers_create(
         vol.Optional("url"): str,
         vol.Optional("headers"): dict,
         vol.Optional("parameters"): dict,
+        vol.Optional("disabled_tools"): [str],
     }
 )
 @websocket_api.async_response

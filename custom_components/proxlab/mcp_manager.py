@@ -274,6 +274,7 @@ class McpManager:
             "url": data.get("url"),
             "headers": data.get("headers", {}),
             "parameters": data.get("parameters", {}),
+            "disabled_tools": data.get("disabled_tools", []),
             "tools": [],
             "created_at": now,
             "last_connected": None,
@@ -310,7 +311,7 @@ class McpManager:
         # Apply updates to allowed fields
         allowed = {
             "name", "description", "enabled", "command", "args",
-            "env", "url", "headers", "parameters",
+            "env", "url", "headers", "parameters", "disabled_tools",
         }
         for key, value in updates.items():
             if key in allowed:
@@ -354,6 +355,8 @@ class McpManager:
                 server["status"] = conn.status
                 server["error"] = conn.error
                 server["tools"] = conn.tools
+            # Ensure disabled_tools key exists for older configs
+            server.setdefault("disabled_tools", [])
             result.append(server)
         return result
 
@@ -398,6 +401,7 @@ class McpManager:
         """Get all tools from all connected servers.
 
         Returns a list of dicts with server_id, server_name, and tool info.
+        Tools in a server's disabled_tools list are excluded.
         """
         all_tools = []
         for sid, server in self._data["servers"].items():
@@ -405,12 +409,14 @@ class McpManager:
                 continue
             conn = self._connections.get(sid)
             if conn and conn.status == "connected":
+                disabled = set(server.get("disabled_tools", []))
                 for tool in conn.tools:
-                    all_tools.append({
-                        "server_id": sid,
-                        "server_name": server.get("name", sid),
-                        **tool,
-                    })
+                    if tool.get("name") not in disabled:
+                        all_tools.append({
+                            "server_id": sid,
+                            "server_name": server.get("name", sid),
+                            **tool,
+                        })
         return all_tools
 
     # ------------------------------------------------------------------

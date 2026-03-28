@@ -127,53 +127,6 @@ async def discover_services(
     return services
 
 
-async def fetch_proxy_mcp_tools(proxlab_url: str) -> list[dict[str, Any]]:
-    """Fetch MCP tools available through the ProxLab proxy.
-
-    The proxy auto-injects these tools into LLM requests. This fetches
-    the catalog so we can display them in the agent tool configuration UI.
-
-    Args:
-        proxlab_url: Base URL for ProxLab (e.g., http://10.0.0.140:7777).
-
-    Returns:
-        List of tool dicts with name, description, category, server_name fields.
-    """
-    url = f"{proxlab_url.rstrip('/')}/api/mcp/tools"
-
-    try:
-        async with aiohttp.ClientSession(timeout=_API_TIMEOUT) as session:
-            async with session.get(url) as response:
-                if response.status != 200:
-                    _LOGGER.warning(
-                        "ProxLab MCP tools API returned status %d from %s",
-                        response.status,
-                        url,
-                    )
-                    return []
-                data = await response.json()
-    except aiohttp.ClientError as err:
-        _LOGGER.warning("Failed to fetch MCP tools from %s: %s", url, err)
-        return []
-    except Exception as err:
-        _LOGGER.error("Unexpected error fetching MCP tools: %s", err)
-        return []
-
-    tools: list[dict[str, Any]] = []
-    for entry in data:
-        if not isinstance(entry, dict) or not entry.get("enabled", False):
-            continue
-        tools.append({
-            "name": entry.get("fullName", entry.get("tool", "unknown")),
-            "description": f"Proxy tool from {entry.get('server', 'unknown')} MCP server",
-            "category": "proxy",
-            "server_name": entry.get("server", ""),
-        })
-
-    _LOGGER.debug("Fetched %d proxy MCP tools from %s", len(tools), url)
-    return tools
-
-
 async def check_proxlab_connection(proxlab_url: str) -> bool:
     """Quick connectivity check to ProxLab proxy services endpoint.
 

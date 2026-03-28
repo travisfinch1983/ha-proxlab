@@ -123,7 +123,7 @@ export async function updateAgent(
 export interface ToolCatalogEntry {
   name: string;
   description: string;
-  category: "builtin" | "mcp" | "proxy";
+  category: "builtin" | "mcp";
   server_name?: string;
 }
 

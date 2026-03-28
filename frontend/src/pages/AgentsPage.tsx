@@ -533,42 +533,6 @@ function AgentCard({ agent, discoveredModels }: { agent: AgentInfo; discoveredMo
                   </div>
                 )}
 
-                {/* ProxLab Proxy tools */}
-                {allTools.filter((t) => t.category === "proxy").length > 0 && (
-                  <div>
-                    <h4 className="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-2">
-                      ProxLab Proxy Tools
-                    </h4>
-                    {allTools
-                      .filter((t) => t.category === "proxy")
-                      .map((tool) => (
-                        <label
-                          key={tool.name}
-                          className="flex items-center gap-3 py-1.5 px-2 rounded hover:bg-base-200 cursor-pointer"
-                        >
-                          <input
-                            type="checkbox"
-                            className="checkbox checkbox-xs checkbox-primary"
-                            checked={enabledTools.includes(tool.name)}
-                            onChange={() => toggleTool(tool.name)}
-                          />
-                          <div className="min-w-0">
-                            <span className="text-sm font-medium">{tool.name}</span>
-                            {tool.server_name && (
-                              <span className="badge badge-xs badge-ghost ml-1">
-                                {tool.server_name}
-                              </span>
-                            )}
-                            {tool.description && (
-                              <p className="text-xs text-base-content/50 truncate">
-                                {tool.description}
-                              </p>
-                            )}
-                          </div>
-                        </label>
-                      ))}
-                  </div>
-                )}
               </div>
             )}
 

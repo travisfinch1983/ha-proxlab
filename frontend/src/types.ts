@@ -280,6 +280,7 @@ export interface McpServer {
   headers: Record<string, string>;
   parameters: Record<string, string>;
   tools: McpToolDef[];
+  disabled_tools: string[];
   created_at: number;
   last_connected: number | null;
   status: "connected" | "disconnected" | "error" | "starting";
