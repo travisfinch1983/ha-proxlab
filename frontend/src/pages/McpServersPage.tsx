@@ -10,6 +10,7 @@ import {
   faPlus,
   faToggleOn,
   faToggleOff,
+  faServer,
 } from "@fortawesome/free-solid-svg-icons";
 import type { McpServer, McpToolDef } from "../types";
 import {
@@ -47,15 +48,22 @@ function transportBadge(transport: string) {
 }
 
 /** Group tools by server-name prefix (MCPJungle uses server__tool naming). */
-function groupTools(tools: McpToolDef[]): Record<string, McpToolDef[]> {
-  const groups: Record<string, McpToolDef[]> = {};
+function groupTools(tools: McpToolDef[]): { name: string; tools: McpToolDef[] }[] {
+  const map: Record<string, McpToolDef[]> = {};
   for (const t of tools) {
     const sep = t.name.indexOf("__");
-    const prefix = sep > 0 ? t.name.substring(0, sep) : "";
-    const key = prefix || "(ungrouped)";
-    (groups[key] ??= []).push(t);
+    const key = sep > 0 ? t.name.substring(0, sep) : "(ungrouped)";
+    (map[key] ??= []).push(t);
   }
-  return groups;
+  return Object.entries(map)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([name, tools]) => ({ name, tools }));
+}
+
+/** Short tool name — strip the server__ prefix when grouped. */
+function shortToolName(fullName: string): string {
+  const sep = fullName.indexOf("__");
+  return sep > 0 ? fullName.substring(sep + 2) : fullName;
 }
 
 function ToolToggleList({
@@ -67,11 +75,13 @@ function ToolToggleList({
 }) {
   const disabled = new Set(server.disabled_tools ?? []);
   const [saving, setSaving] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Record<string, boolean>>({});
 
-  const toggle = async (toolName: string) => {
-    const next = new Set(disabled);
-    if (next.has(toolName)) next.delete(toolName);
-    else next.add(toolName);
+  const groups = groupTools(server.tools);
+  const hasGroups = groups.length > 1 || (groups.length === 1 && groups[0].name !== "(ungrouped)");
+  const enabledCount = server.tools.length - disabled.size;
+
+  const save = async (next: Set<string>) => {
     setSaving(true);
     try {
       await updateMcpServer(server.id, { disabled_tools: [...next] });
@@ -81,90 +91,144 @@ function ToolToggleList({
     }
   };
 
-  const toggleAll = async (enable: boolean) => {
-    const next = enable ? [] : server.tools.map((t) => t.name);
-    setSaving(true);
-    try {
-      await updateMcpServer(server.id, { disabled_tools: next });
-      onUpdate();
-    } finally {
-      setSaving(false);
-    }
+  const toggleTool = (toolName: string) => {
+    const next = new Set(disabled);
+    if (next.has(toolName)) next.delete(toolName);
+    else next.add(toolName);
+    save(next);
   };
 
-  const groups = groupTools(server.tools);
-  const groupKeys = Object.keys(groups).sort();
-  const hasGroups = groupKeys.length > 1 || (groupKeys.length === 1 && groupKeys[0] !== "(ungrouped)");
-  const enabledCount = server.tools.length - disabled.size;
+  const toggleAllGlobal = (enable: boolean) => {
+    save(new Set(enable ? [] : server.tools.map((t) => t.name)));
+  };
+
+  const toggleSubServer = (group: { name: string; tools: McpToolDef[] }) => {
+    const groupToolNames = group.tools.map((t) => t.name);
+    const allEnabled = groupToolNames.every((n) => !disabled.has(n));
+    const next = new Set(disabled);
+    if (allEnabled) {
+      // Disable all in this sub-server
+      for (const n of groupToolNames) next.add(n);
+    } else {
+      // Enable all in this sub-server
+      for (const n of groupToolNames) next.delete(n);
+    }
+    save(next);
+  };
+
+  const toggleGroupExpand = (name: string) => {
+    setExpandedGroups((prev) => ({ ...prev, [name]: !prev[name] }));
+  };
 
   return (
     <div className="mt-3 border-t border-base-300 pt-3">
+      {/* Header */}
       <div className="flex items-center justify-between mb-2">
         <p className="text-xs font-semibold text-base-content/60">
-          Tools ({enabledCount}/{server.tools.length} enabled)
+          {hasGroups
+            ? `${groups.length} servers, ${enabledCount}/${server.tools.length} tools enabled`
+            : `${enabledCount}/${server.tools.length} tools enabled`}
         </p>
         <div className="flex gap-1">
           <button
             className="btn btn-ghost btn-xs"
             disabled={saving}
-            onClick={() => toggleAll(true)}
-            title="Enable all"
+            onClick={() => toggleAllGlobal(true)}
+            title="Enable all tools"
           >
             <FontAwesomeIcon icon={faToggleOn} className="text-success" /> All
           </button>
           <button
             className="btn btn-ghost btn-xs"
             disabled={saving}
-            onClick={() => toggleAll(false)}
-            title="Disable all"
+            onClick={() => toggleAllGlobal(false)}
+            title="Disable all tools"
           >
             <FontAwesomeIcon icon={faToggleOff} className="text-base-content/30" /> None
           </button>
         </div>
       </div>
-      <div className="max-h-80 overflow-y-auto space-y-3">
-        {groupKeys.map((group) => (
-          <div key={group}>
-            {hasGroups && (
-              <h4 className="text-xs font-semibold text-base-content/40 uppercase tracking-wider mb-1 sticky top-0 bg-base-100 py-0.5">
-                {group}
-              </h4>
-            )}
-            <div className="grid gap-1">
-              {groups[group].map((t) => {
-                const isDisabled = disabled.has(t.name);
-                return (
-                  <label
-                    key={t.name}
-                    className={`flex items-start gap-2 text-xs rounded px-2 py-1.5 cursor-pointer hover:bg-base-200 ${
-                      isDisabled ? "opacity-50" : "bg-base-200"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      className="checkbox checkbox-xs checkbox-primary mt-0.5 shrink-0"
-                      checked={!isDisabled}
-                      disabled={saving}
-                      onChange={() => toggle(t.name)}
-                    />
-                    <div className="min-w-0">
-                      <code className="font-mono text-primary text-xs">
-                        {hasGroups && t.name.includes("__")
-                          ? t.name.substring(t.name.indexOf("__") + 2)
-                          : t.name}
-                      </code>
-                      {t.description && (
-                        <p className="text-base-content/60 truncate">
-                          {t.description}
-                        </p>
-                      )}
-                    </div>
-                  </label>
-                );
-              })}
+
+      {/* Sub-server list */}
+      <div className="max-h-[32rem] overflow-y-auto space-y-1">
+        {groups.map((group) => {
+          const groupEnabled = group.tools.filter((t) => !disabled.has(t.name)).length;
+          const allEnabled = groupEnabled === group.tools.length;
+          const noneEnabled = groupEnabled === 0;
+          const isExpanded = expandedGroups[group.name] ?? false;
+
+          return (
+            <div key={group.name} className="border border-base-300 rounded-lg overflow-hidden">
+              {/* Sub-server header row */}
+              {hasGroups && (
+                <div
+                  className={`flex items-center gap-2 px-3 py-2 cursor-pointer select-none ${
+                    noneEnabled ? "bg-base-200/50 opacity-60" : "bg-base-200"
+                  }`}
+                  onClick={() => toggleGroupExpand(group.name)}
+                >
+                  <FontAwesomeIcon
+                    icon={isExpanded ? faChevronDown : faChevronRight}
+                    className="text-xs text-base-content/40 w-3"
+                  />
+                  <FontAwesomeIcon
+                    icon={faServer}
+                    className={`text-xs ${noneEnabled ? "text-base-content/30" : "text-primary"}`}
+                  />
+                  <span className="text-sm font-medium flex-1">{group.name}</span>
+                  <span className="text-xs text-base-content/50">
+                    {groupEnabled}/{group.tools.length}
+                  </span>
+                  <input
+                    type="checkbox"
+                    className="toggle toggle-xs toggle-primary"
+                    checked={allEnabled}
+                    ref={(el) => {
+                      if (el) el.indeterminate = !allEnabled && !noneEnabled;
+                    }}
+                    disabled={saving}
+                    onChange={(e) => { e.stopPropagation(); toggleSubServer(group); }}
+                    onClick={(e) => e.stopPropagation()}
+                    title={allEnabled ? "Disable all tools in this server" : "Enable all tools in this server"}
+                  />
+                </div>
+              )}
+
+              {/* Tool list (expanded) */}
+              {(isExpanded || !hasGroups) && (
+                <div className={`divide-y divide-base-300 ${hasGroups ? "border-t border-base-300" : ""}`}>
+                  {group.tools.map((t) => {
+                    const isOff = disabled.has(t.name);
+                    return (
+                      <label
+                        key={t.name}
+                        className={`flex items-start gap-2 px-3 py-1.5 cursor-pointer hover:bg-base-200/70 text-xs ${
+                          isOff ? "opacity-40" : ""
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          className="checkbox checkbox-xs checkbox-primary mt-0.5 shrink-0"
+                          checked={!isOff}
+                          disabled={saving}
+                          onChange={() => toggleTool(t.name)}
+                        />
+                        <div className="min-w-0 flex-1">
+                          <code className="font-mono text-primary">
+                            {hasGroups ? shortToolName(t.name) : t.name}
+                          </code>
+                          {t.description && (
+                            <p className="text-base-content/50 truncate">{t.description}</p>
+                          )}
+                        </div>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
@@ -417,7 +481,7 @@ export default function McpServersPage() {
                       </span>
                       {s.tools.length > 0 && (
                         <span className="badge badge-xs badge-outline">
-                          {s.tools.length} tool{s.tools.length !== 1 && "s"}
+                          {s.tools.length - (s.disabled_tools?.length ?? 0)}/{s.tools.length} tools
                         </span>
                       )}
                     </div>
