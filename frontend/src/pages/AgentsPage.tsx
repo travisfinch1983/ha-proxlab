@@ -39,17 +39,16 @@ function AgentCard({ agent, discoveredModels }: { agent: AgentInfo; discoveredMo
   const [showPrompt, setShowPrompt] = useState(false);
 
   // Load available models for the selected connection
-  // Show cached models immediately for fast UI, then fetch fresh in background
   useEffect(() => {
-    if (!primaryConn) {
-      setConnModels([]);
-      return;
-    }
+    // Always clear stale models immediately when the connection changes
+    setConnModels([]);
+    if (!primaryConn) return;
+    // Show cached models while fetching fresh list
     const cached = config.health[primaryConn]?.available_models;
     if (cached?.length) setConnModels(cached);
     fetchModels(primaryConn)
-      .then((models) => { if (models.length) setConnModels(models); })
-      .catch(() => { if (!cached?.length) setConnModels([]); });
+      .then((models) => setConnModels(models))
+      .catch(() => setConnModels([]));
   }, [primaryConn, config.health]);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -235,7 +234,7 @@ function AgentCard({ agent, discoveredModels }: { agent: AgentInfo; discoveredMo
                 ))}
               </select>
             </label>
-            {primaryConn && connModels.length > 0 && (
+            {primaryConn && connModels.length > 1 && (
               <label className="form-control">
                 <div className="label">
                   <span className="label-text text-xs">Model Override</span>
