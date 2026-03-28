@@ -44,14 +44,14 @@ export default function ConnectionCard({
     if (m.supports_embeddings) detectedSet.add("embeddings");
     if (m.supports_reranker) detectedSet.add("reranker");
     if (m.supports_tts) detectedSet.add("tts");
+    if (m.supports_stt) detectedSet.add("stt");
     if (m.supports_tool_use) detectedSet.add("tool_use");
-    // A model is conversational if it's NOT a pure embedding or reranker model
-    if (
-      (!m.supports_embeddings && !m.supports_reranker) ||
-      m.supports_vision ||
-      m.supports_tool_use ||
-      m.supports_tts
-    ) {
+    // A model is conversational only if it's not a utility model
+    // (embedding, reranker, TTS, or STT). Vision/tool_use on an embedding
+    // model means multimodal embeddings, not conversation.
+    const isUtilityModel =
+      m.supports_embeddings || m.supports_reranker || m.supports_tts || m.supports_stt;
+    if (!isUtilityModel) {
       hasConversationalModel = true;
     }
   }

@@ -344,6 +344,7 @@ export interface DiscoveredModel {
   supports_audio: boolean;
   supports_embeddings: boolean;
   supports_tts: boolean;
+  supports_stt: boolean;
   supports_tool_use: boolean;
   supports_reranker: boolean;
   size_bytes: number | null;

@@ -60,6 +60,7 @@ class ModelInfo:
     supports_audio: bool = False
     supports_embeddings: bool = False
     supports_tts: bool = False
+    supports_stt: bool = False
     supports_tool_use: bool = False
     supports_reranker: bool = False
 
@@ -147,6 +148,10 @@ async def _detect_provider(
 # ---------------------------------------------------------------------------
 
 
+_TTS_NAME_HINTS = {"tts", "kokoro", "piper", "coqui", "bark", "parler", "speech"}
+_STT_NAME_HINTS = {"whisper", "faster-whisper", "transcri"}
+
+
 def _apply_name_heuristics(info: ModelInfo) -> None:
     """Infer capability flags from a model's ID when the backend provides no metadata."""
     mid = info.id.lower()
@@ -154,6 +159,10 @@ def _apply_name_heuristics(info: ModelInfo) -> None:
         info.supports_embeddings = True
     if "rerank" in mid:
         info.supports_reranker = True
+    if any(hint in mid for hint in _TTS_NAME_HINTS):
+        info.supports_tts = True
+    if any(hint in mid for hint in _STT_NAME_HINTS):
+        info.supports_stt = True
 
 
 # ---------------------------------------------------------------------------
