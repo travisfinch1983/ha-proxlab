@@ -37,18 +37,25 @@ export default function ConnectionCard({
   // Aggregate detected capabilities from discovered models for this connection
   const detectedSet = new Set<string>();
   const models = (discoveredModels ?? []).filter((m) => m.connection_id === id);
-  let hasNonEmbeddingModel = false;
+  let hasConversationalModel = false;
   for (const m of models) {
     if (m.supports_vision) detectedSet.add("vision");
     if (m.supports_audio) detectedSet.add("specialized");
     if (m.supports_embeddings) detectedSet.add("embeddings");
+    if (m.supports_reranker) detectedSet.add("reranker");
     if (m.supports_tts) detectedSet.add("tts");
     if (m.supports_tool_use) detectedSet.add("tool_use");
-    if (!m.supports_embeddings || m.supports_vision || m.supports_tool_use || m.supports_tts) {
-      hasNonEmbeddingModel = true;
+    // A model is conversational if it's NOT a pure embedding or reranker model
+    if (
+      (!m.supports_embeddings && !m.supports_reranker) ||
+      m.supports_vision ||
+      m.supports_tool_use ||
+      m.supports_tts
+    ) {
+      hasConversationalModel = true;
     }
   }
-  if (hasNonEmbeddingModel) detectedSet.add("conversation");
+  if (hasConversationalModel) detectedSet.add("conversation");
 
   // Merge user-assigned capabilities into detected set (strip retired caps)
   for (const cap of cleanStoredCaps(connection.capabilities)) {

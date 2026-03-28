@@ -345,6 +345,7 @@ export interface DiscoveredModel {
   supports_embeddings: boolean;
   supports_tts: boolean;
   supports_tool_use: boolean;
+  supports_reranker: boolean;
   size_bytes: number | null;
   size_vram_bytes: number | null;
   is_loaded: boolean;

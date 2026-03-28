@@ -61,6 +61,7 @@ class ModelInfo:
     supports_embeddings: bool = False
     supports_tts: bool = False
     supports_tool_use: bool = False
+    supports_reranker: bool = False
 
     # Size
     size_bytes: int | None = None
@@ -142,6 +143,20 @@ async def _detect_provider(
 
 
 # ---------------------------------------------------------------------------
+# Model-name heuristics
+# ---------------------------------------------------------------------------
+
+
+def _apply_name_heuristics(info: ModelInfo) -> None:
+    """Infer capability flags from a model's ID when the backend provides no metadata."""
+    mid = info.id.lower()
+    if "embed" in mid:
+        info.supports_embeddings = True
+    if "rerank" in mid:
+        info.supports_reranker = True
+
+
+# ---------------------------------------------------------------------------
 # Provider-specific discovery
 # ---------------------------------------------------------------------------
 
@@ -161,7 +176,7 @@ async def _discover_koboldcpp(
         is_loaded=True,
     )
 
-    # /api/extra/version — software version + model path
+    # /api/extra/version — software version + model path + capability flags
     try:
         async with session.get(f"{url}/api/extra/version") as resp:
             if resp.status == 200:
@@ -172,6 +187,16 @@ async def _discover_koboldcpp(
                     model.extras["model_path"] = model_path
                     # Derive model ID from filename
                     model.id = model_path.rsplit("/", 1)[-1].rsplit("\\", 1)[-1]
+                # Extract capability flags (different field names than /props)
+                # These serve as defaults; /props can override below
+                if data.get("embeddings"):
+                    model.supports_embeddings = True
+                if data.get("vision"):
+                    model.supports_vision = True
+                if data.get("audio"):
+                    model.supports_audio = True
+                if data.get("tts"):
+                    model.supports_tts = True
     except Exception as err:
         _LOGGER.debug("KoboldCpp /api/extra/version failed: %s", err)
 
@@ -383,6 +408,8 @@ async def _discover_vllm(
             info.extras["vllm_version"] = vllm_version
         info.extras["owned_by"] = m.get("owned_by", "")
         info.extras["created"] = m.get("created")
+        # Infer capabilities from model name
+        _apply_name_heuristics(info)
         models.append(info)
 
     return models
@@ -420,14 +447,17 @@ async def _discover_openai_generic(
         return []
 
     for m in data["data"]:
+        model_id = m.get("id", "unknown")
         info = ModelInfo(
-            id=m.get("id", "unknown"),
+            id=model_id,
             connection_id=conn_id,
             connection_name=conn.get("name", ""),
             provider="openai",
         )
         info.extras["owned_by"] = m.get("owned_by", "")
         info.extras["created"] = m.get("created")
+        # Infer capabilities from model name
+        _apply_name_heuristics(info)
         models.append(info)
 
     return models
