@@ -272,57 +272,87 @@ export default function McpServersPage() {
           <div className="card-body space-y-3">
             <h3 className="font-semibold">Add Manual MCP Server</h3>
             <div className="grid grid-cols-2 gap-3">
-              <input
-                className="input input-bordered input-sm"
-                placeholder="Server name"
-                value={addForm.name}
-                onChange={(e) =>
-                  setAddForm({ ...addForm, name: e.target.value })
-                }
-              />
-              <select
-                className="select select-bordered select-sm"
-                value={addForm.transport}
-                onChange={(e) =>
-                  setAddForm({
-                    ...addForm,
-                    transport: e.target.value as "stdio" | "sse" | "streamable_http",
-                  })
-                }
-              >
-                <option value="stdio">stdio</option>
-                <option value="sse">SSE</option>
-                <option value="streamable_http">Streamable HTTP</option>
-              </select>
+              <label className="form-control">
+                <div className="label">
+                  <span className="label-text text-xs">Server Name</span>
+                  <span className="label-text-alt text-xs text-base-content/40" title="A display name to identify this server in the list">Required</span>
+                </div>
+                <input
+                  className="input input-bordered input-sm"
+                  placeholder="e.g. MCPJungle"
+                  value={addForm.name}
+                  onChange={(e) =>
+                    setAddForm({ ...addForm, name: e.target.value })
+                  }
+                />
+              </label>
+              <label className="form-control">
+                <div className="label">
+                  <span className="label-text text-xs">Transport</span>
+                  <span className="label-text-alt text-xs text-base-content/40" title="stdio: launch a local process. SSE: connect to a remote server via Server-Sent Events. Streamable HTTP: newer HTTP-based MCP transport.">Protocol</span>
+                </div>
+                <select
+                  className="select select-bordered select-sm"
+                  value={addForm.transport}
+                  onChange={(e) =>
+                    setAddForm({
+                      ...addForm,
+                      transport: e.target.value as "stdio" | "sse" | "streamable_http",
+                    })
+                  }
+                >
+                  <option value="stdio">stdio</option>
+                  <option value="sse">SSE</option>
+                  <option value="streamable_http">Streamable HTTP</option>
+                </select>
+              </label>
             </div>
             {addForm.transport === "stdio" ? (
               <div className="grid grid-cols-2 gap-3">
-                <input
-                  className="input input-bordered input-sm"
-                  placeholder="Command (e.g. python3)"
-                  value={addForm.command}
-                  onChange={(e) =>
-                    setAddForm({ ...addForm, command: e.target.value })
-                  }
-                />
-                <input
-                  className="input input-bordered input-sm"
-                  placeholder="Args (comma-separated)"
-                  value={addForm.args}
-                  onChange={(e) =>
-                    setAddForm({ ...addForm, args: e.target.value })
-                  }
-                />
+                <label className="form-control">
+                  <div className="label">
+                    <span className="label-text text-xs">Command</span>
+                    <span className="label-text-alt text-xs text-base-content/40" title="The executable to run, e.g. python3, node, or a path to a binary">Executable</span>
+                  </div>
+                  <input
+                    className="input input-bordered input-sm"
+                    placeholder="e.g. python3"
+                    value={addForm.command}
+                    onChange={(e) =>
+                      setAddForm({ ...addForm, command: e.target.value })
+                    }
+                  />
+                </label>
+                <label className="form-control">
+                  <div className="label">
+                    <span className="label-text text-xs">Arguments</span>
+                    <span className="label-text-alt text-xs text-base-content/40" title="Comma-separated arguments passed to the command">Optional</span>
+                  </div>
+                  <input
+                    className="input input-bordered input-sm"
+                    placeholder="e.g. -m, mcp_server"
+                    value={addForm.args}
+                    onChange={(e) =>
+                      setAddForm({ ...addForm, args: e.target.value })
+                    }
+                  />
+                </label>
               </div>
             ) : (
-              <input
-                className="input input-bordered input-sm w-full"
-                placeholder="URL"
-                value={addForm.url}
-                onChange={(e) =>
-                  setAddForm({ ...addForm, url: e.target.value })
-                }
-              />
+              <label className="form-control">
+                <div className="label">
+                  <span className="label-text text-xs">Server URL</span>
+                  <span className="label-text-alt text-xs text-base-content/40" title="The full URL of the MCP server endpoint, including /sse for SSE transport">Endpoint</span>
+                </div>
+                <input
+                  className="input input-bordered input-sm w-full"
+                  placeholder={addForm.transport === "sse" ? "e.g. http://10.0.0.52:8080/sse" : "e.g. http://10.0.0.52:8080/mcp"}
+                  value={addForm.url}
+                  onChange={(e) =>
+                    setAddForm({ ...addForm, url: e.target.value })
+                  }
+                />
+              </label>
             )}
             <div className="flex gap-2 justify-end">
               <button
