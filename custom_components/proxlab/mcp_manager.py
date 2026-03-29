@@ -354,7 +354,10 @@ class McpManager:
             if conn:
                 server["status"] = conn.status
                 server["error"] = conn.error
-                server["tools"] = conn.tools
+                # Only overwrite tools if the connection has them;
+                # keep persisted tools when the connection dropped.
+                if conn.tools:
+                    server["tools"] = conn.tools
             # Ensure disabled_tools key exists for older configs
             server.setdefault("disabled_tools", [])
             result.append(server)
@@ -371,7 +374,8 @@ class McpManager:
 
         conn = self._connections.get(server_id)
         if conn:
-            server["tools"] = conn.tools
+            if conn.tools:
+                server["tools"] = conn.tools
             server["status"] = conn.status
             server["error"] = conn.error
             if conn.status == "connected":
@@ -398,25 +402,27 @@ class McpManager:
         return await conn.call_tool(tool_name, arguments)
 
     def get_all_tools(self) -> list[dict[str, Any]]:
-        """Get all tools from all connected servers.
+        """Get all tools from all enabled servers.
 
         Returns a list of dicts with server_id, server_name, and tool info.
         Tools in a server's disabled_tools list are excluded.
+        Uses live connection tools if available, otherwise persisted tools.
         """
         all_tools = []
         for sid, server in self._data["servers"].items():
             if not server.get("enabled", True):
                 continue
+            # Prefer live tools, fall back to persisted
             conn = self._connections.get(sid)
-            if conn and conn.status == "connected":
-                disabled = set(server.get("disabled_tools", []))
-                for tool in conn.tools:
-                    if tool.get("name") not in disabled:
-                        all_tools.append({
-                            "server_id": sid,
-                            "server_name": server.get("name", sid),
-                            **tool,
-                        })
+            tools = (conn.tools if conn and conn.tools else None) or server.get("tools", [])
+            disabled = set(server.get("disabled_tools", []))
+            for tool in tools:
+                if tool.get("name") not in disabled:
+                    all_tools.append({
+                        "server_id": sid,
+                        "server_name": server.get("name", sid),
+                        **tool,
+                    })
         return all_tools
 
     # ------------------------------------------------------------------

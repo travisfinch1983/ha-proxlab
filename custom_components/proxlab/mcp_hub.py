@@ -16,6 +16,7 @@ from .const import MCP_TRANSPORT_SSE, MCP_TRANSPORT_HTTP, MCP_TRANSPORT_STDIO
 _LOGGER = logging.getLogger(__name__)
 
 CONNECT_TIMEOUT = 30  # seconds
+SSE_READ_TIMEOUT = 3600  # 1 hour — SSE streams are long-lived
 
 
 class McpServerConnection:
@@ -148,7 +149,12 @@ class McpServerConnection:
         headers = self._config.get("headers") or {}
 
         sse_transport = await self._exit_stack.enter_async_context(
-            sse_client(url=url, headers=headers)
+            sse_client(
+                url=url,
+                headers=headers,
+                timeout=CONNECT_TIMEOUT,
+                sse_read_timeout=SSE_READ_TIMEOUT,
+            )
         )
         read_stream, write_stream = sse_transport
 
