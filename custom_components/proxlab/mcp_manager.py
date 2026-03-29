@@ -310,7 +310,7 @@ class McpManager:
 
         # Apply updates to allowed fields
         allowed = {
-            "name", "description", "enabled", "command", "args",
+            "name", "description", "enabled", "transport", "command", "args",
             "env", "url", "headers", "parameters", "disabled_tools",
         }
         for key, value in updates.items():
@@ -332,6 +332,18 @@ class McpManager:
                 await self._disconnect_server(server_id)
                 server["status"] = "disconnected"
                 server["error"] = None
+        elif {"transport", "url", "command", "args"} & updates.keys():
+            # Connection config changed — reconnect if enabled
+            if server.get("enabled", True):
+                await self._connect_server(server_id)
+                conn = self._connections.get(server_id)
+                if conn:
+                    if conn.tools:
+                        server["tools"] = conn.tools
+                    server["status"] = conn.status
+                    server["error"] = conn.error
+                    if conn.status == "connected":
+                        server["last_connected"] = time.time()
 
         await self._save()
         return server
